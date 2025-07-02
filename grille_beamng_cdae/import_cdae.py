@@ -8,7 +8,7 @@ from bpy.types import Operator
 from bpy_extras.io_utils import ImportHelper
 from bpy.props import StringProperty
 
-from .CdaeV31 import CdaeV31
+from .cdae_v31 import CdaeV31
 
 class ImportCdae(Operator, ImportHelper):
     bl_idname = "import_scene.beamng"
@@ -28,14 +28,14 @@ class ImportCdae(Operator, ImportHelper):
             meshes.append((cdae_mesh, obj, mesh))
 
         objects: list[tuple[CdaeV31.Object, bpy.types.Object]] = []
-        for cdae_obj in cdae.objects:
+        for cdae_obj in cdae.unpack_objects():
             name = cdae.names[cdae_obj.nameIndex]
             obj = bpy.data.objects.new(f"obj:{name}", None)
             bpy.context.collection.objects.link(obj)
             objects.append((cdae_obj, obj))
 
         nodes: list[tuple[CdaeV31.Node, bpy.types.Object]] = []
-        for cdae_node in cdae.nodes:
+        for cdae_node in cdae.unpack_nodes():
             name = cdae.names[cdae_node.nameIndex]
             obj = bpy.data.objects.new(f"node:{name}", None)
             bpy.context.collection.objects.link(obj)

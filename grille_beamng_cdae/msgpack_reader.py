@@ -56,7 +56,7 @@ class MsgpackReader:
         raise Exception()
 
 
-    def read_uint32(self):
+    def read_int32(self):
         value = self.read_next()
 
         if isinstance(value, float):
