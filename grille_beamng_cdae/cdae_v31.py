@@ -1,6 +1,7 @@
 import struct
 import numpy as np
 
+from dataclasses import dataclass
 from enum import Enum
 from io import BufferedReader, BufferedWriter
 
@@ -12,67 +13,74 @@ from .numerics import *
 
 class CdaeV31:
 
+    @dataclass
     class Node:
 
-        def __init__(self):
-
-            self.nameIndex: int = 0
-            self.parentIndex: int = 0
-            self.firstObject: int = 0
-            self.firstChild: int = 0
-            self.nextSibling: int = 0
+        nameIndex: int = 0
+        parentIndex: int = 0
+        firstObject: int = 0
+        firstChild: int = 0
+        nextSibling: int = 0
 
 
+        def unpack(self, data: bytes):
+            (self.nameIndex, self.parentIndex, self.firstObject, self.firstChild, self.nextSibling) = struct.unpack("<5i", data)
+        
 
+        def pack(self):
+            return struct.pack("<5i", self.nameIndex, self.parentIndex, self.firstObject, self.firstChild, self.nextSibling)
+
+
+    @dataclass
     class Object:
 
-        def __init__(self):
+        nameIndex: int = 0
+        numMeshes: int = 0
+        startMeshIndex: int = 0
+        nodeIndex: int = 0
+        nextSibling: int = 0
+        firstDecal: int = 0
 
-            self.nameIndex: int = 0
-            self.numMeshes: int = 0
-            self.startMeshIndex: int = 0
-            self.nodeIndex: int = 0
-            self.nextSibling: int = 0
-            self.firstDecal: int = 0
+
+        def unpack(self, data: bytes):
+            (self.nameIndex, self.numMeshes, self.startMeshIndex, self.nodeIndex, self.nextSibling, self.firstDecal) = struct.unpack("<6i", data)
+        
+
+        def pack(self):
+            return struct.pack("<6i", self.nameIndex, self.numMeshes, self.startMeshIndex, self.nodeIndex, self.nextSibling, self.firstDecal)
 
     
-
+    @dataclass
     class ObjectState:
         
-        def __init__(self):
-
-            self.vis: float
-            self.frameIndex: int
-            self.matFrameIndex: int
+        vis: float
+        frameIndex: int
+        matFrameIndex: int
 
 
-
+    @dataclass
     class Trigger:
 
-        def __init__(self):
-            
-            self.state: int
-            self.pos: float
+        state: int
+        pos: float
 
 
-
+    @dataclass
     class Detail:
 
-        def __init__(self):
-
-            self.nameIndex: int
-            self.subShapeNum: int
-            self.objectDetailNum: int
-            self.size: float
-            self.averageError: float
-            self.maxError: float
-            self.polyCount: int
-            self.bbDimension: int
-            self.bbDetailLevel: int
-            self.bbEquatorSteps: int
-            self.bbPolarSteps: int
-            self.bbPolarAngle: float
-            self.bbIncludePoles: int
+        nameIndex: int
+        subShapeNum: int
+        objectDetailNum: int
+        size: float
+        averageError: float
+        maxError: float
+        polyCount: int
+        bbDimension: int
+        bbDetailLevel: int
+        bbEquatorSteps: int
+        bbPolarSteps: int
+        bbPolarAngle: float
+        bbIncludePoles: int
 
 
 
@@ -88,33 +96,18 @@ class CdaeV31:
 
     class Mesh:
 
+        @dataclass
         class DrawRegion:
 
-            class Info:
-                def __init__(self):
-                    pass
-
-
-
-            def __init__(self):
-
-                self.elements_start: int
-                self.elements_count: int
-                self.info: int
-
-
-            def decode_info(self) -> Info:
-                pass
-
-
-            def encode_info(self, info: Info):
-                pass
+            elements_start: int
+            elements_count: int
+            info: int
 
 
 
         def __init__(self):
 
-            self.type: CdaeV31.MeshType = 0
+            self.type = CdaeV31.MeshType.NULL
 
             self.numFrames: int = 0
             self.numMatFrames: int = 0
@@ -124,15 +117,15 @@ class CdaeV31:
             self.radius: float = 0.0
 
             create_empty = PackedVector.create_empty
-            self.verts = create_empty() #vtx vec3
-            self.tverts0 = create_empty() #vtx vec2
-            self.tverts1 = create_empty() #vtx vec2
-            self.colors = create_empty() #vtx int/rgba
-            self.norms = create_empty() #vtx vec3
-            self.encodedNorms = create_empty() #vtx byte
-            self.regions = create_empty()
-            self.indices = create_empty() #int
-            self.tangents = create_empty() #vtx vec3
+            self.verts = create_empty(12) #vtx vec3
+            self.tverts0 = create_empty(8) #vtx vec2
+            self.tverts1 = create_empty(8) #vtx vec2
+            self.colors = create_empty(4) #vtx int/rgba
+            self.norms = create_empty(12) #vtx vec3
+            self.encoded_Norms = create_empty(1) #vtx byte
+            self.draw_regions = create_empty(12) #start: int, count: int, material_index: int (DrawRegion)
+            self.indices = create_empty(4) #int
+            self.tangents = create_empty(16) #vtx vec4
 
             self.vertsPerFrame: int = 0
             self.flags: int = 0
@@ -162,63 +155,69 @@ class CdaeV31:
 
         create_empty = PackedVector.create_empty
 
-        self.nodes = create_empty() #Node
-        self.objects = create_empty() #Object
+        self.nodes = create_empty(20) #Node
+        self.objects = create_empty(24) #Object
 
-        self.subShapeFirstNode = create_empty() #int
-        self.subShapeFirstObject = create_empty() #int
-        self.subShapeNumNodes = create_empty() #int
-        self.subShapeNumObjects = create_empty() #int
+        self.subShapeFirstNode = create_empty(4) #int
+        self.subShapeFirstObject = create_empty(4) #int
+        self.subShapeNumNodes = create_empty(4) #int
+        self.subShapeNumObjects = create_empty(4) #int
 
-        self.defaultRotations = create_empty() #quat4h
-        self.defaultTranslations = create_empty() #vec3f
-        self.nodeRotations = create_empty() #quat4h
-        self.nodeTranslations = create_empty() #quat4h
+        self.defaultRotations = create_empty(8) #quat4h
+        self.defaultTranslations = create_empty(12) #vec3f
+        self.nodeRotations = create_empty(8) #quat4h
+        self.nodeTranslations = create_empty(8) #quat4h
 
-        self.nodeUniformScales = create_empty() #float
-        self.nodeAlignedScales = create_empty() #vec3f
-        self.nodeArbitraryScaleFactors = create_empty() #vec3f
-        self.nodeArbitraryScaleRots = create_empty() #quat4h
+        self.nodeUniformScales = create_empty(4) #float
+        self.nodeAlignedScales = create_empty(12) #vec3f
+        self.nodeArbitraryScaleFactors = create_empty(12) #vec3f
+        self.nodeArbitraryScaleRots = create_empty(8) #quat4h
 
-        self.groundTranslations = create_empty() #vec3f
-        self.groundRotations = create_empty() #quat4h
+        self.groundTranslations = create_empty(12) #vec3f
+        self.groundRotations = create_empty(8) #quat4h
 
-        self.objectStates = create_empty() #CdaeV31.ObjectState
-        self.triggers = create_empty() #CdaeV31.Trigger
-        self.details = create_empty() #CdaeV31.Detail
+        self.objectStates = create_empty(12) #CdaeV31.ObjectState
+        self.triggers = create_empty(8) #CdaeV31.Trigger
+        self.details = create_empty(52) #CdaeV31.Detail
 
         self.names: list[str] = []
 
         self.meshes: list[CdaeV31.Mesh] = []
         self.sequences: list[CdaeV31.Sequence] = []
         self.materials: list[CdaeV31.Material] = []
+    
+
+    def require_name_index(self, name: str) -> int:
+        for idx, key in enumerate(self.names):
+            if key == name:
+                return idx
+        self.names.append(name)
+        return len(self.names) - 1
 
 
     def unpack_nodes(self):
-        unpacked: list[CdaeV31.Node] = []
-        for chunk in self.nodes:
-            node = CdaeV31.Node()
-            (node.nameIndex, node.parentIndex, node.firstObject, node.firstChild, node.nextSibling) = struct.unpack("<5i", chunk)
-            unpacked.append(node)
-        return unpacked
+        return self.nodes.unpack_list(CdaeV31.Node)
 
 
     def unpack_objects(self):
-        unpacked: list[CdaeV31.Object] = []
-        for chunk in self.objects:
-            obj = CdaeV31.Object()
-            (obj.nameIndex, obj.numMeshes, obj.startMeshIndex, obj.nodeIndex, obj.nextSibling, obj.firstDecal) = struct.unpack("<6i", chunk)
-            unpacked.append(obj)
-        return unpacked
+        return self.objects.unpack_list(CdaeV31.Object)
+    
+
+    def pack_nodes(self, list):
+        return self.nodes.pack_list(list)
+
+
+    def pack_objects(self, list):
+        return self.objects.pack_list(list)
 
 
     def read_from_stream(self, f: BufferedReader):
 
-        (file_version, export_version) = struct.unpack("HH", f.read(4))
+        (file_version, export_version) = struct.unpack("<HH", f.read(4))
         if (file_version != 31):
             raise Exception()
         
-        header_size = struct.unpack("I", f.read(4))[0]
+        header_size = struct.unpack("<I", f.read(4))[0]
         header = MsgpackReader.from_bytes(f.read(header_size)).read_dict()
 
         for key in header:
@@ -302,8 +301,8 @@ class CdaeV31:
             mesh.tverts1 = read_vector()
             mesh.colors = read_vector()
             mesh.norms = read_vector()
-            mesh.encodedNorms = read_vector()
-            mesh.regions = read_vector()
+            mesh.encoded_Norms = read_vector()
+            mesh.draw_regions = read_vector()
             mesh.indices = read_vector()
             mesh.tangents = read_vector()
 
@@ -364,6 +363,7 @@ class CdaeV31:
         for name in self.names:
             body.write_str(name)
 
+
         body.write_int32(len(self.meshes))
         for mesh in self.meshes:
 
@@ -384,13 +384,22 @@ class CdaeV31:
             write_vector(mesh.tverts1)
             write_vector(mesh.colors)
             write_vector(mesh.norms)
-            write_vector(mesh.encodedNorms)
-            write_vector(mesh.regions)
+            write_vector(mesh.encoded_Norms)
+            write_vector(mesh.draw_regions)
             write_vector(mesh.indices)
             write_vector(mesh.tangents)
 
             body.write_int32(mesh.vertsPerFrame)
             body.write_int32(mesh.flags)
+
+
+        body.write_int32(len(self.sequences))
+        for obj in self.sequences:
+            pass
+
+        body.write_int32(len(self.materials))
+        for obj in self.materials:
+            pass
 
         return body.to_bytes()
     
@@ -410,13 +419,13 @@ class CdaeV31:
         head_dict = {
             "compression": False,
             "bodysize": len(body_bytes),
-            "objectNames": self.get_object_names(),
+            "objectNames": [],
         }
         head.write_dict(head_dict)
         head_bytes = head.to_bytes()
 
-        f.write(struct.pack("HH", 31, 0))
-        f.write(struct.pack("I", len(head_bytes)))
+        f.write(struct.pack("<HH", 31, 0))
+        f.write(struct.pack("<I", len(head_bytes)))
         f.write(head_bytes)
         f.write(body_bytes)
 

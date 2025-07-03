@@ -7,6 +7,7 @@ from bpy.types import Operator
 from bpy_extras.io_utils import ExportHelper
 from bpy.props import StringProperty
 
+from. cdae_builder import CdeaBuilder
 from .cdae_v31 import CdaeV31
 from .cdae_components import *
 
@@ -17,9 +18,10 @@ class ExportCdae(Operator, ExportHelper):
     filter_glob = StringProperty(default="*.cdae", options={'HIDDEN'})
 
     def execute(self, context):
-        cdae = CdaeV31()
-
-        cdae.write_to_file(self.filepath)
+        builder = CdeaBuilder()
+        builder.tree.add_objects(set(bpy.context.selected_objects))
+        builder.build()
+        builder.cdae.write_to_file(self.filepath)
 
         return {'FINISHED'}
     
