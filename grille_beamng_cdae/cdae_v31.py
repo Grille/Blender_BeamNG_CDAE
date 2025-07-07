@@ -68,19 +68,39 @@ class CdaeV31:
     @dataclass
     class Detail:
 
-        nameIndex: int
-        subShapeNum: int
-        objectDetailNum: int
-        size: float
-        averageError: float
-        maxError: float
-        polyCount: int
-        bbDimension: int
-        bbDetailLevel: int
-        bbEquatorSteps: int
-        bbPolarSteps: int
-        bbPolarAngle: float
-        bbIncludePoles: int
+        nameIndex: int = 0
+        subShapeNum: int = 0
+        objectDetailNum: int = 0
+        size: float = 0
+        averageError: float = 0
+        maxError: float = 0
+        polyCount: int = 0
+        bbDimension: int = 0
+        bbDetailLevel: int = 0
+        bbEquatorSteps: int = 0
+        bbPolarSteps: int = 0
+        bbPolarAngle: float = 0
+        bbIncludePoles: int = 0
+
+        def unpack(self, data: bytes):
+            (
+                self.nameIndex, self.subShapeNum, self.objectDetailNum,
+                self.size, self.averageError, self.maxError,
+                self.polyCount,
+                self.bbDimension, self.bbDetailLevel, self.bbEquatorSteps, self.bbPolarSteps,
+                self.bbPolarAngle,
+                self.bbIncludePoles
+            ) = struct.unpack("<3i 3f 5i f I", data)
+
+        def pack(self):
+            return struct.pack("<3i 3f 5i f I",
+                self.nameIndex, self.subShapeNum, self.objectDetailNum,
+                self.size, self.averageError, self.maxError,
+                self.polyCount,
+                self.bbDimension, self.bbDetailLevel, self.bbEquatorSteps, self.bbPolarSteps,
+                self.bbPolarAngle,
+                self.bbIncludePoles
+        )
 
 
 
@@ -122,7 +142,7 @@ class CdaeV31:
             self.tverts1 = create_empty(8) #vtx vec2
             self.colors = create_empty(4) #vtx int/rgba
             self.norms = create_empty(12) #vtx vec3
-            self.encoded_Norms = create_empty(1) #vtx byte
+            self.encoded_norms = create_empty(1) #vtx byte
             self.draw_regions = create_empty(12) #start: int, count: int, material_index: int (DrawRegion)
             self.indices = create_empty(4) #int
             self.tangents = create_empty(16) #vtx vec4
@@ -141,7 +161,13 @@ class CdaeV31:
     class Material:
 
         def __init__(self):
-            pass
+            self.name: str = ""
+            self.flags: int = 0
+            self.reflect: int = 0
+            self.bump: int = 0
+            self.detail: int = 0
+            self.detailScale: float = 0
+            self.reflectionAmount: float = 0
 
 
     def __init__(self):
@@ -166,7 +192,7 @@ class CdaeV31:
         self.defaultRotations = create_empty(8) #quat4h
         self.defaultTranslations = create_empty(12) #vec3f
         self.nodeRotations = create_empty(8) #quat4h
-        self.nodeTranslations = create_empty(8) #quat4h
+        self.nodeTranslations = create_empty(12) #vec3f
 
         self.nodeUniformScales = create_empty(4) #float
         self.nodeAlignedScales = create_empty(12) #vec3f
@@ -203,13 +229,21 @@ class CdaeV31:
         return self.objects.unpack_list(CdaeV31.Object)
     
 
+    def unpack_details(self):
+        return self.details.unpack_list(CdaeV31.Detail)
+    
+
     def pack_nodes(self, list):
         return self.nodes.pack_list(list)
 
 
     def pack_objects(self, list):
         return self.objects.pack_list(list)
+    
 
+    def pack_details(self, list):
+        return self.details.pack_list(list)
+    
 
     def read_from_stream(self, f: BufferedReader):
 
@@ -301,13 +335,32 @@ class CdaeV31:
             mesh.tverts1 = read_vector()
             mesh.colors = read_vector()
             mesh.norms = read_vector()
-            mesh.encoded_Norms = read_vector()
+            mesh.encoded_norms = read_vector()
             mesh.draw_regions = read_vector()
             mesh.indices = read_vector()
             mesh.tangents = read_vector()
 
             mesh.vertsPerFrame = body.read_int32()
             mesh.flags = body.read_int32()
+
+
+        seq_count = body.read_int32()
+        if seq_count != 0:
+            raise Exception()
+        
+
+        mat_count = body.read_int32()
+        for i in range(mat_count):
+            mat = CdaeV31.Material()
+            self.materials.append(mat)
+
+            mat.name = body.read_str()
+            mat.flags = body.read_int32()
+            mat.reflect = body.read_int32()
+            mat.bump = body.read_int32()
+            mat.detail = body.read_int32()
+            mat.detailScale = body.read_float()
+            mat.reflectionAmount = body.read_float()
 
 
     def read_from_file(self, filepath: str):
@@ -384,7 +437,7 @@ class CdaeV31:
             write_vector(mesh.tverts1)
             write_vector(mesh.colors)
             write_vector(mesh.norms)
-            write_vector(mesh.encoded_Norms)
+            write_vector(mesh.encoded_norms)
             write_vector(mesh.draw_regions)
             write_vector(mesh.indices)
             write_vector(mesh.tangents)
@@ -397,9 +450,16 @@ class CdaeV31:
         for obj in self.sequences:
             pass
 
+
         body.write_int32(len(self.materials))
         for obj in self.materials:
-            pass
+            body.write_str(obj.name)
+            body.write_int32(obj.flags)
+            body.write_int32(obj.reflect)
+            body.write_int32(obj.bump)
+            body.write_int32(obj.detail)
+            body.write_float(obj.detailScale)
+            body.write_float(obj.reflectionAmount)
 
         return body.to_bytes()
     
@@ -417,9 +477,10 @@ class CdaeV31:
 
         head = MsgpackWriter()
         head_dict = {
+            "info": "Welcome! This is a binary file :D Please read the docs at https://go.beamng.com/shapeMessagepackFileformat",
             "compression": False,
             "bodysize": len(body_bytes),
-            "objectNames": [],
+            "objectNames": self.get_object_names(),
         }
         head.write_dict(head_dict)
         head_bytes = head.to_bytes()

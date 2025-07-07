@@ -61,35 +61,44 @@ class ImportCdae(Operator, ImportHelper):
             if (info.type != CdaeV31.MeshType.STANDARD):
                 continue
 
-            print(info)
-            positions = info.verts.to_numpy_buffer(np.float32, 3)
-            tverts0 = info.tverts0.to_numpy_buffer(np.float32, 2)
-            tverts1 = info.tverts1.to_numpy_buffer(np.float32, 2)
-            normals = info.norms.to_numpy_buffer(np.float32, 3)
+            positions = info.verts.to_numpy_buffer(np.float32, 3).reshape(-1, 3)
+            tverts0 = info.tverts0.to_numpy_buffer(np.float32, 2).reshape(-1, 2)
+            tverts1 = info.tverts1.to_numpy_buffer(np.float32, 2).reshape(-1, 2)
+            normals = info.norms.to_numpy_buffer(np.float32, 3).reshape(-1, 3)
             indices = info.indices.to_numpy_buffer(np.int32)
 
-
-            print(f"wtf0 {info.verts.element_count}")
-            print(f"wtf1 {len(positions)}")
-            print(f"wtf2 {len(positions)/3}")
             vert_count = len(positions) // 3
             loop_count = len(indices)
             face_count = loop_count // 3
 
-            mesh.vertices.add(vert_count)
+            print(info.norms.element_count)
+            print(normals.shape)
+
+            # Expand to loop-space
+            loop_positions = positions[indices]
+            if info.norms.element_count:
+                loop_normals = normals[indices]
+
+            mesh.vertices.add(loop_count)
             mesh.loops.add(loop_count)
             mesh.polygons.add(face_count)
 
-            mesh.vertices.foreach_set("co", positions)
-            mesh.loops.foreach_set("vertex_index", indices)
+            mesh.vertices.foreach_set("co", loop_positions.ravel())
+            mesh.loops.foreach_set("vertex_index", np.arange(loop_count, dtype=np.int32))
 
-            loop_start = np.arange(face_count, dtype = np.int32) * 3
-            loop_total = np.full(face_count, 3, dtype = np.int32)
+            loop_start = np.arange(face_count, dtype=np.int32) * 3
+            loop_total = np.full(face_count, 3, dtype=np.int32)
             mesh.polygons.foreach_set("loop_start", loop_start)
             mesh.polygons.foreach_set("loop_total", loop_total)
-
+        
             mesh.validate()
+
+            if info.norms.element_count:
+                mesh.normals_split_custom_set(loop_normals)
+
             mesh.update()
+
+
         
 
         return {'FINISHED'}

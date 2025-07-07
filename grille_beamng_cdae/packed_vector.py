@@ -19,15 +19,6 @@ class PackedVector:
         self.element_size = size
         self.data = bytes(bytearray(0))
         return self
-
-
-    @classmethod
-    def from_numpy_buffer(cls, array: np.ndarray, element_size = 1):
-        self = cls()
-        self.element_count = len(array)
-        self.element_size = element_size * 4
-        self.data = array.tobytes()
-        return self
     
 
     def unpack_list(self, cls: type[T]) -> list[T]:
@@ -60,7 +51,17 @@ class PackedVector:
         return self.data[start:end]
     
 
+    def alloc(self, element_count):
+        self.element_count = element_count
+        self.data = bytes(bytearray(self.element_count * self.element_size))
+    
+
     def to_numpy_buffer(self, type, size = 1):
         return np.frombuffer(self.data, type, self.element_count * size)
+    
+
+    def set_numpy_buffer(self, array: np.ndarray):
+        self.data = array.tobytes()
+        self.element_count = len(self.data) // self.element_size
 
 
