@@ -3,6 +3,7 @@ import bpy
 import struct
 import numpy as np
 
+from . import cdae_serializer_binary as CdaeBinarySerializer
 from io import BufferedReader
 from bpy.types import Operator
 from bpy_extras.io_utils import ImportHelper
@@ -11,15 +12,15 @@ from bpy.props import StringProperty
 from .cdae_v31 import CdaeV31
 
 class ImportCdae(Operator, ImportHelper):
-    bl_idname = "import_scene.beamng"
+    bl_idname = "grille.import_beamng_cdae"
     bl_label = "Import BeamNG"
     filename_ext = ".cdae"
     filter_glob = StringProperty(default="*.cdae", options={'HIDDEN'})
 
     def execute(self, context):
-        cdae = CdaeV31()
-        cdae.read_from_file(self.filepath)
-
+        cdae = CdaeBinarySerializer.read_from_file(self.filepath)
+        cdae.print_debug()
+        
         meshes: list[tuple[CdaeV31.Mesh, bpy.types.Object, bpy.types.Mesh]] = []
         for cdae_mesh in cdae.meshes:
             mesh = bpy.data.meshes.new("mesh")
@@ -54,6 +55,19 @@ class ImportCdae(Operator, ImportHelper):
                 mesh_info = meshes[i + obj_info[0].startMeshIndex]
                 mesh_info[1].parent = obj_info[1]
 
+        for subshape in cdae.unpack_subshapes():
+            obj = bpy.data.objects.new(f"ss", None)
+            bpy.context.collection.objects.link(obj)
+            obj["nodes.first"] = subshape.firstNode
+            obj["nodes.count"] = subshape.numNodes
+            obj["objects.first"] = subshape.firstObject
+            obj["objects.count"] = subshape.numObjects
+
+        for detail in cdae.unpack_details():
+            name = cdae.names[detail.nameIndex]
+            obj = bpy.data.objects.new(f"lod:{name}", None)
+            bpy.context.collection.objects.link(obj)
+
         for mesh_info in meshes:
             info = mesh_info[0]
             mesh = mesh_info[2]
@@ -61,11 +75,13 @@ class ImportCdae(Operator, ImportHelper):
             if (info.type != CdaeV31.MeshType.STANDARD):
                 continue
 
-            positions = info.verts.to_numpy_buffer(np.float32, 3).reshape(-1, 3)
-            tverts0 = info.tverts0.to_numpy_buffer(np.float32, 2).reshape(-1, 2)
-            tverts1 = info.tverts1.to_numpy_buffer(np.float32, 2).reshape(-1, 2)
-            normals = info.norms.to_numpy_buffer(np.float32, 3).reshape(-1, 3)
-            indices = info.indices.to_numpy_buffer(np.int32)
+            positions = info.verts.to_numpy_array(np.float32).reshape(-1, 3)
+            tverts0 = info.tverts0.to_numpy_array(np.float32).reshape(-1, 2)
+            tverts1 = info.tverts1.to_numpy_array(np.float32).reshape(-1, 2)
+            normals = info.norms.to_numpy_array(np.float32).reshape(-1, 3)
+            indices = info.indices.to_numpy_array(np.int32)
+
+            normals = -normals
 
             vert_count = len(positions) // 3
             loop_count = len(indices)

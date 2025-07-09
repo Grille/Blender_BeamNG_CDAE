@@ -58,11 +58,34 @@ class CdaeV31:
         matFrameIndex: int
 
 
+        def unpack(self, data: bytes):
+            self.vis, self.frameIndex, self.matFrameIndex = struct.unpack("<fii", data)
+
+        def pack(self):
+            return struct.pack("<fii", self.vis, self.frameIndex, self.matFrameIndex)
+
+
     @dataclass
     class Trigger:
 
         state: int
         pos: float
+
+
+        def unpack(self, data: bytes):
+            self.state, self.pos = struct.unpack("<if", data)
+
+        def pack(self):
+            return struct.pack("<if", self.state, self.pos)
+
+
+    @dataclass
+    class SubShape:
+
+        firstNode: int = 0
+        firstObject: int = 0
+        numNodes: int = 0
+        numObjects: int = 0
 
 
     @dataclass
@@ -151,6 +174,15 @@ class CdaeV31:
             self.flags: int = 0
 
 
+        def get_vec4f_colors(self):
+
+            uint32_array = self.colors.to_numpy_array(np.uint32)
+            r = (uint32_array >> 0) & 0xFF
+            g = (uint32_array >> 8) & 0xFF
+            b = (uint32_array >> 16) & 0xFF
+            a = (uint32_array >> 24) & 0xFF
+            return (np.stack([r, g, b, a], axis=-1).astype(np.float32) / 255.0).flatten()
+
 
     class Sequence:
 
@@ -213,7 +245,7 @@ class CdaeV31:
         self.materials: list[CdaeV31.Material] = []
     
 
-    def require_name_index(self, name: str) -> int:
+    def get_name_index(self, name: str) -> int:
         for idx, key in enumerate(self.names):
             if key == name:
                 return idx
@@ -229,6 +261,24 @@ class CdaeV31:
         return self.objects.unpack_list(CdaeV31.Object)
     
 
+    def unpack_subshapes(self):
+        fn = self.subShapeFirstNode.to_numpy_array(np.uint32)
+        nn = self.subShapeNumNodes.to_numpy_array(np.uint32)
+        fo = self.subShapeFirstObject.to_numpy_array(np.uint32)
+        no = self.subShapeNumObjects.to_numpy_array(np.uint32)
+
+        count = fn.size
+        assert all(arr.size == count for arr in (nn, fo, no)), "Subshape buffers must have the same length"
+
+        for firstNode, numNodes, firstObject, numObjects in zip(fn, nn, fo, no):
+            yield CdaeV31.SubShape(
+                firstNode=int(firstNode),
+                numNodes=int(numNodes),
+                firstObject=int(firstObject),
+                numObjects=int(numObjects)
+            )
+    
+
     def unpack_details(self):
         return self.details.unpack_list(CdaeV31.Detail)
     
@@ -241,257 +291,49 @@ class CdaeV31:
         return self.objects.pack_list(list)
     
 
+    def pack_subshapes(self, subshapes: 'list[CdaeV31.SubShape]'):
+        count = len(subshapes)
+
+        fn = np.empty(count, dtype=np.uint32)
+        nn = np.empty(count, dtype=np.uint32)
+        fo = np.empty(count, dtype=np.uint32)
+        no = np.empty(count, dtype=np.uint32)
+
+        for i, s in enumerate(subshapes):
+            fn[i] = s.firstNode
+            nn[i] = s.numNodes
+            fo[i] = s.firstObject
+            no[i] = s.numObjects
+
+        self.subShapeFirstNode.set_numpy_array(fn)
+        self.subShapeNumNodes.set_numpy_array(nn)
+        self.subShapeFirstObject.set_numpy_array(fo)
+        self.subShapeNumObjects.set_numpy_array(no)
+    
+
     def pack_details(self, list):
         return self.details.pack_list(list)
     
 
-    def read_from_stream(self, f: BufferedReader):
+    def print_debug(self):
+        print("---------------------")
+        print("tree-count")
+        print(self.nodes.element_count)
+        print(self.objects.element_count)
+        print(len(self.meshes))
 
-        (file_version, export_version) = struct.unpack("<HH", f.read(4))
-        if (file_version != 31):
-            raise Exception()
-        
-        header_size = struct.unpack("<I", f.read(4))[0]
-        header = MsgpackReader.from_bytes(f.read(header_size)).read_dict()
-
-        for key in header:
-            print(key)
-            print(header[key])
-
-
-        body = MsgpackReader.from_stream(f)
-
-        self.smallest_visible_size = body.read_float()
-        self.smallest_visible_dl = body.read_int32()
-        self.radius = body.read_float()
-        self.tube_radius = body.read_float()
-        self.center = body.read_vec3f()
-        self.bounds = body.read_box6f()
-
-        def read_vector():
-            vec = PackedVector()
-            vec.element_count = body.read_int32()
-            vec.element_size = body.read_int32()
-            vec.data = body.read_bytes()
-            return vec
-        
-
-        self.nodes = read_vector()
-        self.objects = read_vector()
-
-        self.subShapeFirstNode = read_vector()
-        self.subShapeFirstObject = read_vector()
-        self.subShapeNumNodes = read_vector()
-        self.subShapeNumObjects = read_vector()
-
-        self.defaultRotations = read_vector()
-        self.defaultTranslations = read_vector()
-        self.nodeRotations = read_vector()
-        self.nodeTranslations = read_vector()
-
-        self.nodeUniformScales = read_vector()
-        self.nodeAlignedScales = read_vector()
-        self.nodeArbitraryScaleFactors = read_vector()
-        self.nodeArbitraryScaleRots = read_vector()
-
-        self.groundTranslations = read_vector()
-        self.groundRotations = read_vector()
-
-        self.objectStates = read_vector()
-        self.triggers = read_vector()
-        self.details = read_vector()
-
-
-        names_count = body.read_int32()
-        print(names_count)
-        for _ in range(names_count):
-            name = body.read_str()
-            self.names.append(name)
-
-
-        meshes_count = body.read_int32()
-        for i in range(meshes_count):
-            print(i)
-            mesh = CdaeV31.Mesh()
-            self.meshes.append(mesh)
-
-            mesh.type = CdaeV31.MeshType(body.read_int32())
-
-            if (mesh.type == CdaeV31.MeshType.NULL):
-                continue
-
-            elif (mesh.type != CdaeV31.MeshType.STANDARD):
-                raise Exception(mesh.type.name)
-
-            mesh.numFrames = body.read_int32()
-            mesh.numMatFrames = body.read_int32()
-            mesh.parentMesh = body.read_int32()
-            mesh.bounds = body.read_box6f()
-            mesh.center = body.read_vec3f()
-            mesh.radius = body.read_float()
-
-            mesh.verts = read_vector()
-            mesh.tverts0 = read_vector()
-            mesh.tverts1 = read_vector()
-            mesh.colors = read_vector()
-            mesh.norms = read_vector()
-            mesh.encoded_norms = read_vector()
-            mesh.draw_regions = read_vector()
-            mesh.indices = read_vector()
-            mesh.tangents = read_vector()
-
-            mesh.vertsPerFrame = body.read_int32()
-            mesh.flags = body.read_int32()
-
-
-        seq_count = body.read_int32()
-        if seq_count != 0:
-            raise Exception()
-        
-
-        mat_count = body.read_int32()
-        for i in range(mat_count):
-            mat = CdaeV31.Material()
-            self.materials.append(mat)
-
-            mat.name = body.read_str()
-            mat.flags = body.read_int32()
-            mat.reflect = body.read_int32()
-            mat.bump = body.read_int32()
-            mat.detail = body.read_int32()
-            mat.detailScale = body.read_float()
-            mat.reflectionAmount = body.read_float()
-
-
-    def read_from_file(self, filepath: str):
-
-        with open(filepath, "rb") as f:
-            self.read_from_stream(f)
-
-
-    def get_body_bytes(self) -> bytes:
-
-        body = MsgpackWriter()
-
-        def write_vector(pvec: PackedVector):
-            body.write_int32(pvec.element_count)
-            body.write_int32(pvec.element_size)
-            body.write_bytes(pvec.data)
-
-        body.write_float(self.smallest_visible_size)
-        body.write_int32(self.smallest_visible_dl)
-        body.write_float(self.radius)
-        body.write_float(self.tube_radius)
-        body.write_vec3f(self.center)
-        body.write_box6f(self.bounds)
-
-
-        write_vector(self.nodes)
-        write_vector(self.objects)
-
-        write_vector(self.subShapeFirstNode)
-        write_vector(self.subShapeFirstObject)
-        write_vector(self.subShapeNumNodes)
-        write_vector(self.subShapeNumObjects)
-
-        write_vector(self.defaultRotations)
-        write_vector(self.defaultTranslations)
-        write_vector(self.nodeRotations)
-        write_vector(self.nodeTranslations)
-
-        write_vector(self.nodeUniformScales)
-        write_vector(self.nodeAlignedScales)
-        write_vector(self.nodeArbitraryScaleFactors)
-        write_vector(self.nodeArbitraryScaleRots)
-
-        write_vector(self.groundTranslations)
-        write_vector(self.groundRotations)
-        write_vector(self.objectStates)
-
-        write_vector(self.triggers)
-        write_vector(self.details)
-
-
-        body.write_int32(len(self.names))
-        for name in self.names:
-            body.write_str(name)
-
-
-        body.write_int32(len(self.meshes))
-        for mesh in self.meshes:
-
-            body.write_int32(mesh.type.value)
-
-            if mesh.type == CdaeV31.MeshType.NULL:
-                continue
-
-            body.write_int32(mesh.numFrames)
-            body.write_int32(mesh.numMatFrames)
-            body.write_int32(mesh.parentMesh)
-            body.write_box6f(mesh.bounds)
-            body.write_vec3f(mesh.center)
-            body.write_float(mesh.radius)
-
-            write_vector(mesh.verts)
-            write_vector(mesh.tverts0)
-            write_vector(mesh.tverts1)
-            write_vector(mesh.colors)
-            write_vector(mesh.norms)
-            write_vector(mesh.encoded_norms)
-            write_vector(mesh.draw_regions)
-            write_vector(mesh.indices)
-            write_vector(mesh.tangents)
-
-            body.write_int32(mesh.vertsPerFrame)
-            body.write_int32(mesh.flags)
-
-
-        body.write_int32(len(self.sequences))
-        for obj in self.sequences:
-            pass
-
-
-        body.write_int32(len(self.materials))
-        for obj in self.materials:
-            body.write_str(obj.name)
-            body.write_int32(obj.flags)
-            body.write_int32(obj.reflect)
-            body.write_int32(obj.bump)
-            body.write_int32(obj.detail)
-            body.write_float(obj.detailScale)
-            body.write_float(obj.reflectionAmount)
-
-        return body.to_bytes()
-    
-
-    def get_object_names(self) -> list[str]:
-        list = []
-        for obj in self.unpack_objects():
-            list.append(self.names[obj.nameIndex])
-        return list
-
-    
-    def write_to_stream(self, f: BufferedWriter):
-
-        body_bytes = self.get_body_bytes()
-
-        head = MsgpackWriter()
-        head_dict = {
-            "info": "Welcome! This is a binary file :D Please read the docs at https://go.beamng.com/shapeMessagepackFileformat",
-            "compression": False,
-            "bodysize": len(body_bytes),
-            "objectNames": self.get_object_names(),
-        }
-        head.write_dict(head_dict)
-        head_bytes = head.to_bytes()
-
-        f.write(struct.pack("<HH", 31, 0))
-        f.write(struct.pack("<I", len(head_bytes)))
-        f.write(head_bytes)
-        f.write(body_bytes)
-
-
-    def write_to_file(self, filepath: str):
-
-        with open(filepath, 'wb') as f:
-            self.write_to_stream(f)
+        print("blobs")
+        print("- default")
+        print(self.defaultRotations.element_count)
+        print(self.defaultTranslations.element_count)
+        print("- node")
+        print(self.nodeRotations.element_count)
+        print(self.nodeTranslations.element_count)
+        print("- scale")
+        print(self.nodeUniformScales.element_count)
+        print(self.nodeAlignedScales.element_count)
+        print(self.nodeArbitraryScaleFactors.element_count)
+        print(self.nodeArbitraryScaleRots.element_count)
+        print("- ground")
+        print(self.groundRotations.element_count)
+        print(self.groundTranslations.element_count)

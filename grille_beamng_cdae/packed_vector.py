@@ -56,11 +56,12 @@ class PackedVector:
         self.data = bytes(bytearray(self.element_count * self.element_size))
     
 
-    def to_numpy_buffer(self, type, size = 1):
+    def to_numpy_array(self, type: type[np.dtype]) -> np.ndarray:
+        size = (len(self.data) // self.element_count) // np.dtype(type).itemsize if self.element_count != 0 else 0
         return np.frombuffer(self.data, type, self.element_count * size)
     
 
-    def set_numpy_buffer(self, array: np.ndarray):
+    def set_numpy_array(self, array: np.ndarray):
         self.data = array.tobytes()
         self.element_count = len(self.data) // self.element_size
 

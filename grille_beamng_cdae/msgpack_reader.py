@@ -72,11 +72,13 @@ class MsgpackReader:
         value = self.read_next()
 
         if isinstance(value, list):
+            print("read list")
             if (len(value) != size):
                 raise Exception()
             return value
             
         elif isinstance(value, bytes):
+            print("read bytes")
             if (len(value) != size * 4):
                 raise Exception()
             return list(struct.unpack(f"<{size}f", value))
