@@ -50,6 +50,48 @@ class CdaeV31:
             return struct.pack("<6i", self.nameIndex, self.numMeshes, self.startMeshIndex, self.nodeIndex, self.nextSibling, self.firstDecal)
 
     
+    class Tree:
+
+        def __init__(self, nodes: 'list[CdaeV31.Node]', objects: 'list[CdaeV31.Object]'):
+
+            self.nodes = nodes
+            self.objects = objects
+
+
+        def enumerate_root(self):
+            for node_index, node in enumerate(self.nodes):
+                if node.parentIndex == -1:
+                    yield (node_index, node)
+
+
+        def enumerate_nodes(self, node_index: int):
+            node_index = self.nodes[node_index].firstChild
+            while node_index != -1:
+                node = self.nodes[node_index]
+                yield (node_index, node)
+                node_index = node.nextSibling
+
+
+        def enumerate_objects(self, node_index: int):
+            obj_index = self.nodes[node_index].firstObject
+            while obj_index != -1:
+                obj = self.objects[obj_index]
+                yield (obj_index, obj)
+                obj_index = obj.nextSibling
+
+
+        def enumerate_mesh_indexes(self, obj_index: int):
+            obj = self.objects[obj_index]
+            for mesh_index in range(obj.startMeshIndex, obj.startMeshIndex + obj.numMeshes):
+                print(mesh_index)
+                yield mesh_index
+
+
+        def enumerate_meshes(self, obj_index: int, meshes: 'list[CdaeV31.Mesh]'):
+            for mesh_index in self.enumerate_mesh_indexes(obj_index):
+                yield (mesh_index, meshes[mesh_index])
+
+
     @dataclass
     class ObjectState:
         
@@ -187,7 +229,28 @@ class CdaeV31:
     class Sequence:
 
         def __init__(self):
-            pass
+            self.nameIndex: int = 0
+            self.flags: int = 0
+            self.numKeyframes: int = 0
+            self.duration: float = 0
+            self.priority: int = 0
+            self.firstGroundFrame: int = 0
+            self.numGroundFrames: int = 0
+            self.baseRotation: int = 0
+            self.baseTranslation: int = 0
+            self.baseScale: int = 0
+            self.baseObjectState: int = 0
+            self.baseDecalState: int = 0
+            self.firstTrigger: int = 0
+            self.numTriggers: int = 0
+            self.toolBegin: float = 0
+
+            self.rotationMatters: TSIntegerSet
+            self.translationMatters: TSIntegerSet
+            self.scaleMatters: TSIntegerSet
+            self.visMatters: TSIntegerSet
+            self.frameMatters: TSIntegerSet
+            self.matFrameMatters: TSIntegerSet
 
 
     class Material:
@@ -243,7 +306,7 @@ class CdaeV31:
         self.meshes: list[CdaeV31.Mesh] = []
         self.sequences: list[CdaeV31.Sequence] = []
         self.materials: list[CdaeV31.Material] = []
-    
+
 
     def get_name_index(self, name: str) -> int:
         for idx, key in enumerate(self.names):
@@ -259,6 +322,10 @@ class CdaeV31:
 
     def unpack_objects(self):
         return self.objects.unpack_list(CdaeV31.Object)
+    
+
+    def unpack_tree(self):
+        return CdaeV31.Tree(self.unpack_nodes(), self.unpack_objects())
     
 
     def unpack_subshapes(self):
@@ -289,6 +356,11 @@ class CdaeV31:
 
     def pack_objects(self, list):
         return self.objects.pack_list(list)
+    
+
+    def pack_tree(self, tree: 'CdaeV31.Tree'):
+        self.pack_nodes(tree.nodes)
+        self.pack_objects(tree.objects)
     
 
     def pack_subshapes(self, subshapes: 'list[CdaeV31.SubShape]'):

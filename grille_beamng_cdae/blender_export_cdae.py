@@ -19,12 +19,18 @@ class ExportCdae(Operator, ExportHelper):
     filename_ext = ".cdae"
     filter_glob = StringProperty(default="*.cdae", options={'HIDDEN'})
 
+
     def execute(self, context):
         builder = CdeaBuilder()
-        builder.tree.add_objects(set(bpy.context.selected_objects))
+        builder.tree.add_selected()
         builder.build()
 
         CdaeBinarySerializer.write_to_file(builder.cdae, self.filepath)
 
         return {'FINISHED'}
     
+    
+    @staticmethod
+    def menu_func(self, context):
+        self.layout.operator(ExportCdae.bl_idname, text="BeamNG (.cdae)")
+        

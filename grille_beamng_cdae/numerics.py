@@ -54,11 +54,13 @@ class Vec4F:
 
 
 class Quat4F(Vec4F):
-    pass
+    
+    def to_euler(self) -> Vec3F:
+        pass
 
 
 
-class Quat4H(Vec4F):
+class Quat4H(Quat4F):
 
     def unpack(self, data: bytes):
         arr = np.frombuffer(data, dtype=np.float16, count=4)
@@ -79,3 +81,8 @@ class Box6F:
     @staticmethod
     def create_empty():
         return Box6F(Vec3F.create_empty(), Vec3F.create_empty())
+
+
+
+class TSIntegerSet:
+    pass

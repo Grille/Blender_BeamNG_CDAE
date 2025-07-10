@@ -44,7 +44,7 @@ def write_src_float(flat_array: NDArray[np.float32], xml: ET.Element, stride: in
     }).extend([ET.Element("param", {"name": UNITS[n], "type": "float"}) for n in range(stride)])
 
 
-def write_geometry(mesh: CdaeV31.Mesh, lib_geometries: ET.Element, mesh_index: int, materials: list[CdaeV31.Material]):
+def write_geometry(mesh: CdaeV31.Mesh, lib_geometries: ET.Element, mesh_index: int, materials: list[CdaeV31.Material], mesh_mat_names: list[CdaeV31.Material]):
 
     geom_id = f"mesh_{mesh_index}"
     geom = ET.SubElement(lib_geometries, "geometry", {"id": geom_id, "name": geom_id})
@@ -73,6 +73,7 @@ def write_geometry(mesh: CdaeV31.Mesh, lib_geometries: ET.Element, mesh_index: i
     draw_regions = mesh.draw_regions.to_numpy_array(np.uint32).reshape(-1, 3)
     for draw_index, (start, count, mat_index) in enumerate(draw_regions):
         mat_name = f"mat_{mat_index}" if mat_index < len(materials) else "mat_0"
+        mesh_mat_names.append(mat_name)
         tris = ET.SubElement(mesh_elem, "triangles", {
             "count": str(count // 3),
             "material": mat_name
@@ -122,27 +123,51 @@ def write_to_tree(cdae: CdaeV31, dae: ET.Element):
         ET.SubElement(lib_effects, "effect", {"id": effect_id})
 
     # Geometries
+    mesh_mat_names: list[list[str]] = []
     for mesh_index, mesh in enumerate(cdae.meshes):
-        write_geometry(mesh, lib_geometries, mesh_index, cdae.materials)
+        mesh_mat_names_2 = []
+        write_geometry(mesh, lib_geometries, mesh_index, cdae.materials, mesh_mat_names_2)
+        mesh_mat_names.append(mesh_mat_names_2)
 
-    # Visual Scene with nodes and mesh instances
-    for obj_index, obj in enumerate(cdae.unpack_objects()):
-        name = cdae.names[obj.nameIndex] if obj.nameIndex < len(cdae.names) else f"Object_{obj_index}"
-        node = ET.SubElement(visual_scene, "node", {"id": name, "name": name, "type": "NODE"})
-        for i in range(obj.startMeshIndex, obj.startMeshIndex + obj.numMeshes):
-            geom_url = f"#mesh_{i}"
-            mat_name = f"mat_0"  # fallback
-            if i < len(cdae.meshes):
-                regions = cdae.meshes[i].draw_regions.to_numpy_array(np.uint32).reshape(-1, 3)
-                if len(regions) > 0 and regions[0][2] < len(cdae.materials):
-                    mat_name = f"mat_{regions[0][2]}"
-            inst_geom = ET.SubElement(node, "instance_geometry", {"url": geom_url})
-            bind_mat = ET.SubElement(inst_geom, "bind_material")
-            technique_common = ET.SubElement(bind_mat, "technique_common")
-            ET.SubElement(technique_common, "instance_material", {
-                "symbol": mat_name,
-                "target": f"#{mat_name}"
-            })
+
+    cdae_tree = cdae.unpack_tree()
+
+    # Build tree: recursively walk nodes and objects
+    def process_node(node_index: int, node: CdaeV31.Node, parent_xml_node):
+        node_name = cdae.names[node.nameIndex]
+        xml_node = ET.SubElement(parent_xml_node, "node", {"id": node_name, "name": node_name, "type": "NODE"})
+
+
+        for obj_index, obj in cdae_tree.enumerate_objects(node_index):
+
+            obj_name = cdae.names[obj.nameIndex]
+            if obj_name != node_name:
+                xml_obj_node = ET.SubElement(xml_node, "node", {"id": obj_name, "name": obj_name, "type": "NODE"})
+            else:
+                xml_obj_node = xml_node
+
+            for mesh_index in cdae_tree.enumerate_mesh_indexes(obj_index):
+                print(mesh_index)
+                geom_url = f"#mesh_{mesh_index}"
+                mat_names = mesh_mat_names[mesh_index]
+
+                inst_geom = ET.SubElement(xml_obj_node, "instance_geometry", {"url": geom_url})
+                bind_mat = ET.SubElement(inst_geom, "bind_material")
+                tech_common = ET.SubElement(bind_mat, "technique_common")
+
+                for mat_name in mat_names:
+                    ET.SubElement(tech_common, "instance_material", {
+                        "symbol": mat_name,
+                        "target": f"#{mat_name}"
+                    })
+
+
+        for child_index, child in cdae_tree.enumerate_nodes(node_index):
+            process_node(child_index, child, xml_node)
+
+
+    for node_index, node in cdae_tree.enumerate_root():
+        process_node(node_index, node, visual_scene)
 
 
 def write_to_stream(cdae: CdaeV31, f: TextIOWrapper):

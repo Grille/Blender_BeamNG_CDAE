@@ -1,4 +1,5 @@
 import bpy
+import bmesh
 import re
 import numpy as np
 
@@ -9,6 +10,10 @@ from typing import List, Dict, Optional, Tuple
 from collections import defaultdict
 
 from .cdae_v31 import *
+from .blender_object_properties import ObjectProperties
+
+
+# Classes to help build serializable CdaeV31.
 
 
 class CdaeNodeList:
@@ -64,6 +69,16 @@ class CdaeTree(CdaeNodeList):
             self.name = name
             self.meshes = meshes
 
+
+        @staticmethod
+        def from_bpy(bpy_obj: bpy.types.Object) -> 'CdaeTree.Object':
+            obj = CdaeTree.Object(bpy_obj.name)
+
+            for mesh_obj in bpy_obj.children:
+                if CdaeTree.get_node_type(mesh_obj) == CdaeTree.Mesh:
+                    mesh = CdaeTree.Mesh(mesh_obj)
+                    obj.meshes.append(mesh)
+
     
     class Mesh:
         def __init__(self, obj: bpy.types.Object):
@@ -99,12 +114,12 @@ class CdaeTree(CdaeNodeList):
             CdaeTree.Mesh: [],
         }
 
-        CDAE_PATH = "cdae_path"
-        path_objects: set[bpy.types.Object] = set()
+        path_objects: list[tuple[bpy.types.Object, str]] = []
 
         for obj in root_objects:
-            if CDAE_PATH in obj:
-                path_objects.add(obj)
+            cdae_path = getattr(obj, ObjectProperties.CDAE_PATH)
+            if cdae_path:
+                path_objects.append((obj, cdae_path))
             else:
                 obj_type = CdaeTree.get_node_type(obj)
                 if obj_type is not None:
@@ -115,7 +130,7 @@ class CdaeTree(CdaeNodeList):
             self.nodes.append(CdaeTree.build_node_recursive(root))
 
         for root in root_dict[CdaeTree.Object]:
-            obj = CdaeTree.build_object(root)
+            obj = CdaeTree.Object.from_bpy(root)
             node = CdaeTree.Node(root.name, [], [obj])
             self.nodes.append(node)
 
@@ -127,8 +142,11 @@ class CdaeTree(CdaeNodeList):
             
 
         for obj in path_objects:
-            path: str = obj[CDAE_PATH]
-            self.add_object_by_path(obj, path)
+            self.add_object_by_path(*obj)
+
+
+    def add_selected(self):
+        self.add_objects(set(bpy.context.selected_objects))
 
 
     def get_path_node(self, path: str) -> 'CdaeTree.Node':
@@ -154,7 +172,7 @@ class CdaeTree(CdaeNodeList):
         name = parent.name
 
         if obj_type is CdaeTree.Object:
-            cdae_obj = CdaeTree.build_object(obj)
+            cdae_obj = CdaeTree.Object.from_bpy(obj)
             cdae_obj.name = name
             parent.objects.append(cdae_obj)
 
@@ -178,16 +196,6 @@ class CdaeTree(CdaeNodeList):
 
 
     @staticmethod
-    def build_object(bpy_obj: bpy.types.Object) -> 'CdaeTree.Object':
-        obj = CdaeTree.Object(bpy_obj.name)
-
-        for mesh_obj in bpy_obj.children:
-            if CdaeTree.get_node_type(mesh_obj) == CdaeTree.Mesh:
-                mesh = CdaeTree.Mesh(mesh_obj)
-                obj.meshes.append(mesh)
-
-
-    @staticmethod
     def build_node_recursive(bpy_obj: bpy.types.Object) -> 'CdaeTree.Node':
         node = CdaeTree.Node(bpy_obj.name)
 
@@ -196,7 +204,7 @@ class CdaeTree(CdaeNodeList):
             type = CdaeTree.get_node_type(child)
 
             if type == CdaeTree.Object:
-                node.objects.append(CdaeTree.build_object(child))
+                node.objects.append(CdaeTree.Object.from_bpy(child))
 
             elif type == CdaeTree.Node:
                 node.nodes.append(CdaeTree.build_node_recursive(child))
@@ -302,6 +310,14 @@ class CdeaMeshBuilder:
         
 
     def build_from_mesh(self, mesh: bpy.types.Mesh, material_indexer: CdaeMaterialIndexer)-> CdaeV31.Mesh:
+
+        if any(len(p.vertices) > 4 for p in mesh.polygons):
+            bm = bmesh.new()
+            bm.from_mesh(mesh)
+            bmesh.ops.triangulate(bm, faces=bm.faces)
+            bm.to_mesh(mesh)
+            bm.free()
+
         self.mesh = mesh
         mesh.calc_loop_triangles()
         mesh.calc_tangents()

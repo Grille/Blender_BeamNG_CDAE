@@ -16,40 +16,38 @@ ensure_package("numpy")
 
 
 import bpy
+from .blender_object_properties import ObjectProperties
+from .blender_object_panel import ObjectPanel
 from .blender_import_cdae import ImportCdae
 from .blender_export_cdae import ExportCdae
 from .blender_export_dae import ExportDae
 
 
-def menu_func_import(self, context):
-    self.layout.operator(ImportCdae.bl_idname, text="BeamNG (.cdae)")
-
-
-def menu_func_export(self, context):
-    self.layout.operator(ExportCdae.bl_idname, text="BeamNG (.cdae)")
-
-
-def menu_func_export_text(self, context):
-    self.layout.operator(ExportDae.bl_idname, text="BeamNG (.dae)")
-
-
 def register():
+    ObjectProperties.register()
+
+    bpy.utils.register_class(ObjectPanel)
+
     bpy.utils.register_class(ImportCdae)
-    bpy.types.TOPBAR_MT_file_import.append(menu_func_import)
+    bpy.types.TOPBAR_MT_file_import.append(ImportCdae.menu_func)
 
     bpy.utils.register_class(ExportCdae)
-    bpy.types.TOPBAR_MT_file_export.append(menu_func_export)
+    bpy.types.TOPBAR_MT_file_export.append(ExportCdae.menu_func)
 
     bpy.utils.register_class(ExportDae)
-    bpy.types.TOPBAR_MT_file_export.append(menu_func_export_text)
+    bpy.types.TOPBAR_MT_file_export.append(ExportDae.menu_func)
 
 
 def unregister():
+    ObjectProperties.unregister()
+
+    bpy.utils.unregister_class(ObjectPanel)
+
     bpy.utils.unregister_class(ImportCdae)
-    bpy.types.TOPBAR_MT_file_import.remove(menu_func_import)
+    bpy.types.TOPBAR_MT_file_import.remove(ImportCdae.menu_func)
 
     bpy.utils.unregister_class(ExportCdae)
-    bpy.types.TOPBAR_MT_file_export.remove(menu_func_export)
+    bpy.types.TOPBAR_MT_file_export.remove(ExportCdae.menu_func)
 
     bpy.utils.unregister_class(ExportDae)
-    bpy.types.TOPBAR_MT_file_export.remove(menu_func_export_text)
+    bpy.types.TOPBAR_MT_file_export.remove(ExportDae.menu_func)
