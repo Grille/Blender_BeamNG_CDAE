@@ -8,8 +8,10 @@ It’s still very WIP, Import is very rudimentary and will give you barely anyth
 | Data | Import | Export |
 | --- | --- | --- |
 | CDAE.Mesh | ⚠️ | ⚠️ |
+| CDA.Mesh | ❌ | ⚠️ |
 | CDAE.Animations | ❌ | ❌ |
-| Materials.JSON | ❌ | ❌ |
+| CDA.Animations | ❌ | ❌ |
+| Main.Materials.JSON | ❌ | ⚠️ |
 
 ### Planned Advanced Features
 - Support for main.materials.json files at export location, merge materials with existing file if it exists.
