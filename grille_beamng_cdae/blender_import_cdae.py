@@ -16,7 +16,10 @@ class ImportCdae(Operator, ImportHelper):
     bl_idname = "grille.import_beamng_cdae"
     bl_label = "Import BeamNG"
     filename_ext = ".cdae"
-    filter_glob = StringProperty(default="*.cdae", options={'HIDDEN'})
+
+# pyright: reportInvalidTypeForm=false
+
+    filter_glob: StringProperty(default="*.cdae", options={'HIDDEN'})
 
 
     def execute(self, context):

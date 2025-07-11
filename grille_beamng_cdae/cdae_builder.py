@@ -403,6 +403,7 @@ class CdeaBuilder:
     def __init__(self):
         self.cdae = CdaeV31()
         self.tree = CdaeTree()
+        self.materials: list[bpy.types.Material] = []
 
 
     def build(self):
@@ -492,3 +493,5 @@ class CdeaBuilder:
         self.cdae.pack_subshapes([sub])
         self.cdae.pack_details([lod])
         self.cdae.meshes = flat_meshes
+
+        self.materials = materials.materials
