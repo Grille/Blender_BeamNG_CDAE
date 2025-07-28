@@ -132,7 +132,7 @@ def write_to_tree(cdae: CdaeV31, dae: ET.Element):
 
     cdae_tree = cdae.unpack_tree()
     cdae_node_translations = cdae.defaultTranslations.unpack_list(Vec3F)
-    cdae_node_rotation = cdae.defaultRotations.unpack_list(Quat4H)
+    cdae_node_rotation = cdae.defaultRotations.unpack_list(Quat4I16)
 
     dae_translations = []
     dae_rotations = []

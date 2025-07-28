@@ -1,5 +1,6 @@
 import struct
 import numpy as np
+import zstandard as zstd
 
 from dataclasses import dataclass
 from enum import Enum
@@ -28,8 +29,15 @@ def read_from_stream(f: BufferedReader) -> CdaeV31:
         print(key)
         print(header[key])
 
+    is_compressed = header.get('compression', False)
 
-    body = MsgpackReader.from_stream(f)
+    body_data = f.read()
+
+    if is_compressed:
+        dctx = zstd.ZstdDecompressor()
+        body_data = dctx.decompress(body_data)
+
+    body = MsgpackReader.from_bytes(body_data)
 
     cdae.smallest_visible_size = body.read_float()
     cdae.smallest_visible_dl = body.read_int32()

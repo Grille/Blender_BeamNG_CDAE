@@ -11,6 +11,12 @@ from .msgpack_writer import MsgpackWriter
 from .numerics import *
 
 
+TYPE_MASK = 0xC0000000
+INDEXED = 0x20000000
+NO_MATERIAL = 0x10000000
+MATERIAL_MASK = 0x0FFFFFFF
+
+
 class CdaeV31:
 
     @dataclass
@@ -241,9 +247,31 @@ class CdaeV31:
         @dataclass
         class DrawRegion:
 
-            elements_start: int
-            elements_count: int
-            info: int
+            elements_start: int = 0
+            elements_count: int = 0
+            info: int = 0
+            
+
+            @property
+            def material(self) -> int:
+                return self.info & MATERIAL_MASK
+            
+            @material.setter
+            def material(self, value: int):
+                self.info = (self.info & ~MATERIAL_MASK) | (value & MATERIAL_MASK)
+
+            def get_polygon_range(self) -> range:
+                start = self.elements_start // 3
+                count = self.elements_count // 3
+                stop = start + count
+                return range(start, stop)
+
+
+            def unpack(self, data: bytes):
+                self.elements_start, self.elements_count, self.info = struct.unpack("<iii", data)
+
+            def pack(self):
+                return struct.pack("<iii", self.elements_start, self.elements_count, self.info)
 
 
 
@@ -271,6 +299,10 @@ class CdaeV31:
 
             self.vertsPerFrame: int = 0
             self.flags: int = 0
+
+
+        def unpack_regions(self):
+            return self.draw_regions.unpack_list(CdaeV31.Mesh.DrawRegion)
 
 
         def get_vec4f_colors(self):

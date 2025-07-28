@@ -44,7 +44,8 @@ class MsgpackWriter:
 
 
     def write_integerset(self, value: set[int]):
-        self.write(list(value))
+        values = list(value)
+        self.write([len(values), values])
 
 
     def write_vec2f(self, value: Vec2F):

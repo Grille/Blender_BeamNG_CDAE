@@ -70,11 +70,21 @@ class MsgpackReader:
 
     def read_integerset(self) -> set[int]:
         value = self.read_next()
-        
+
         if isinstance(value, list):
             integerset = set()
-            for item in value:
+
+            count = value[0]
+            values = value[1]
+
+            actual_count = len(values)
+
+            if count != actual_count:
+                raise Exception(f"expected: {count}, actual: {actual_count}")
+
+            for item in values:
                 integerset.add(int(item))
+
             return integerset
         
         raise Exception()

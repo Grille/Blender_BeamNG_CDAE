@@ -3,6 +3,7 @@ import numpy as np
 
 from dataclasses import dataclass
 
+from .numerics import *
 from .cdae_v31 import CdaeV31
 
 
@@ -29,10 +30,17 @@ class CdaeParser:
             mesh: bpy.types.Mesh
 
 
+        @dataclass
+        class Material:
+            info: CdaeV31.Material
+            material: bpy.types.Material
+
+
         def __init__(self):
             self.nodes: list[CdaeParser.Scene.Node] = []
             self.objects: list[CdaeParser.Scene.Object] = []
             self.meshes: list[CdaeParser.Scene.Mesh] = []
+            self.materials: list[CdaeParser.Scene.Material] = []
 
 
         def build_scene(self, cdae: CdaeV31):
@@ -67,6 +75,12 @@ class CdaeParser:
                 for i in range(obj_info.info.numMeshes):
                     mesh_info = self.meshes[i + obj_info.info.startMeshIndex]
                     mesh_info.object.parent = obj_info.object
+
+            for cdae_mat in cdae.materials:
+                mat = bpy.data.materials.get(cdae_mat.name)
+                if mat is None:
+                    mat = bpy.data.materials.new(name=cdae_mat.name)
+                self.materials.append(CdaeParser.Scene.Material(cdae_mat, mat))
             
 
 
@@ -75,26 +89,80 @@ class CdaeParser:
         self.debug = False
 
 
+    def build_debug_info(self, cdae: CdaeV31, scene: Scene):
+
+        for idx, info in enumerate(scene.nodes):
+            info.object["cdae_index"] = idx
+
+        for idx, info in enumerate(scene.objects):
+            info.object["cdae_index"] = idx
+
+        for idx, info in enumerate(scene.meshes):
+            info.object["cdae_index"] = idx
+
+        debug_obj = bpy.data.objects.new(f"cdae_debug", None)
+        bpy.context.collection.objects.link(debug_obj)
+
+        subshapes = list(cdae.unpack_subshapes())
+        subshapes_count = len(subshapes)
+
+        subshapes_obj = bpy.data.objects.new(f"subshapes[{subshapes_count}]", None)
+        bpy.context.collection.objects.link(subshapes_obj)
+        subshapes_obj.parent = debug_obj
+
+        for subshape in subshapes:
+            obj = bpy.data.objects.new(f"subshape", None)
+            bpy.context.collection.objects.link(obj)
+            obj.parent = subshapes_obj
+            obj["nodes_first"] = subshape.firstNode
+            obj["nodes_count"] = subshape.numNodes
+            obj["objects_first"] = subshape.firstObject
+            obj["objects_count"] = subshape.numObjects
+
+        details = cdae.unpack_details()
+        details_count = len(details)
+
+        details_obj = bpy.data.objects.new(f"details[{details_count}]", None)
+        bpy.context.collection.objects.link(details_obj)
+        details_obj.parent = debug_obj
+
+        for detail in details:
+            name = cdae.names[detail.nameIndex]
+            obj = bpy.data.objects.new(f"lod:{name}", None)
+            bpy.context.collection.objects.link(obj)
+            obj.parent = details_obj
+
+            obj["polyCount"] = detail.polyCount
+            obj["objectDetailNum"] = detail.objectDetailNum
+            obj["size"] = detail.size
+            obj["subShapeNum"] = detail.subShapeNum
+
+
     def parse(self, cdae: CdaeV31):
         scene = CdaeParser.Scene()
         scene.build_scene(cdae)
 
-        for subshape in cdae.unpack_subshapes():
-            obj = bpy.data.objects.new(f"ss", None)
-            bpy.context.collection.objects.link(obj)
-            obj["nodes.first"] = subshape.firstNode
-            obj["nodes.count"] = subshape.numNodes
-            obj["objects.first"] = subshape.firstObject
-            obj["objects.count"] = subshape.numObjects
+        positions = cdae.defaultTranslations.unpack_list(Vec3F)
+        rotations = cdae.defaultRotations.unpack_list(Quat4I16)
 
-        for detail in cdae.unpack_details():
-            name = cdae.names[detail.nameIndex]
-            obj = bpy.data.objects.new(f"lod:{name}", None)
-            bpy.context.collection.objects.link(obj)
+        for index, node_info in enumerate(scene.nodes):
+            obj = node_info.object
+            obj.location = positions[index].to_tuple()
+            obj.rotation_mode = 'QUATERNION'
+            obj.rotation_quaternion = rotations[index].to_blender_quaternion()
+
+        if self.debug:
+            self.build_debug_info(cdae, scene)
 
         for mesh_info in scene.meshes:
             self.build_mesh(mesh_info.info, mesh_info.mesh)
+            self.add_materials(mesh_info.info, mesh_info.mesh, scene)
 
+
+    def add_materials(self, info: CdaeV31.Mesh, mesh: bpy.types.Mesh, scene: Scene):
+        
+        for mat_info in scene.materials:
+            mesh.materials.append(mat_info.material)
 
     def build_mesh(self, info: CdaeV31.Mesh, mesh: bpy.types.Mesh):
 
@@ -129,6 +197,10 @@ class CdaeParser:
         mesh.polygons.foreach_set("loop_start", loop_start)
         mesh.polygons.foreach_set("loop_total", loop_total)
 
+        for region in info.unpack_regions():
+            for i in region.get_polygon_range():
+                mesh.polygons[i].material_index = region.material
+
         if info.norms.element_count:
             loop_normals = -info.norms.to_numpy_array(np.float32).reshape(-1, 3)[indices]
             mesh.normals_split_custom_set(loop_normals)
@@ -147,9 +219,6 @@ class CdaeParser:
             loop_colors = info.colors.to_numpy_array(np.ubyte).reshape(-1, 4)[indices].astype(np.float32) / 255
             layer = mesh.color_attributes.new(name="Color", domain='CORNER', type='FLOAT_COLOR')
             layer.data.foreach_set("color", loop_colors.ravel())
-
-        degenerate_faces = [p for p in mesh.polygons if p.area == 0.0]
-        print(f"{len(degenerate_faces)} zero-area faces")
 
         if self.validate:
             mesh.validate(verbose=self.debug)
