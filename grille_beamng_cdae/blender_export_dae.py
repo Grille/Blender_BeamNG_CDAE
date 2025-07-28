@@ -16,6 +16,7 @@ class ExportDae(ExportBase):
 
     def execute_write_geometry(self, cdae, filepath):
         CdaeTextSerializer.write_to_file(cdae, filepath)
+        print(f"Write dae: {filepath}")
 
     
     @staticmethod

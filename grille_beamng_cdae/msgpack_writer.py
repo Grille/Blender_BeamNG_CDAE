@@ -43,6 +43,14 @@ class MsgpackWriter:
         self.write(value)
 
 
+    def write_integerset(self, value: set[int]):
+        self.write(list(value))
+
+
+    def write_vec2f(self, value: Vec2F):
+        self.write([value.x, value.y])
+
+
     def write_vec3f(self, value: Vec3F):
         self.write([value.x, value.y, value.z])
 

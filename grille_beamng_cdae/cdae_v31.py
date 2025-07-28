@@ -16,11 +16,11 @@ class CdaeV31:
     @dataclass
     class Node:
 
-        nameIndex: int = 0
-        parentIndex: int = 0
-        firstObject: int = 0
-        firstChild: int = 0
-        nextSibling: int = 0
+        nameIndex: int = -1
+        parentIndex: int = -1
+        firstObject: int = -1
+        firstChild: int = -1
+        nextSibling: int = -1
 
 
         def unpack(self, data: bytes):
@@ -34,12 +34,12 @@ class CdaeV31:
     @dataclass
     class Object:
 
-        nameIndex: int = 0
+        nameIndex: int = -1
         numMeshes: int = 0
-        startMeshIndex: int = 0
-        nodeIndex: int = 0
-        nextSibling: int = 0
-        firstDecal: int = 0
+        startMeshIndex: int = -1
+        nodeIndex: int = -1
+        nextSibling: int = -1
+        firstDecal: int = -1
 
 
         def unpack(self, data: bytes):
@@ -52,8 +52,9 @@ class CdaeV31:
     
     class Tree:
 
-        def __init__(self, nodes: 'list[CdaeV31.Node]', objects: 'list[CdaeV31.Object]'):
+        def __init__(self, cdae: 'CdaeV31', nodes: 'list[CdaeV31.Node]', objects: 'list[CdaeV31.Object]'):
 
+            self.cdae = cdae
             self.nodes = nodes
             self.objects = objects
 
@@ -83,13 +84,69 @@ class CdaeV31:
         def enumerate_mesh_indexes(self, obj_index: int):
             obj = self.objects[obj_index]
             for mesh_index in range(obj.startMeshIndex, obj.startMeshIndex + obj.numMeshes):
-                print(mesh_index)
                 yield mesh_index
 
 
-        def enumerate_meshes(self, obj_index: int, meshes: 'list[CdaeV31.Mesh]'):
+        def enumerate_meshes(self, obj_index: int):
             for mesh_index in self.enumerate_mesh_indexes(obj_index):
-                yield (mesh_index, meshes[mesh_index])
+                yield (mesh_index, self.cdae.meshes[mesh_index])
+
+
+        def create_node(self):
+            node_index = len(self.nodes)
+            node = CdaeV31.Node()
+            self.nodes.append(node)
+            return (node_index, node)
+
+
+        def create_object(self):
+            obj_index = len(self.objects)
+            obj = CdaeV31.Object()
+            self.objects.append(obj)
+            return (obj_index, obj)
+        
+
+        def _set_last_sibling(list: 'list[CdaeV31.Node|CdaeV31.Object]', current_index: int, value: int):
+            next_index = list[current_index].nextSibling
+            if next_index == -1:
+                list[current_index].nextSibling = value
+            else:
+                CdaeV31.Tree._set_last_sibling(list, next_index, value)
+
+
+        def link_node(self, parent_index: int, node_index: int):
+            if (self.nodes[node_index].parentIndex) != -1:
+                raise ValueError("Already parented")
+            
+            if parent_index == -1:
+                return
+            
+            self.nodes[node_index].parentIndex = parent_index
+
+            first = self.nodes[parent_index].firstChild
+            if first == -1:
+                self.nodes[parent_index].firstChild = node_index
+                return
+            
+            CdaeV31.Tree._set_last_sibling(self.nodes, first, node_index)
+
+
+        def link_object(self, parent_index: int, obj_index: int):
+            if (self.objects[obj_index].nodeIndex) != -1:
+                raise ValueError("Already parented")
+            
+            if parent_index == -1:
+                return
+            
+            self.objects[obj_index].nodeIndex = parent_index
+
+            first = self.nodes[parent_index].firstObject
+            if first == -1:
+                self.nodes[parent_index].firstObject = obj_index
+                return
+            
+            CdaeV31.Tree._set_last_sibling(self.objects, first, obj_index)
+
 
 
     @dataclass
@@ -196,7 +253,7 @@ class CdaeV31:
 
             self.numFrames: int = 0
             self.numMatFrames: int = 0
-            self.parentMesh: int = 0
+            self.parentMesh: int = -1
             self.bounds: Box6F = Box6F.create_empty()
             self.center: Vec3F = Vec3F.create_empty()
             self.radius: float = 0.0
@@ -325,7 +382,7 @@ class CdaeV31:
     
 
     def unpack_tree(self):
-        return CdaeV31.Tree(self.unpack_nodes(), self.unpack_objects())
+        return CdaeV31.Tree(self, self.unpack_nodes(), self.unpack_objects())
     
 
     def unpack_subshapes(self):

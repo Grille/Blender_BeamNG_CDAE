@@ -131,11 +131,24 @@ def write_to_tree(cdae: CdaeV31, dae: ET.Element):
 
 
     cdae_tree = cdae.unpack_tree()
+    cdae_node_translations = cdae.defaultTranslations.unpack_list(Vec3F)
+    cdae_node_rotation = cdae.defaultRotations.unpack_list(Quat4H)
+
+    dae_translations = []
+    dae_rotations = []
+
+    #for i in range(len(cdae_tree.nodes)):
+        
 
     # Build tree: recursively walk nodes and objects
     def process_node(node_index: int, node: CdaeV31.Node, parent_xml_node):
         node_name = cdae.names[node.nameIndex]
         xml_node = ET.SubElement(parent_xml_node, "node", {"id": node_name, "name": node_name, "type": "NODE"})
+
+        #location = dae_translations[node_index]
+        #axis = dae_rotations[node_index]
+        #translate_str = f"{location.x} {location.y} {location.z}"
+        #rotate_str = f"{axis.x} {axis.y} {axis.z} {angle_deg}"
 
 
         for obj_index, obj in cdae_tree.enumerate_objects(node_index):
@@ -147,7 +160,6 @@ def write_to_tree(cdae: CdaeV31, dae: ET.Element):
                 xml_obj_node = xml_node
 
             for mesh_index in cdae_tree.enumerate_mesh_indexes(obj_index):
-                print(mesh_index)
                 geom_url = f"#mesh_{mesh_index}"
                 mat_names = mesh_mat_names[mesh_index]
 

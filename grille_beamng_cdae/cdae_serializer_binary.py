@@ -90,9 +90,6 @@ def read_from_stream(f: BufferedReader) -> CdaeV31:
         if (mesh.type == CdaeV31.MeshType.NULL):
             continue
 
-        elif (mesh.type != CdaeV31.MeshType.STANDARD):
-            raise Exception(mesh.type.name)
-
         mesh.numFrames = body.read_int32()
         mesh.numMatFrames = body.read_int32()
         mesh.parentMesh = body.read_int32()
@@ -113,10 +110,43 @@ def read_from_stream(f: BufferedReader) -> CdaeV31:
         mesh.vertsPerFrame = body.read_int32()
         mesh.flags = body.read_int32()
 
+        if (mesh.type == CdaeV31.MeshType.STANDARD):
+            continue
+
+        elif (mesh.type == CdaeV31.MeshType.SKIN):
+            raise Exception()
+        
+        else:
+            raise Exception()
+
 
     seq_count = body.read_int32()
     if seq_count != 0:
-        raise Exception()
+        seq = CdaeV31.Sequence()
+        cdae.sequences.append(seq)
+
+        seq.nameIndex = body.read_int32()
+        seq.flags = body.read_int32()
+        seq.numKeyframes = body.read_int32()
+        seq.duration = body.read_float()
+        seq.priority = body.read_int32()
+        seq.firstGroundFrame = body.read_int32()
+        seq.numGroundFrames = body.read_int32()
+        seq.baseRotation = body.read_int32()
+        seq.baseTranslation = body.read_int32()
+        seq.baseScale = body.read_int32()
+        seq.baseObjectState = body.read_int32()
+        seq.baseDecalState = body.read_int32()
+        seq.firstTrigger = body.read_int32()
+        seq.numTriggers = body.read_int32()
+        seq.toolBegin = body.read_float()
+
+        seq.rotationMatters = body.read_integerset()
+        seq.translationMatters = body.read_integerset()
+        seq.scaleMatters = body.read_integerset()
+        seq.visMatters = body.read_integerset()  
+        seq.frameMatters = body.read_integerset()
+        seq.matFrameMatters = body.read_integerset()
     
 
     mat_count = body.read_int32()
@@ -221,7 +251,7 @@ def get_body_bytes(cdae: CdaeV31) -> bytes:
 
     body.write_int32(len(cdae.sequences))
     for obj in cdae.sequences:
-        pass
+        raise Exception()
 
 
     body.write_int32(len(cdae.materials))

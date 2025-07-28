@@ -66,9 +66,21 @@ class MsgpackReader:
             return value
         
         raise Exception()
+        
 
+    def read_integerset(self) -> set[int]:
+        value = self.read_next()
+        
+        if isinstance(value, list):
+            integerset = set()
+            for item in value:
+                integerset.add(int(item))
+            return integerset
+        
+        raise Exception()
+        
 
-    def read_float_list(self, size: int) -> list[float]:
+    def _read_float_list(self, size: int) -> list[float]:
         value = self.read_next()
 
         if isinstance(value, list):
@@ -88,17 +100,17 @@ class MsgpackReader:
         
 
     def read_vec2f(self):
-        values = self.read_float_list(2)
+        values = self._read_float_list(2)
         return Vec2F(values[0], values[1])
 
 
     def read_vec3f(self):
-        values = self.read_float_list(3)
+        values = self._read_float_list(3)
         return Vec3F(values[0], values[1], values[2])
     
 
     def read_box6f(self):
-        values = self.read_float_list(6)
+        values = self._read_float_list(6)
         min = Vec3F(values[0], values[1], values[2])
         max = Vec3F(values[3], values[4], values[5])
         return Box6F(min, max)

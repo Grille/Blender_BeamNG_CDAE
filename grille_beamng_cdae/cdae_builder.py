@@ -217,12 +217,15 @@ class CdaeMaterialIndexer:
         self.material_to_index = {}
         self.materials: list[bpy.types.Material] = []
 
-    def get_index(self, mat: bpy.types.Material):
-        if mat not in self.material_to_index:
+
+    def get_index(self, bmat: bpy.types.Material):
+        if bmat is None:
+            raise ValueError("'bmat' is None")
+        if bmat not in self.material_to_index:
             index = len(self.materials)
-            self.material_to_index[mat] = index
-            self.materials.append(mat)
-        return self.material_to_index[mat]
+            self.material_to_index[bmat] = index
+            self.materials.append(bmat)
+        return self.material_to_index[bmat]
     
     
 class CdeaMeshBuilder:
@@ -410,61 +413,37 @@ class CdeaBuilder:
 
         cdae = self.cdae
 
-        flat_nodes: list[CdaeV31.Node] = []
-        flat_objects: list[CdaeV31.Object] = []
-        flat_meshes: list[CdaeV31.Mesh] = []
+        flat_tree = cdae.unpack_tree()
+        flat_meshes = cdae.meshes
 
         materials = CdaeMaterialIndexer()
 
-        def add_node(node: 'CdaeTree.Node', parent_index: int = -1) -> int:
-            print(f"add_node {node.name}")
-            node_index = len(flat_nodes)
-            flat_nodes.append(CdaeV31.Node())  # Will fill fields later
-            current_node = flat_nodes[node_index]
-            current_node.nameIndex = cdae.get_name_index(node.name)
-            current_node.parentIndex = parent_index
 
-            # Handle objects
-            current_node.firstObject = -1
-            last_object_index = -1
+        def add_node(node: 'CdaeTree.Node', parent_index: int = -1) -> int:
+            (node_index, flat_node) = flat_tree.create_node()
+            flat_tree.link_node(parent_index, node_index)
+            flat_node.nameIndex = cdae.get_name_index(node.name)
+
             for obj in node.objects:
-                obj_index = len(flat_objects)
-                flat_objects.append(CdaeV31.Object())
-                flat_obj = flat_objects[obj_index]
+                (obj_index, flat_obj) = flat_tree.create_object()
+                flat_tree.link_object(node_index, obj_index)
                 flat_obj.nameIndex = cdae.get_name_index(obj.name)
+
                 flat_obj.numMeshes = len(obj.meshes)
                 flat_obj.startMeshIndex = len(flat_meshes)
-                flat_obj.nodeIndex = node_index
-                flat_obj.firstDecal = -1
-                flat_obj.nextSibling = -1
-
+   
                 for mesh in obj.meshes:
                     mesh_builder = CdeaMeshBuilder()
                     flat_meshes.append(mesh_builder.build_from_object(mesh.bpy_obj, materials))
 
-                if current_node.firstObject == -1:
-                    current_node.firstObject = obj_index
-                if last_object_index != -1:
-                    flat_objects[last_object_index].nextSibling = obj_index
-                last_object_index = obj_index
-
-            # Handle children
-            current_node.firstChild = -1
-            current_node.nextSibling = -1
-
-            last_child_index = -1
             for child in node.nodes:
-                child_index = add_node(child, node_index)
-                if current_node.firstChild == -1:
-                    current_node.firstChild = child_index
-                if last_child_index != -1:
-                    flat_nodes[last_child_index].nextSibling = child_index
-                last_child_index = child_index
+                add_node(child, node_index)
 
             return node_index
 
+
         for node in self.tree.nodes:
-            add_node (node)
+            add_node(node)
 
         for mat in materials.materials:
             res = CdaeV31.Material()
@@ -480,16 +459,14 @@ class CdeaBuilder:
         lod.maxError = -1
 
         sub = CdaeV31.SubShape()
-        sub.numNodes = len(flat_nodes)
-        sub.numObjects = len(flat_objects)
+        sub.numNodes = len(flat_tree.nodes)
+        sub.numObjects = len(flat_tree.objects)
 
-
-        self.cdae.defaultRotations.alloc(len(flat_nodes))
-        self.cdae.defaultTranslations.alloc(len(flat_nodes))
+        self.cdae.defaultRotations.alloc(len(flat_tree.nodes))
+        self.cdae.defaultTranslations.alloc(len(flat_tree.nodes))
 
         # Convert flat_nodes and flat_objects into PackedVectors
-        self.cdae.pack_nodes(flat_nodes)
-        self.cdae.pack_objects(flat_objects)
+        self.cdae.pack_tree(flat_tree)
         self.cdae.pack_subshapes([sub])
         self.cdae.pack_details([lod])
         self.cdae.meshes = flat_meshes

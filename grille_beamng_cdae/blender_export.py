@@ -17,6 +17,9 @@ class ExportBase(Operator, ExportHelper):
 
     write_geometry: BoolProperty(name="Write Geometry", default=True)
 
+    copy_textures: BoolProperty(name="Copy Textures", default=False)
+
+
     material_write_mode: EnumProperty(
         name="Write Mode",
         description="How materials are written",
@@ -44,7 +47,7 @@ class ExportBase(Operator, ExportHelper):
 
         filepath: str = self.filepath
         dirpath = os.path.dirname(filepath)
-        
+
         if self.write_geometry:
             self.execute_write_geometry(builder.cdae, filepath)
 
@@ -64,8 +67,6 @@ class ExportBase(Operator, ExportHelper):
         else:
             mat_filepath = os.path.abspath(os.path.join(dirpath, self.material_path))
 
-        print(mat_filepath)
-
         libary = MaterialLibary()
         if (mode != "REPLACE"):
             libary.try_load(mat_filepath)
@@ -77,6 +78,7 @@ class ExportBase(Operator, ExportHelper):
                 libary.overwrite_bmat(bmat)
 
         libary.save(mat_filepath)
+        print(f"Write materials.json: {mat_filepath}")
     
 
     def draw(self, context):
@@ -84,6 +86,7 @@ class ExportBase(Operator, ExportHelper):
         layout = self.layout
 
         layout.prop(self, "write_geometry")
+        layout.prop(self, "copy_textures")
 
         box = layout.box()
         box.label(text="Materials", icon='MATERIAL')

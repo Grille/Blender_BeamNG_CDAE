@@ -16,6 +16,7 @@ class ExportCdae(ExportBase):
 
     def execute_write_geometry(self, cdae, filepath):
         CdaeBinarySerializer.write_to_file(cdae, filepath)
+        print(f"Write cdae: {filepath}")
 
     
     @staticmethod

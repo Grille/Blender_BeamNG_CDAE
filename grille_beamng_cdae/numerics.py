@@ -2,6 +2,7 @@ import struct
 import numpy as np
 
 class Vec2F:
+    
     def __init__(self, x: float, y: float):
         self.x = x
         self.y = y
@@ -17,6 +18,7 @@ class Vec2F:
 
 
 class Vec3F:
+
     def __init__(self, x: float, y: float, z: float):
         self.x = x
         self.y = y
@@ -37,6 +39,7 @@ class Vec3F:
 
 
 class Vec4F:
+
     def __init__(self, x: float, y: float, z: float, w: float):
         self.x = x
         self.y = y
@@ -66,6 +69,7 @@ class Quat4H(Quat4F):
         arr = np.frombuffer(data, dtype=np.float16, count=4)
         self.x, self.y, self.z, self.w = map(float, arr)
 
+
     def pack(self):
         arr = np.array([self.x, self.y, self.z, self.w], dtype=np.float16)
         return arr.tobytes()
@@ -73,6 +77,7 @@ class Quat4H(Quat4F):
 
 
 class Box6F:
+
     def __init__(self, min: Vec3F, max: Vec3F):
         self.min = min
         self.max = max
