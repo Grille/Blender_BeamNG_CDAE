@@ -282,8 +282,8 @@ class CdaeV31:
             self.numFrames: int = 0
             self.numMatFrames: int = 0
             self.parentMesh: int = -1
-            self.bounds: Box6F = Box6F.create_empty()
-            self.center: Vec3F = Vec3F.create_empty()
+            self.bounds: Box6F = Box6F()
+            self.center: Vec3F = Vec3F()
             self.radius: float = 0.0
 
             create_empty = PackedVector.create_empty
@@ -334,12 +334,12 @@ class CdaeV31:
             self.numTriggers: int = 0
             self.toolBegin: float = 0
 
-            self.rotationMatters: TSIntegerSet
-            self.translationMatters: TSIntegerSet
-            self.scaleMatters: TSIntegerSet
-            self.visMatters: TSIntegerSet
-            self.frameMatters: TSIntegerSet
-            self.matFrameMatters: TSIntegerSet
+            self.rotationMatters: set[int] = set()
+            self.translationMatters: set[int] = set()
+            self.scaleMatters: set[int]= set()
+            self.visMatters: set[int] = set()
+            self.frameMatters: set[int] = set()
+            self.matFrameMatters: set[int] = set()
 
 
     class Material:
@@ -360,8 +360,8 @@ class CdaeV31:
         self.smallest_visible_dl: int = 0
         self.radius: float = 0.0
         self.tube_radius: float = 0.0
-        self.center: Vec3F = Vec3F.create_empty()
-        self.bounds: Box6F = Box6F.create_empty()
+        self.center: Vec3F = Vec3F()
+        self.bounds: Box6F = Box6F()
 
         create_empty = PackedVector.create_empty
 

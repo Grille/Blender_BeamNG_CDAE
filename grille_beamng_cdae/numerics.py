@@ -42,11 +42,6 @@ class Vec3F:
         return (self.x, self.y, self.z)
         
 
-    @staticmethod
-    def create_empty():
-        return Vec3F()
-
-
 
 class Vec4F:
 
@@ -55,6 +50,12 @@ class Vec4F:
         self.y: float = y
         self.z: float = z
         self.w: float = w
+
+
+    @classmethod
+    def from_list(cls, list: list[float]):
+        self = cls(*list[:4])
+        return self
 
 
     def unpack(self, data: bytes):
@@ -69,7 +70,9 @@ class Vec4F:
         return (self.x, self.y, self.z, self.w)
     
 
-
+    def to_list(self):
+        return [self.x, self.y, self.z, self.w]
+    
 
 
 class Quat4F(Vec4F):
@@ -87,6 +90,7 @@ class Quat4F(Vec4F):
     def to_blender_quaternion(self):
         return mathutils.Quaternion((self.z, self.y, self.x, self.w))
     
+
 
 class Quat4I16(Quat4F):
 
@@ -111,16 +115,37 @@ class Quat4I16(Quat4F):
 
 class Box6F:
 
-    def __init__(self, min: Vec3F, max: Vec3F):
-        self.min = min
-        self.max = max
+    def __init__(self, minx = 0.0, miny = 0.0, minz = 0.0, maxx = 0.0, maxy = 0.0, maxz = 0.0):
+        self.min = Vec3F(minx, miny, minz)
+        self.max = Vec3F(maxx, maxy, maxz)
 
 
-    @staticmethod
-    def create_empty():
-        return Box6F(Vec3F.create_empty(), Vec3F.create_empty())
+class Color4F(Vec4F):
+
+    def __init__(self, r = 0.0, g = 0.0, b = 0.0, a = 0.0):
+        self.r = r
+        self.g = g
+        self.b = b
+        self.a = a
 
 
+    @property
+    def r(self) -> float: return self.x
+    @r.setter
+    def r(self, value: float): self.x = value
 
-class TSIntegerSet:
-    pass
+    @property
+    def g(self) -> float: return self.y
+    @g.setter
+    def g(self, value: float): self.y = value
+
+    @property
+    def b(self) -> float: return self.z
+    @b.setter
+    def b(self, value: float): self.z = value
+
+    @property
+    def a(self) -> float: return self.w
+    @a.setter
+    def a(self, value: float): self.w = value
+    

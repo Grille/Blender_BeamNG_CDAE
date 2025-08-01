@@ -132,10 +132,14 @@ class CdaeParser:
             bpy.context.collection.objects.link(obj)
             obj.parent = details_obj
 
+            obj["name"] = name
             obj["polyCount"] = detail.polyCount
             obj["objectDetailNum"] = detail.objectDetailNum
             obj["size"] = detail.size
             obj["subShapeNum"] = detail.subShapeNum
+            obj["averageError"] = detail.averageError
+            obj["maxError"] = detail.maxError
+            obj["bbDetailLevel"] = detail.bbDetailLevel
 
 
     def parse(self, cdae: CdaeV31):

@@ -10,16 +10,18 @@ class ObjectProperties:
 
     @staticmethod
     def register():
+        def _set(key, property): setattr(bpy.types.Object, key, property)
 
         property = bpy.props.StringProperty(
             name="Tree Path",
             description="Node tree path inside the cdae file",
             default=""
         )
-        setattr(bpy.types.Object, ObjectProperties.CDAE_PATH, property)
+        _set(ObjectProperties.CDAE_PATH, property)
     
 
     @staticmethod
     def unregister():
-
-        delattr(bpy.types.Object, ObjectProperties.CDAE_PATH)
+        def _del(key): delattr(bpy.types.Object, key)
+        
+        _del(ObjectProperties.CDAE_PATH)

@@ -258,19 +258,40 @@ def get_body_bytes(cdae: CdaeV31) -> bytes:
 
 
     body.write_int32(len(cdae.sequences))
-    for obj in cdae.sequences:
-        raise Exception()
+    for seq in cdae.sequences:
+        body.write_int32(seq.nameIndex)
+        body.write_int32(seq.flags)
+        body.write_int32(seq.numKeyframes)
+        body.write_float(seq.duration)
+        body.write_int32(seq.priority)
+        body.write_int32(seq.firstGroundFrame)
+        body.write_int32(seq.numGroundFrames)
+        body.write_int32(seq.baseRotation)
+        body.write_int32(seq.baseTranslation)
+        body.write_int32(seq.baseScale)
+        body.write_int32(seq.baseObjectState)
+        body.write_int32(seq.baseDecalState)
+        body.write_int32(seq.firstTrigger)
+        body.write_int32(seq.numTriggers)
+        body.write_float(seq.toolBegin)
+
+        body.write_integerset(seq.rotationMatters)
+        body.write_integerset(seq.translationMatters)
+        body.write_integerset(seq.scaleMatters)
+        body.write_integerset(seq.visMatters)
+        body.write_integerset(seq.frameMatters)
+        body.write_integerset(seq.matFrameMatters)
 
 
     body.write_int32(len(cdae.materials))
-    for obj in cdae.materials:
-        body.write_str(obj.name)
-        body.write_int32(obj.flags)
-        body.write_int32(obj.reflect)
-        body.write_int32(obj.bump)
-        body.write_int32(obj.detail)
-        body.write_float(obj.detailScale)
-        body.write_float(obj.reflectionAmount)
+    for mat in cdae.materials:
+        body.write_str(mat.name)
+        body.write_int32(mat.flags)
+        body.write_int32(mat.reflect)
+        body.write_int32(mat.bump)
+        body.write_int32(mat.detail)
+        body.write_float(mat.detailScale)
+        body.write_float(mat.reflectionAmount)
 
     return body.to_bytes()
 

@@ -1,8 +1,9 @@
 
 import os
 import json
-
 import bpy
+
+from enum import Enum
 
 from .material import Material
 
@@ -10,6 +11,7 @@ class MaterialLibary:
 
     def __init__(self):
         self.materials: dict[str, Material] = {}
+        self.new_materials: list[Material] = []
 
     def try_load(self, filepath: str):
         try:
@@ -50,3 +52,4 @@ class MaterialLibary:
     def overwrite_bmat(self, bmat: bpy.types.Material):
         mat = Material.from_bmat(bmat)
         self.materials[mat.name] = mat
+        self.new_materials.append(mat)
