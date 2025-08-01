@@ -151,7 +151,7 @@ class CdaeParser:
 
         for index, node_info in enumerate(scene.nodes):
             obj = node_info.object
-            obj.location = positions[index].to_tuple()
+            obj.location = positions[index].tuple3
             obj.rotation_mode = 'QUATERNION'
             obj.rotation_quaternion = rotations[index].to_blender_quaternion()
 

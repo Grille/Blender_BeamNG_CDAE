@@ -15,25 +15,26 @@ class NodeLayoutError(Exception):
 class NodeWalker():
 
     @dataclass
-    class Socket:
+    class MatSocket:
+        exists: bool = False
         image: bpy.types.Image = None
         layer: str = None
         color: Color4F = None
         factor: float = None
         strength: float = None
         scale: Vec2F = None
-        child: 'NodeWalker.Socket' = None
+        child: 'NodeWalker.MatSocket' = None
         issues: list[str] = None
 
         def set_value_or_color(self, value: float | tuple):
             if isinstance(value, float):
                 self.factor = value
             else:
-                self.color = Color4F.from_list(value)
+                self.color = Color4F.from_list4(value)
 
 
     @dataclass
-    class MaterialSettings:
+    class MatSettings:
         alpha_clip: bool = False
         alpha_clip_threshold: int = 0
         alpha_blend: bool = False
@@ -43,20 +44,20 @@ class NodeWalker():
 
     
     @dataclass
-    class StageHead:
+    class MatStage:
         context: 'NodeWalker'
 
-    
-    def __init__(self, node: bpy.types.Node = None):
+
+    def __init__(self, node: bpy.types.Node = None, stack: list = None):
         self.current = node
-        self.group_stack = []
+        self.group_stack = [] if stack is None else list(stack)
 
 
     def is_node_idname(self, idname: str):
         return self.current.bl_idname == idname
     
 
-    def find_output(self, nodes: bpy.types.Nodes):
+    def find_material_output(self, nodes: bpy.types.Nodes):
         for node in nodes:
             if node.bl_idname == NodeNames.OutputMaterial and node.is_active_output:
                 self.current = node
@@ -66,10 +67,13 @@ class NodeWalker():
 
     def get_input(self, input_key: str | int, throw: bool = True) -> bpy.types.NodeSocket | None:
 
+        if isinstance(input_key, bpy.types.NodeSocket):
+            return input_key
+        
         if isinstance(input_key, str):
             return self.current.inputs.get(input_key) 
         
-        elif isinstance(input_key, int):
+        elif isinstance(input_key, int) and input_key < len(self.current.inputs):
             return self.current.inputs[input_key]
         
         elif throw:
@@ -96,12 +100,27 @@ class NodeWalker():
 
         if from_node.bl_idname == NodeNames.Group:
 
-            group_output = from_node.outputs[from_socket_index()]
-            if not group_output.is_linked:
+            print("Hit group")
+
+            print(len(from_node.node_tree.nodes))
+            for node in from_node.node_tree.nodes:
+                if node.bl_idname == NodeNames.GroupOutput:
+                    
+                    print("found node")
+                    group_output_node = node
+                    break
+
+            if group_output_node is None:
+                return None
+
+            inner_output_input = group_output_node.inputs[from_socket_index()]
+            if not inner_output_input.is_linked:
                 return None
             
+            print("found input")
+            
             self.group_stack.append(from_node)
-            return self.walk_link_recursively(group_output.links[0])
+            return self.walk_link_recursively(inner_output_input.links[0])
 
         elif from_node.bl_idname == NodeNames.GroupInput:
 
@@ -120,55 +139,59 @@ class NodeWalker():
     
 
     def try_follow(self, input_key: str | int):
-        node = self.get_node(input_key)
-        if node is not None:
-            self.current = node
-            return True
-        return False
+        self.current = self.get_node(input_key, False)
+        return self.current is not None
     
 
     def follow(self, input_key: str | int):
-        print(f"follow {input_key}")
-
         if not self.try_follow(input_key):
-            raise Exception()
+            raise NodeLayoutError(f"Next node on {input_key} is None.")
         
 
     def fork(self, input_key: str | int = None) -> 'NodeWalker':
-        walk = NodeWalker(self.current)
+        walk = NodeWalker(self.current, stack=self.group_stack)
         if (input_key is not None):
             walk.follow(input_key)
         return walk
     
 
-    def _get_any_value(self, input_key: str | int) -> any:
-        node = self.get_node(input_key, throw=False)
-        if node is not None and node.bl_idname:
-            return node.outputs[0].default_value
-        input = self.get_input(input_key, throw=True)
-        return input.default_value
+    def _get_any_value(self, input_key: str | int, idname):
+        input = self.get_input(input_key, throw = False)
+        if input is None:
+            return None
+        stack = list(self.group_stack) if input.is_linked else self.group_stack
+        try:
+            node = self.get_node(input, throw=False)
+            if node is None:
+                return input.default_value
+            elif node.bl_idname == idname:
+                return node.outputs[0].default_value
+            return None
+        finally:
+            self.group_stack = stack
+
     
 
-    def get_float_value(self, input_key: str | int) -> float:
+    def get_float_value(self, input_key: str | int) -> float | None:
         try:
-            value = self._get_any_value(input_key)
+            value = self._get_any_value(input_key, NodeNames.Value)
             return float(value)
         except:
-            return 0
+            return None
     
 
-    def get_color_value(self, input_key: str | int) -> Color4F:
+    def get_color_value(self, input_key: str | int) -> Color4F | None:
         try:
-            value = self._get_any_value(input_key)
-            return Color4F.from_list(value)
+            value = self._get_any_value(input_key, NodeNames.RGB)
+            return Color4F.from_list4(value)
         except:
-            return Color4F(1,1,1,1)
+            return None
 
 
-    def parse_socket_tree(self, socket: 'NodeWalker.Socket'):
+    def parse_socket_tree(self, socket: 'NodeWalker.MatSocket'):
 
         if self.is_node_idname(BeamDetailColor.bl_idname):
-            child = NodeWalker.Socket(issues=[])
+            child = NodeWalker.MatSocket(issues=[])
             child.strength = self.get_float_value("Strength")
             self.get_socket("Detail", child)
             socket.child = child
@@ -176,7 +199,7 @@ class NodeWalker():
             self.follow("Base")
 
         if self.is_node_idname(BeamDetailNormal.bl_idname):
-            child = NodeWalker.Socket(issues=[])
+            child = NodeWalker.MatSocket(issues=[])
             self.get_socket("Detail", child)
             socket.child = child
             self.follow("Base")
@@ -187,15 +210,25 @@ class NodeWalker():
             self.follow("Texture Map")
 
         if self.is_node_idname(BeamFactorColor.bl_idname):
-            print("GET color factor")
             socket.color = self.get_color_value("Factor")
-            print(socket.color)
             self.follow("Texture Map")
 
+        if self.is_node_idname(NodeNames.Mix):
+            socket.color = self.get_color_value(7)
+            self.follow(6)
+
+        if self.is_node_idname(NodeNames.VectorMath):
+            socket.color = self.get_color_value(1)
+            self.follow(0)
+
+        if self.is_node_idname(NodeNames.Math):
+            socket.factor = self.get_float_value(1)
+            self.follow(0)
 
         if self.is_node_idname(NodeNames.NormalMap):
             socket.strength = self.get_float_value("Strength")
             self.follow("Color")
+
 
         if self.is_node_idname(NodeNames.TexImage):
             socket.image = self.get_image()
@@ -218,23 +251,27 @@ class NodeWalker():
             socket.layer = self.current.uv_map
 
 
-    def get_socket(self, input_key: str | int, socket: 'NodeWalker.Socket' = None) -> 'NodeWalker.Socket':
+    def get_socket(self, input_key: str | int, socket: 'NodeWalker.MatSocket' = None) -> 'NodeWalker.MatSocket':
 
         if socket is None:
-            socket = NodeWalker.Socket(issues=[])
+            socket = NodeWalker.MatSocket(issues=[])
 
         try:
             socket.color = self.get_color_value(input_key)
             socket.factor = self.get_float_value(input_key)
+            socket.exists = True
             ctx = self.fork()
             if ctx.try_follow(input_key):
                 ctx.parse_socket_tree(socket)
+
+        except Exception as e:
+            print(e)
 
         finally:
             return socket
 
 
-    def parse_stage_recursively(self, stages: list['NodeWalker.StageHead'] = None):
+    def parse_stage_recursively(self, stages: list['NodeWalker.MatStage'] = None):
 
         if stages is None:
             stages = []
@@ -243,15 +280,15 @@ class NodeWalker():
             context = self.fork("Overlay")
             self.follow("Base")
             self.parse_stage_recursively(stages)
-            stages.append(NodeWalker.StageHead(context))
+            stages.append(NodeWalker.MatStage(context))
         else:
-            stages.append(NodeWalker.StageHead(self))
+            stages.append(NodeWalker.MatStage(self))
 
         return stages
     
 
-    def parse_mat_settings(self) -> 'NodeWalker.MaterialSettings':
-        mat = NodeWalker.MaterialSettings()
+    def parse_mat_settings(self) -> 'NodeWalker.MatSettings':
+        mat = NodeWalker.MatSettings()
         if self.is_node_idname(BeamMaterial.bl_idname):
             mat.alpha_clip = self.get_float_value(BeamMaterial.Sockets.CLIP) > 0.5
             mat.alpha_clip_threshold = self.get_float_value(BeamMaterial.Sockets.CLIP_T)

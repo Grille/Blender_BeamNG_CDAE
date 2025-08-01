@@ -26,11 +26,13 @@ class DictProperty(Generic[T]):
             instance.dict[f"{instance.prefix}{self.key}"] = value
 
 
-class Socket:
+    
+
+
+class SocketV15:
     
     factor: float | list[float] = DictProperty("Factor")
     strength: float = DictProperty("MapStrength")
-    bcm_strength: float = DictProperty("BaseColorMapStrength")
     use_uv: int = DictProperty("MapUseUV")
     map: str = DictProperty("Map")
     scale: list[float] = DictProperty("Scale")
@@ -48,26 +50,36 @@ class Socket:
         self.dict = dict
 
 
-    def parse_socket(self, src: NodeWalker.Socket, set: ParserSettings):
+    def parse_socket(self, src: NodeWalker.MatSocket, set: ParserSettings):
 
-        if set.color_enabled and src.color:
-            self.factor = src.color.to_list()
-        if set.factor_enabled and src.factor:
+        if set.color_enabled and src.color is not None:
+            self.factor = src.color.srgb.list4
+        if set.factor_enabled and src.factor is not None:
             self.factor = src.factor
-        if src.strength:
+        if src.strength is not None:
             self.strength = src.strength
 
-        if src.image:
+        if src.image is not None:
             self.map = src.image.name
 
-        if src.scale:
+        if self.map is not None and self.factor is None:
+            self.factor = 1.0
+
+        if src.scale is not None:
             self.scale = [src.scale.x, src.scale.y]
 
-        if src.layer:
+        if src.layer is not None:
             self.use_uv = 1 if set.uv1hint in src.layer else 0
 
 
-class Stage:
+    def move(self, src: str, dst: str):
+        value = self.dict.pop(src, None)
+        if value is not None:
+            self.dict[dst] = value
+
+
+
+class StageV15:
 
     use_anisotropic: bool = DictProperty("useAnisotropic")
 
@@ -76,39 +88,45 @@ class Stage:
         self.prefix = ""
         self.dict = {} if basedict is None else basedict
 
-        self.base_color = Socket("baseColor", self.dict)
-        self.detail = Socket("detail", self.dict)
-        self.metallic = Socket("metallic", self.dict)
-        self.normal = Socket("normal", self.dict)
-        self.detail_normal = Socket("detailNormal", self.dict)
-        self.roughness = Socket("roughness", self.dict)
-        self.opacity = Socket("opacity", self.dict)
-        self.ambient_occlusion = Socket("ambientOcclusion", self.dict)
+        self.base_color = SocketV15("baseColor", self.dict)
+        self.detail = SocketV15("detail", self.dict)
+        self.metallic = SocketV15("metallic", self.dict)
+        self.normal = SocketV15("normal", self.dict)
+        self.detail_normal = SocketV15("detailNormal", self.dict)
+        self.roughness = SocketV15("roughness", self.dict)
+        self.opacity = SocketV15("opacity", self.dict)
+        self.ambient_occlusion = SocketV15("ambientOcclusion", self.dict)
 
 
     def add_texture_names_to(self, target: set[str]):
         def try_add(value: str | None): 
             if value is not None: target.add(value)
         try_add(self.base_color.map)
+        try_add(self.detail.map)
         try_add(self.metallic.map)
         try_add(self.normal.map)
+        try_add(self.detail_normal.map)
         try_add(self.roughness.map)
         try_add(self.opacity.map)
+        try_add(self.ambient_occlusion.map)
 
 
-    def parse_shader_node(self, head: NodeWalker.StageHead, uv1hint: str):
+    def parse_shader_node(self, head: NodeWalker.MatStage, uv1hint: str):
         ctx = head.context
 
-        COLOR = Socket.ParserSettings(uv1hint, True, False)
-        FLOAT = Socket.ParserSettings(uv1hint, False, True)
-        MAP = Socket.ParserSettings(uv1hint, False, False)
+        COLOR = SocketV15.ParserSettings(uv1hint, True, False)
+        FLOAT = SocketV15.ParserSettings(uv1hint, False, True)
+        MAP = SocketV15.ParserSettings(uv1hint, False, False)
 
         base_color = ctx.get_socket("Base Color")
+        if not base_color.exists:
+            ctx.get_socket("Color", base_color)
         self.base_color.parse_socket(base_color, COLOR)
+        self.base_color.move("baseColorMapUseUV", "diffuseMapUseUV")
 
         if base_color.child:
             self.detail.parse_socket(base_color.child, MAP)
-            self.detail.bcm_strength = self.detail.strength
+            self.detail.move("detailMapStrength", "detailBaseColorMapStrength")
 
         metallic = ctx.get_socket("Metallic")
         self.metallic.parse_socket(metallic, FLOAT)
@@ -121,6 +139,7 @@ class Stage:
 
         if normal.child:
             self.detail_normal.parse_socket(normal.child, MAP)
+            self.detail_normal.move("detailNormalMapUseUV", "normalDetailMapUseUV")
 
         normal = ctx.get_socket("Alpha")
         self.opacity.parse_socket(normal, FLOAT)
@@ -157,7 +176,7 @@ class Material:
             self.dict[Material.STAGES_KEY] = [{},{},{},{}]
 
         raw_stages: list[dict] = self.dict[Material.STAGES_KEY]
-        self.stages = [Stage(raw_stages[0]), Stage(raw_stages[1]), Stage(raw_stages[2]), Stage(raw_stages[3])]
+        self.stages = [StageV15(raw_stages[0]), StageV15(raw_stages[1]), StageV15(raw_stages[2]), StageV15(raw_stages[3])]
 
 
     @classmethod
@@ -175,7 +194,7 @@ class Material:
         stage0.use_anisotropic = True
 
         ctx = NodeWalker()
-        ctx.find_output(bmat.node_tree.nodes)
+        ctx.find_material_output(bmat.node_tree.nodes)
         ctx.follow("Surface")
 
         settings = ctx.parse_mat_settings()

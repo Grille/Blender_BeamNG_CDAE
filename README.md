@@ -4,6 +4,8 @@ A (WIP) [BeamNG](https://www.beamng.com/game/) specific Blender addon to export 
 
 Since [BeamNG's](https://www.beamng.com/game/) CDAE now has format [specifications](https://documentation.beamng.com/modding/file_formats/cdae/), as well as blender announcing to drop collada support with 5.0, I thought a dedicated addon might become useful.
 
+[Wiki (WIP)](https://github.com/Grille/Blender_BeamNG_CDAE/wiki)
+
 ### Features
 | Data | Import | Export |
 | --- | --- | --- |
@@ -11,7 +13,8 @@ Since [BeamNG's](https://www.beamng.com/game/) CDAE now has format [specificatio
 | CDAE.Animations | ➖ | ❌ Planned |
 | CDA.Mesh | ➖ | ⚠️ Partial |
 | CDA.Animations | ➖ | ❌ Planned |
-| Main.Materials.JSON | ➖ | ⚠️ Partial |
+| Main.Materials.JSON | ➖ | ✔️ Functional (PBR) |
+
 
 ### Materials
 Material placeholders can be generated at the export location, existing `main.materials.json` files can be handled/merged based on user preference.\

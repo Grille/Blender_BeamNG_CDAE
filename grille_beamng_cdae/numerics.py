@@ -18,7 +18,8 @@ class Vec2F:
         return struct.pack("<2f", self.x, self.y)
     
 
-    def to_tuple(self):
+    @property
+    def tuple2(self):
         return (self.x, self.y)
     
 
@@ -38,7 +39,8 @@ class Vec3F:
         return struct.pack("<3f", self.x, self.y, self.z)
     
 
-    def to_tuple(self):
+    @property
+    def tuple3(self):
         return (self.x, self.y, self.z)
         
 
@@ -53,7 +55,7 @@ class Vec4F:
 
 
     @classmethod
-    def from_list(cls, list: list[float]):
+    def from_list4(cls, list: list[float]):
         self = cls(*list[:4])
         return self
 
@@ -66,11 +68,18 @@ class Vec4F:
         return struct.pack("<4f", self.x, self.y, self.z, self.w)
     
 
-    def to_tuple(self):
-        return (self.x, self.y, self.z, self.w)
+    @property
+    def tuple3(self):
+        return (self.x, self.y, self.z)
     
 
-    def to_list(self):
+    @property
+    def tuple4(self):
+        return (self.x, self.y, self.z, self.w)
+        
+
+    @property
+    def list4(self):
         return [self.x, self.y, self.z, self.w]
     
 
@@ -127,6 +136,28 @@ class Color4F(Vec4F):
         self.g = g
         self.b = b
         self.a = a
+
+
+    @property
+    def linear(self):
+        unit = Color4F.unit_srgb_to_linear
+        return Color4F(unit(self.r), unit(self.g), unit(self.b), self.a)
+    
+
+    @property
+    def srgb(self):
+        unit = Color4F.unit_linear_to_srgb
+        return Color4F(unit(self.r), unit(self.g), unit(self.b), self.a)
+    
+
+    @staticmethod
+    def unit_srgb_to_linear(c: float):
+        return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+
+
+    @staticmethod
+    def unit_linear_to_srgb(c: float):
+        return c * 12.92 if c <= 0.0031308 else 1.055 * (c ** (1 / 2.4)) - 0.055
 
 
     @property
