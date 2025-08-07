@@ -91,55 +91,123 @@ class CdaeParser:
 
     def build_debug_info(self, cdae: CdaeV31, scene: Scene):
 
-        for idx, info in enumerate(scene.nodes):
-            info.object["cdae_index"] = idx
+        def add_info(obj, dict: dict = None):
+            if dict is None: return
+            for key, value in dict.items():
+                try:
+                    obj[key] = value
+                except:
+                    print(key)
 
-        for idx, info in enumerate(scene.objects):
-            info.object["cdae_index"] = idx
 
-        for idx, info in enumerate(scene.meshes):
-            info.object["cdae_index"] = idx
+        def new_obj(name: str, parent = None, info: dict[str, any] = None):
+            obj: bpy.types.Object = bpy.data.objects.new(name, None)
+            bpy.context.collection.objects.link(obj)
+            if parent is not None:
+                obj.parent = parent
+            add_info(obj, info)
+            return obj
 
-        debug_obj = bpy.data.objects.new(f"cdae_debug", None)
-        bpy.context.collection.objects.link(debug_obj)
+
+        for idx, obj in enumerate(scene.nodes):
+            info = {
+                "cdae_index": idx,
+            }
+            add_info(obj.object, info)
+
+        for idx, obj in enumerate(scene.objects):
+            info = {
+                "cdae_index": idx,
+            }
+            add_info(obj.object, info)
+
+        for idx, obj in enumerate(scene.meshes):
+            info = {
+                "cdae_index": idx,
+                "num_frames": obj.info.numFrames,
+                "num_frames_mat": obj.info.numMatFrames,
+                "vertsPerFrame": obj.info.vertsPerFrame,
+                "flags": obj.info.flags
+            }
+            add_info(obj.object, info)
+        
+        debug_obj = new_obj(f"cdae_debug")
 
         subshapes = list(cdae.unpack_subshapes())
-        subshapes_count = len(subshapes)
-
-        subshapes_obj = bpy.data.objects.new(f"subshapes[{subshapes_count}]", None)
-        bpy.context.collection.objects.link(subshapes_obj)
-        subshapes_obj.parent = debug_obj
-
+        subshapes_obj = new_obj(f"subshapes[{len(subshapes)}]", debug_obj)
         for subshape in subshapes:
-            obj = bpy.data.objects.new(f"subshape", None)
-            bpy.context.collection.objects.link(obj)
-            obj.parent = subshapes_obj
-            obj["nodes_first"] = subshape.firstNode
-            obj["nodes_count"] = subshape.numNodes
-            obj["objects_first"] = subshape.firstObject
-            obj["objects_count"] = subshape.numObjects
+            info = {
+                "nodes_first": subshape.firstNode,
+                "nodes_count": subshape.numNodes,
+                "objects_first": subshape.firstObject,
+                "objects_count": subshape.numObjects,
+            }
+            new_obj(f"subshape", subshapes_obj, info)
 
         details = cdae.unpack_details()
-        details_count = len(details)
-
-        details_obj = bpy.data.objects.new(f"details[{details_count}]", None)
-        bpy.context.collection.objects.link(details_obj)
-        details_obj.parent = debug_obj
-
+        details_obj = new_obj(f"details[{len(details)}]", debug_obj)
         for detail in details:
-            name = cdae.names[detail.nameIndex]
-            obj = bpy.data.objects.new(f"lod:{name}", None)
-            bpy.context.collection.objects.link(obj)
-            obj.parent = details_obj
+            info = {
+                "polyCount": detail.polyCount,
+                "objectDetailNum": detail.objectDetailNum,
+                "size": detail.size,
+                "subShapeNum": detail.subShapeNum,
+                "averageError": detail.averageError,
+                "maxError": detail.maxError,
+                "bbDetailLevel": detail.bbDetailLevel,
+            }
+            new_obj(f"lod:{cdae.names[detail.nameIndex]}", details_obj, detail.asdict())
 
-            obj["name"] = name
-            obj["polyCount"] = detail.polyCount
-            obj["objectDetailNum"] = detail.objectDetailNum
-            obj["size"] = detail.size
-            obj["subShapeNum"] = detail.subShapeNum
-            obj["averageError"] = detail.averageError
-            obj["maxError"] = detail.maxError
-            obj["bbDetailLevel"] = detail.bbDetailLevel
+        sequences = cdae.sequences
+        sequences_obj = new_obj(f"seq[{len(sequences)}]", debug_obj)
+        for seq in sequences:
+            info = {
+                "duration": seq.duration,
+                "numKeyframes": seq.numKeyframes,
+                "numTriggers": seq.numTriggers,
+                "firstGroundFrame": seq.firstGroundFrame,
+                "numGroundFrames": seq.numGroundFrames,
+                "baseScale": seq.baseScale,
+                "baseObjectState": seq.baseObjectState,
+                "baseTranslation": seq.baseTranslation,
+                "priority": seq.priority,
+                "toolBegin": seq.toolBegin,
+                "rotationMatters.len": len(seq.rotationMatters),
+                "translationMatters.len": len(seq.translationMatters),
+                "scaleMatters.len": len(seq.scaleMatters),
+                "visMatters.len": len(seq.visMatters),
+                "frameMatters.len": len(seq.frameMatters),
+                "matFrameMatters.len": len(seq.matFrameMatters),
+            }
+            new_obj(f"seq:{cdae.names[seq.nameIndex]}", sequences_obj, info)
+
+        triggers = cdae.unpack_triggers()
+        triggers_obj = new_obj(f"triggers[{len(triggers)}]", debug_obj)
+        for idx, trigger in enumerate(triggers):
+            info = {
+                "pos": trigger.pos,
+                "state": trigger.state,
+            }
+            new_obj(f"trigger[{idx}]:", triggers_obj, info)
+
+        states = cdae.unpack_states()
+        states_obj = new_obj(f"states[{len(states)}]", debug_obj)
+        for idx, state in enumerate(states):
+            info = {
+                "vis": state.vis,
+                "frame_idx": state.frameIndex,
+                "mat_frame_idx": state.matFrameIndex,
+            }
+            new_obj(f"state[{idx}]:", states_obj, info)
+
+        cdae.nodeRotations.element_count
+
+        info = {
+            "nodeRotations.count": cdae.nodeRotations.element_count,
+            "nodeTranslations.count": cdae.nodeTranslations.element_count
+        }
+        new_obj("misc", debug_obj, info)
+
 
 
     def parse(self, cdae: CdaeV31):

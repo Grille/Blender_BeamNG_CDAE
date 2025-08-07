@@ -3,13 +3,15 @@ from bpy.props import StringProperty
 from . import cdae_serializer_binary as CdaeBinarySerializer
 from .blender_export import ExportBase
 
+# pyright: reportInvalidTypeForm=false
+
+
 
 class ExportCdae(ExportBase):
+    
     bl_idname = "grille.export_beamng_cdae"
     bl_label = "Export BeamNG"
     filename_ext = ".cdae"
-
-# pyright: reportInvalidTypeForm=false
 
     filter_glob: StringProperty(default="*.cdae", options={'HIDDEN'})
 
@@ -22,4 +24,11 @@ class ExportCdae(ExportBase):
     @staticmethod
     def menu_func(self, context):
         self.layout.operator(ExportCdae.bl_idname, text="BeamNG (.cdae)")
+
+
+    def draw(self, context):
+        row = self.layout.row()
+        row.alert = True
+        row.label(text=f"Experimental, use dae instead.", icon="ERROR")
+        return super().draw(context)
         

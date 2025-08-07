@@ -94,6 +94,20 @@ def write_geometry(mesh: CdaeV31.Mesh, lib_geometries: ET.Element, mesh_index: i
             p.text = (p.text or "") + f"{vi} "
 
 
+def add_matrix(quat: Quat4F, location: Vec3F, scale: Vec3F, values: list[float]):
+    matrix = quat.to_collada_matrix()
+    matrix.translation = location.tuple3
+    for col in range(4): 
+        for row in range(4):
+            values.append(matrix[col][row])
+
+
+def get_matrix(quat: Quat4F, location: Vec3F):
+    values: list[float] = []
+    add_matrix(quat, location, Vec3F(1,1,1), values)
+    return values
+
+
 def write_to_tree(cdae: CdaeV31, dae: ET.Element):
     collada = dae
 
@@ -134,22 +148,14 @@ def write_to_tree(cdae: CdaeV31, dae: ET.Element):
     cdae_node_translations = cdae.defaultTranslations.unpack_list(Vec3F)
     cdae_node_rotation = cdae.defaultRotations.unpack_list(Quat4I16)
 
-    dae_translations = []
-    dae_rotations = []
-
-    #for i in range(len(cdae_tree.nodes)):
-        
-
     # Build tree: recursively walk nodes and objects
     def process_node(node_index: int, node: CdaeV31.Node, parent_xml_node):
         node_name = cdae.names[node.nameIndex]
         xml_node = ET.SubElement(parent_xml_node, "node", {"id": node_name, "name": node_name, "type": "NODE"})
 
-        #location = dae_translations[node_index]
-        #axis = dae_rotations[node_index]
-        #translate_str = f"{location.x} {location.y} {location.z}"
-        #rotate_str = f"{axis.x} {axis.y} {axis.z} {angle_deg}"
-
+        matrix = get_matrix(cdae_node_rotation[node_index], cdae_node_translations[node_index])
+        matrix_text = " ".join(f"{v:.6f}" for v in matrix)
+        ET.SubElement(xml_node, "matrix").text = matrix_text
 
         for obj_index, obj in cdae_tree.enumerate_objects(node_index):
 

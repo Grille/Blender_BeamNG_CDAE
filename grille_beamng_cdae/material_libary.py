@@ -5,6 +5,7 @@ import bpy
 
 from enum import Enum
 
+from .blender_material_properties import MaterialProperties
 from .material import Material
 
 class MaterialLibary:
@@ -12,6 +13,8 @@ class MaterialLibary:
     def __init__(self):
         self.materials: dict[str, Material] = {}
         self.new_materials: list[Material] = []
+        self.default_version: float = 1.5
+
 
     def try_load(self, filepath: str):
         try:
@@ -50,6 +53,11 @@ class MaterialLibary:
 
 
     def overwrite_bmat(self, bmat: bpy.types.Material):
-        mat = Material.from_bmat(bmat)
+
+        version = float(getattr(bmat, MaterialProperties.VERSION))
+        if version == 0.0:
+            version = self.default_version
+
+        mat = Material.from_bmat(bmat, version)
         self.materials[mat.name] = mat
         self.new_materials.append(mat)

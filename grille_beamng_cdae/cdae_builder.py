@@ -10,7 +10,7 @@ from typing import List, Dict, Optional, Tuple
 from collections import defaultdict
 
 from .cdae_v31 import *
-from .blender_object_properties import ObjectProperties
+from .blender_object_properties import ObjectProperties, ObjectRole
 
 
 # Classes to help build serializable CdaeV31.
@@ -49,13 +49,38 @@ class CdaeNodeList:
 class CdaeTree(CdaeNodeList):
 
     class Node(CdaeNodeList):
+
         def __init__(self, name: str, nodes: 'list[CdaeTree.Node]', objects: 'list[CdaeTree.Object]'):
+
             super().__init__(nodes)
+            self.bpy_obj: bpy.types.Object = None
             self.name = name
             self.objects = objects
+            self.position = Vec3F()
+            self.rotation = Quat4I16()
+
+
+        def get_object(self, name: str = None):
+            if name is None:
+                name = self.name
+            for obj in self.objects:
+                if obj.name == name:
+                    return obj
+            obj = CdaeTree.Object(name)
+            self.objects.append(obj)
+            return obj
+        
+
+        def append_mesh(self, obj):
+            mesh = CdaeTree.Mesh(obj)
+            self.get_object().meshes.append(mesh)
+            matrix = obj.matrix_world
+            self.position = Vec3F.from_list3(matrix.to_translation())
+            self.rotation = Quat4I16.from_blender_quaternion(matrix.to_quaternion())
 
 
         def enumerate_meshes(self):
+
             for obj in self.objects:
                 for mesh in obj.meshes:
                     yield mesh
@@ -64,29 +89,25 @@ class CdaeTree(CdaeNodeList):
                 yield from node.enumerate_meshes()
 
 
+
     class Object:
-        def __init__(self, name: str, meshes: 'list[CdaeTree.Mesh]'):
+
+        def __init__(self, name: str):
             self.name = name
-            self.meshes = meshes
-
-
-        @staticmethod
-        def from_bpy(bpy_obj: bpy.types.Object) -> 'CdaeTree.Object':
-            obj = CdaeTree.Object(bpy_obj.name)
-
-            for mesh_obj in bpy_obj.children:
-                if CdaeTree.get_node_type(mesh_obj) == CdaeTree.Mesh:
-                    mesh = CdaeTree.Mesh(mesh_obj)
-                    obj.meshes.append(mesh)
-
+            self.meshes: list[CdaeTree.Mesh] = []
     
+
+
     class Mesh:
         def __init__(self, obj: bpy.types.Object):
             self.bpy_obj = obj
+            self.scale = Vec3F()
+
 
 
     def __init__(self):
         super().__init__([])
+        self.build_scene_tree = True
 
 
     def enumerate_meshes(self):
@@ -94,62 +115,11 @@ class CdaeTree(CdaeNodeList):
             yield from node.enumerate_meshes()
 
 
-    @staticmethod
-    def get_node_type(bpy_obj: bpy.types.Object) -> type:
-        if bpy_obj.type == 'EMPTY':
-            has_mesh_child = any(child.type == 'MESH' for child in bpy_obj.children)
-            return CdaeTree.Object if has_mesh_child else CdaeTree.Node
-        elif bpy_obj.type == 'MESH':
-            return CdaeTree.Mesh
-        else:
-            return None
-
-
-    def add_objects(self, objects: set[bpy.types.Object]):
-
-        root_objects = [obj for obj in objects if obj.parent not in objects or obj.parent is None]
-        root_dict: dict[type, list[bpy.types.Object]] = {
-            CdaeTree.Node: [],
-            CdaeTree.Object: [],
-            CdaeTree.Mesh: [],
-        }
-
-        path_objects: list[tuple[bpy.types.Object, str]] = []
-
-        for obj in root_objects:
-            cdae_path = getattr(obj, ObjectProperties.CDAE_PATH)
-            if cdae_path:
-                path_objects.append((obj, cdae_path))
-            else:
-                obj_type = CdaeTree.get_node_type(obj)
-                if obj_type is not None:
-                    root_dict[obj_type].append(obj)
-
-
-        for root in root_dict[CdaeTree.Node]:
-            self.nodes.append(CdaeTree.build_node_recursive(root))
-
-        for root in root_dict[CdaeTree.Object]:
-            obj = CdaeTree.Object.from_bpy(root)
-            node = CdaeTree.Node(root.name, [], [obj])
-            self.nodes.append(node)
-
-        for root in root_dict[CdaeTree.Mesh]:
-            mesh = CdaeTree.Mesh(root)
-            obj = CdaeTree.Object(root.name, [mesh])
-            node = CdaeTree.Node(root.name, [], [obj])
-            self.nodes.append(node)
-            
-
-        for obj in path_objects:
-            self.add_object_by_path(*obj)
-
-
     def add_selected(self):
         self.add_objects(set(bpy.context.selected_objects))
 
 
-    def get_path_node(self, path: str) -> 'CdaeTree.Node':
+    def get_node_by_path(self, path: str) -> 'CdaeTree.Node':
 
         split_path = re.split(r'[\\/\.]', path)
         if len(split_path) == 0:
@@ -162,24 +132,52 @@ class CdaeTree(CdaeNodeList):
         return node
 
 
-    def add_object_by_path(self, obj: bpy.types.Object, path: str):
+    def add_object(self, obj: bpy.types.Object):
 
-        obj_type = CdaeTree.get_node_type(obj)
-        if obj_type is None:
+        has_mesh = ObjectProperties.has_mesh(obj)
+
+        if not self.build_scene_tree:
+            name = obj.name
+            node = self.get_node_by_path(name)
+            if has_mesh:
+                node.append_mesh(obj)
             return
-        
-        parent = self.get_path_node(path)
-        name = parent.name
 
-        if obj_type is CdaeTree.Object:
-            cdae_obj = CdaeTree.Object.from_bpy(obj)
-            cdae_obj.name = name
-            parent.objects.append(cdae_obj)
+        role = ObjectRole.from_obj(obj)
+        lod_size = getattr(obj, ObjectProperties.LOD_SIZE)
+        namespace = "base00.start01"
 
-        if obj_type is CdaeTree.Mesh:
-            cdae_mesh = CdaeTree.Mesh(obj)
-            cdae_obj = CdaeTree.Object(name, meshes=[cdae_mesh])
-            parent.objects.append(cdae_obj)
+        if role == ObjectRole.Generic:
+            path = getattr(obj, ObjectProperties.PATH)
+            node = self.get_node_by_path(path)
+            if has_mesh:
+                node.append_mesh(obj)
+
+        elif role == ObjectRole.Collision:
+            path = f"{namespace}.colmesh-1"
+            self.get_node_by_path(path).append_mesh(obj)
+
+        elif role == ObjectRole.Mesh:
+            path = f"{namespace}.model{lod_size}"
+            self.get_node_by_path(path).append_mesh(obj)
+            
+        elif role == ObjectRole.Billboard:
+            bb = "bbz" if getattr(obj, ObjectProperties.BB_FLAG0) else "bb"
+            path = f"{namespace}.{bb}_billboard{lod_size}"
+            self.get_node_by_path(path).append_mesh(obj)
+
+        elif role == ObjectRole.AutoBillboard:
+            path = f"{namespace}.bb_autobillboard{lod_size}"
+            self.get_node_by_path(path)
+
+        elif role == ObjectRole.NullDetail:
+            path = f"{namespace}.nulldetail{lod_size}"
+            self.get_node_by_path(path)
+
+
+
+    def add_objects(self, objects: set[bpy.types.Object]):
+        for obj in objects: self.add_object(obj)
 
 
     @staticmethod
@@ -195,22 +193,6 @@ class CdaeTree(CdaeNodeList):
         return CdaeTree.from_objects(selected)
 
 
-    @staticmethod
-    def build_node_recursive(bpy_obj: bpy.types.Object) -> 'CdaeTree.Node':
-        node = CdaeTree.Node(bpy_obj.name)
-
-        for child in bpy_obj.children:
-
-            type = CdaeTree.get_node_type(child)
-
-            if type == CdaeTree.Object:
-                node.objects.append(CdaeTree.Object.from_bpy(child))
-
-            elif type == CdaeTree.Node:
-                node.nodes.append(CdaeTree.build_node_recursive(child))
-
-        return node
-
 
 class CdaeMaterialIndexer:
     def __init__(self):
@@ -220,7 +202,7 @@ class CdaeMaterialIndexer:
 
     def get_index(self, bmat: bpy.types.Material):
         if bmat is None:
-            raise ValueError("'bmat' is None")
+            return 0
         if bmat not in self.material_to_index:
             index = len(self.materials)
             self.material_to_index[bmat] = index
@@ -228,6 +210,7 @@ class CdaeMaterialIndexer:
         return self.material_to_index[bmat]
     
     
+
 class CdeaMeshBuilder:
 
     def __init__(self):
@@ -297,19 +280,8 @@ class CdeaMeshBuilder:
         else:
             return None
 
-        # Clamp and convert to uint8
-        colors = np.clip(colors, 0.0, 1.0)
-        colors_u8 = (colors * 255.0 + 0.5).astype(np.uint8)
-
-        # Pack into uint32: 0xRRGGBBAA
-        packed = (
-            (colors_u8[:, 0].astype(np.uint32) << 24) |
-            (colors_u8[:, 1].astype(np.uint32) << 16) |
-            (colors_u8[:, 2].astype(np.uint32) << 8)  |
-            (colors_u8[:, 3].astype(np.uint32))
-        )
-
-        return packed
+        colors_u8 = (colors * 255.0).astype(np.uint8)
+        return colors_u8
         
 
     def build_from_mesh(self, mesh: bpy.types.Mesh, material_indexer: CdaeMaterialIndexer)-> CdaeV31.Mesh:
@@ -333,27 +305,31 @@ class CdeaMeshBuilder:
         loop_uvs1 = self.get_uv_data(1)
         loop_colors = self.get_color_data(vertex_indices)
 
-        # Build index buffer: each triangle uses three consecutive loop vertices
-        # mesh.loop_triangles contains tuples of loop indices, which map 1:1 to positions/normals
-        indices = np.empty((len(mesh.loop_triangles), 3), dtype=np.int32)
-        for i, tri in enumerate(mesh.loop_triangles):
-            indices[i, 0] = tri.loops[0]
-            indices[i, 1] = tri.loops[1]
-            indices[i, 2] = tri.loops[2]
 
-        material_to_ranges = defaultdict(list)
-        for i, tri in enumerate(mesh.loop_triangles):
+        material_ranges: defaultdict[int, list] = defaultdict(list)
+        for tri in mesh.loop_triangles:
             poly = mesh.polygons[tri.polygon_index]
             mat = mesh.materials[poly.material_index] if poly.material_index < len(mesh.materials) else None
             global_mat_index = material_indexer.get_index(mat)
-            material_to_ranges[global_mat_index].append(i)
 
-        # sort globally consistent material indices
-        material_indices = sorted(material_to_ranges.keys())
+            material_ranges[global_mat_index].append([
+                tri.loops[0],
+                tri.loops[1],
+                tri.loops[2]
+            ])
+
+        
+        indices_list = []
+        for mat_index in material_ranges:
+            range = material_ranges[mat_index]
+            indices_list.extend(range)
+        indices = np.array(indices_list, dtype=np.int32)
+
+
         draw_regions = []
         offset = 0
-        for mat_index in material_indices:
-            count = len(material_to_ranges[mat_index])
+        for mat_index in material_ranges:
+            count = len(material_ranges[mat_index])
             draw_regions.append((offset * 3, count * 3, mat_index))
             offset += count
 
@@ -387,6 +363,10 @@ class CdeaMeshBuilder:
         if loop_colors is not None:
             mesh_out.colors.set_numpy_array(loop_colors)
 
+        mesh_out.numFrames = 1
+        mesh_out.numMatFrames = 1
+        mesh_out.vertsPerFrame = len(loop_positions)
+
         return mesh_out
 
 
@@ -401,12 +381,51 @@ class CdeaMeshBuilder:
 
 
 
+class CdaeKeyframeSampler:
+
+    def __init__(self):
+        self.start: int = 0
+        self.end: int = 100
+        self.samples: int = 2
+
+
+    def sample(self, obj: bpy.types.Object):
+        
+        frame_backup = bpy.context.scene.frame_current
+
+        frame_range = self.end = self.start
+        frame_scale = self.samples / frame_range
+
+        matrices: list[mathutils.Matrix] = []
+
+        for iframe in (range(self.samples)):
+            scaled_frame = iframe * frame_scale
+            final_frame = scaled_frame + self.start
+            matrices.append(self.sample_frame(obj, final_frame))
+
+        bpy.context.scene.frame_set(frame_backup)
+
+        return matrices
+
+
+    def sample_frame(self, obj: bpy.types.Object, frame: float) -> mathutils.Matrix:
+        intframe = int(frame)
+        subframe = frame - intframe
+        bpy.context.scene.frame_set(intframe, subframe)
+        return obj.matrix_world.copy()
+
+
+
 class CdeaBuilder:
     
     def __init__(self):
         self.cdae = CdaeV31()
         self.tree = CdaeTree()
+        self.animations_enabled: bool = False
+        self.sampler = CdaeKeyframeSampler()
         self.materials: list[bpy.types.Material] = []
+        self.use_transforms: bool = True
+        self.apply_scale: bool = True
 
 
     def build(self):
@@ -418,8 +437,13 @@ class CdeaBuilder:
 
         materials = CdaeMaterialIndexer()
 
+        defaultRotations = []
+        defaultTranslations = []
 
         def add_node(node: 'CdaeTree.Node', parent_index: int = -1) -> int:
+            if self.use_transforms:
+                defaultRotations.append(node.rotation)
+                defaultTranslations.append(node.position)
             (node_index, flat_node) = flat_tree.create_node()
             flat_tree.link_node(parent_index, node_index)
             flat_node.nameIndex = cdae.get_name_index(node.name)
@@ -462,8 +486,11 @@ class CdeaBuilder:
         sub.numNodes = len(flat_tree.nodes)
         sub.numObjects = len(flat_tree.objects)
 
-        self.cdae.defaultRotations.alloc(len(flat_tree.nodes))
-        self.cdae.defaultTranslations.alloc(len(flat_tree.nodes))
+        self.cdae.defaultRotations.pack_list(defaultRotations)
+        self.cdae.defaultTranslations.pack_list(defaultTranslations)
+
+        states = [CdaeV31.ObjectState() for _ in flat_tree.objects]
+        self.cdae.pack_states(states)
 
         # Convert flat_nodes and flat_objects into PackedVectors
         self.cdae.pack_tree(flat_tree)

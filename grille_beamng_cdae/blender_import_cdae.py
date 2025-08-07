@@ -12,12 +12,15 @@ from bpy.props import StringProperty, BoolProperty
 from .cdae_v31 import CdaeV31
 from .cdae_parser import CdaeParser
 
+# pyright: reportInvalidTypeForm=false
+
+
+
 class ImportCdae(Operator, ImportHelper):
+    
     bl_idname = "grille.import_beamng_cdae"
     bl_label = "Import BeamNG"
     filename_ext = ".cdae"
-
-# pyright: reportInvalidTypeForm=false
 
     filter_glob: StringProperty(default="*.cdae", options={'HIDDEN'})
     validate_meshes: BoolProperty(name="Validate Meshes", default=True)

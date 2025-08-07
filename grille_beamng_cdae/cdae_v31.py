@@ -1,7 +1,7 @@
 import struct
 import numpy as np
 
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from enum import Enum
 from io import BufferedReader, BufferedWriter
 
@@ -158,9 +158,9 @@ class CdaeV31:
     @dataclass
     class ObjectState:
         
-        vis: float
-        frameIndex: int
-        matFrameIndex: int
+        vis: float = 1.0
+        frameIndex: int = 0
+        matFrameIndex: int = 0
 
 
         def unpack(self, data: bytes):
@@ -173,8 +173,8 @@ class CdaeV31:
     @dataclass
     class Trigger:
 
-        state: int
-        pos: float
+        state: int = 0
+        pos: float = 0.0
 
 
         def unpack(self, data: bytes):
@@ -200,8 +200,8 @@ class CdaeV31:
         subShapeNum: int = 0
         objectDetailNum: int = 0
         size: float = 0
-        averageError: float = 0
-        maxError: float = 0
+        averageError: float = -1.0
+        maxError: float = -1.0
         polyCount: int = 0
         bbDimension: int = 0
         bbDetailLevel: int = 0
@@ -229,6 +229,8 @@ class CdaeV31:
                 self.bbPolarAngle,
                 self.bbIncludePoles
         )
+
+        def asdict(self): return asdict(self)
 
 
 
@@ -306,13 +308,9 @@ class CdaeV31:
 
 
         def get_vec4f_colors(self):
-
-            uint32_array = self.colors.to_numpy_array(np.uint32)
-            r = (uint32_array >> 0) & 0xFF
-            g = (uint32_array >> 8) & 0xFF
-            b = (uint32_array >> 16) & 0xFF
-            a = (uint32_array >> 24) & 0xFF
-            return (np.stack([r, g, b, a], axis=-1).astype(np.float32) / 255.0).flatten()
+            byte_array = self.colors.to_numpy_array(np.ubyte)
+            float_array = byte_array.astype(np.float32) / 255.0
+            return float_array
 
 
     class Sequence:
@@ -439,6 +437,14 @@ class CdaeV31:
         return self.details.unpack_list(CdaeV31.Detail)
     
 
+    def unpack_triggers(self):
+        return self.triggers.unpack_list(CdaeV31.Trigger)
+    
+
+    def unpack_states(self):
+        return self.objectStates.unpack_list(CdaeV31.ObjectState)
+    
+
     def pack_nodes(self, list):
         return self.nodes.pack_list(list)
 
@@ -474,6 +480,14 @@ class CdaeV31:
 
     def pack_details(self, list):
         return self.details.pack_list(list)
+    
+
+    def pack_triggers(self, list):
+        return self.triggers.pack_list(list)
+    
+
+    def pack_states(self, list):
+        return self.objectStates.pack_list(list)
     
 
     def print_debug(self):

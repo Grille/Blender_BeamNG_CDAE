@@ -31,6 +31,13 @@ class Vec3F:
         self.y: float = y
         self.z: float = z
 
+
+    @classmethod
+    def from_list3(cls, list: list[float]):
+        self = cls(*list[:3])
+        return self
+    
+
     def unpack(self, data: bytes):
         (self.x, self.y, self.z) = struct.unpack("<3f", data)
     
@@ -90,16 +97,22 @@ class Quat4F(Vec4F):
     def from_blender_quaternion(cls, quat: mathutils.Quaternion | tuple):
         if isinstance(quat, tuple): quat = mathutils.Quaternion(quat)
         self = cls()
-        self.x = quat.z
+        self.x = -quat.z
         self.y = quat.y
-        self.z = quat.x
+        self.z = -quat.x
         self.w = quat.w
+        return self
 
     
+    def to_collada_matrix(self):
+        quat = mathutils.Quaternion((self.w, -self.z, self.y, -self.x))
+        return quat.to_matrix().to_4x4()
+    
+
     def to_blender_quaternion(self):
-        return mathutils.Quaternion((self.z, self.y, self.x, self.w))
+        return mathutils.Quaternion((self.w, -self.x, self.y, -self.z))
     
-
+    
 
 class Quat4I16(Quat4F):
 

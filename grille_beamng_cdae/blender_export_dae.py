@@ -3,13 +3,15 @@ from bpy.props import StringProperty
 from . import cdae_serializer_text as CdaeTextSerializer
 from .blender_export import ExportBase
 
+# pyright: reportInvalidTypeForm=false
+
+
 
 class ExportDae(ExportBase):
+    
     bl_idname = "grille.export_beamng_dae"
     bl_label = "Export BeamNG"
     filename_ext = ".dae"
-
-# pyright: reportInvalidTypeForm=false
 
     filter_glob: StringProperty(default="*.dae", options={'HIDDEN'})
 

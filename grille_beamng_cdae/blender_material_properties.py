@@ -1,13 +1,15 @@
 import bpy
 
+from enum import Enum
 from bpy.props import BoolProperty, EnumProperty, StringProperty
 
 
-class MaterialProperties:
+class MaterialProperties(str, Enum):
 
-    VERSION = "grille_beamng_cdae_version"
-    GROUND_TYPE = "grille_beamng_cdae_groundtype"
-    UV1_HINT = "grille_beamng_cdae_uv1hint"
+    PREFIX = "grille_beamng_cdae_"
+    VERSION = f"{PREFIX}version"
+    GROUND_TYPE = f"{PREFIX}groundtype"
+    UV1_HINT = f"{PREFIX}uv1hint"
 
 
     @staticmethod
@@ -22,10 +24,11 @@ class MaterialProperties:
         _set(MaterialProperties.VERSION, EnumProperty(
             name="Version",
             items=[
+                ("0.0", "Global Default", ""),
                 ("1.0", "V1",""),
                 ("1.5", "V1.5 (PBR)", ""),
             ],
-            default="1.0",
+            default="1.5",
         ))
 
         _set(MaterialProperties.UV1_HINT, StringProperty(
