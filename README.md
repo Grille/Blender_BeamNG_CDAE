@@ -11,8 +11,8 @@ Since [BeamNG's](https://www.beamng.com/game/) CDAE now has format [specificatio
 | --- | --- | --- |
 | CDAE.Mesh | ✅ Functional | ❌ Partial |
 | CDAE.Animations | ➖ | ❌ Planned |
-| CDA.Mesh | ➖ | ✅ Functional |
-| CDA.Animations | ➖ | ❌ Planned |
+| DAE.Mesh | ➖ | ✅ Functional |
+| DAE.Animations | ➖ | ❌ Planned |
 | Main.Materials.JSON | ➖ | ✅ Functional (PBR) |
 
 ### Models
