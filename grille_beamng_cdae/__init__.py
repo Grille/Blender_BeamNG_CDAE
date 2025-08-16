@@ -1,7 +1,7 @@
 bl_info = {
     "name": "BeamNG CDAE",
     "author": "Grille",
-    "version": (0, 4),
+    "version": (0, 5),
     "blender": (4, 5, 0),
     "location": "File > Import/Export",
     "category": "Import-Export",
