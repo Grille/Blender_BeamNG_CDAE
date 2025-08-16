@@ -303,14 +303,18 @@ def get_object_names(cdae: CdaeV31) -> list[str]:
     return list
 
 
-def write_to_stream(cdae: CdaeV31, f: BufferedWriter):
+def write_to_stream(cdae: CdaeV31, f: BufferedWriter, compress: bool = False):
 
     body_bytes = get_body_bytes(cdae)
+
+    if compress:
+        z = zstd.ZstdCompressor()
+        body_bytes = z.compress(body_bytes)
 
     head = MsgpackWriter()
     head_dict = {
         "info": "Welcome! This is a binary file :D Please read the docs at https://go.beamng.com/shapeMessagepackFileformat",
-        "compression": False,
+        "compression": compress,
         "bodysize": len(body_bytes),
         "objectNames": get_object_names(cdae),
     }
@@ -323,7 +327,7 @@ def write_to_stream(cdae: CdaeV31, f: BufferedWriter):
     f.write(body_bytes)
 
 
-def write_to_file(cdae: CdaeV31, filepath: str):
+def write_to_file(cdae: CdaeV31, filepath: str, compress: bool = False):
 
     with open(filepath, 'wb') as f:
-        write_to_stream(cdae, f)
+        write_to_stream(cdae, f, compress)

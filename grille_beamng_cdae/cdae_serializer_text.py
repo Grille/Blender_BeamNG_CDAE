@@ -14,34 +14,78 @@ from .msgpack_writer import MsgpackWriter
 from .numerics import *
 
 
-UNITS = ["X","Y","Z","W"]
+@dataclass(frozen=True)
+class Accessor:
+    stride: int
+    params: list[tuple[str, str]]
+
+A_VEC2 = Accessor(2, [("X", "float"), ("Y", "float")])
+A_VEC3 = Accessor(3, A_VEC2.params + [("Z", "float")])
+A_VEC4 = Accessor(4, A_VEC3.params + [("W", "float")])
+A_TIME = Accessor(1, [("TIME", "float")])
+A_TRANSFORM = Accessor(16, [("TRANSFORM", "float4x4")])
+
+
+limit_precision_enabled = False
+limit_precision_dp = 4
+
+
+def format_id(id: str):
+    return id.replace(".", "_DOT_")
+
+
+def format_float(value: float) -> str:
+    return str(round(value, limit_precision_dp)) if limit_precision_enabled else str(value)
+
+
+def format_float_list(values: list[float]) -> str:
+    return " ".join(map(format_float, values))
+
+
+def append_matrix(quat: Quat4F, location: Vec3F, scale: Vec3F, values: list[float]):
+    matrix = quat.to_collada_matrix()
+    matrix.translation = location.tuple3
+    for col in range(4): 
+        for row in range(4):
+            values.append(matrix[col][row])
+
+
+def get_matrix(quat: Quat4F, location: Vec3F):
+    values: list[float] = []
+    append_matrix(quat, location, Vec3F(1,1,1), values)
+    return values
 
 
 def make_id(name, suffix):
         return f"{name}_{suffix}"
 
 
-def write_src_float(flat_array: NDArray[np.float32], xml: ET.Element, stride: int, name: str, invert: bool = False):
-    
-    xml_source = ET.SubElement(xml, "source", {"id": name})
+def write_float_array(xml: ET.Element, flat_array: NDArray[np.float32], array_id: str):
 
-    if invert:
-        flat_array = -flat_array
-    array_id = f"{name}_array"
     array_length = len(flat_array)
-
-    xml_float_array = ET.SubElement(xml_source, "float_array", {
+    xml_float_array = ET.SubElement(xml, "float_array", {
         "id": array_id,
         "count": str(array_length)
     })
-    xml_float_array.text = " ".join(map(str, flat_array))
+    xml_float_array.text = format_float_list(flat_array)
 
-    pos_technique = ET.SubElement(xml_source, "technique_common")
-    ET.SubElement(pos_technique, "accessor", {
-        "source": f"#{array_id}",
-        "count": str(array_length // stride),
-        "stride": str(stride)
-    }).extend([ET.Element("param", {"name": UNITS[n], "type": "float"}) for n in range(stride)])
+
+def write_accessor(xml: ET.Element, source_id: str, count: int, accessor: Accessor):
+
+    xml_technique = ET.SubElement(xml, "technique_common")
+    ET.SubElement(xml_technique, "accessor", {
+        "source": f"#{source_id}",
+        "count": str(count),
+        "stride": str(accessor.stride)
+    }).extend([ET.Element("param", {"name": acc[0], "type": acc[1]}) for acc in accessor.params])
+
+
+def write_src_float(xml: ET.Element, flat_array: NDArray[np.float32], name: str, accessor: Accessor):
+
+    xml_source = ET.SubElement(xml, "source", {"id": name})
+    array_id = f"{name}_array"
+    write_float_array(xml_source, flat_array, array_id)
+    write_accessor(xml_source, array_id, len(flat_array) // accessor.stride, accessor)
 
 
 def write_geometry(mesh: CdaeV31.Mesh, lib_geometries: ET.Element, mesh_index: int, materials: list[CdaeV31.Material], mesh_mat_names: list[CdaeV31.Material]):
@@ -50,18 +94,23 @@ def write_geometry(mesh: CdaeV31.Mesh, lib_geometries: ET.Element, mesh_index: i
     geom = ET.SubElement(lib_geometries, "geometry", {"id": geom_id, "name": geom_id})
     mesh_elem = ET.SubElement(geom, "mesh")
 
-    def try_write_src(vector: NDArray[np.float32], name: str, stride: int, invert = False) -> str:
+    def try_write_src(vector: NDArray[np.float32], name: str, accessor: Accessor) -> str:
+        if vector.size == 0: return None
         src_id = f"{geom_id}_{name}"
-        if vector.size == 0:
-            return None
-        write_src_float(vector, mesh_elem, stride, src_id, invert)
+        write_src_float(mesh_elem, vector, src_id, accessor)
         return src_id
+    
+    def try_write_src_uv(vector: NDArray[np.float32], name: str) -> str:
+        if vector.size == 0: return None
+        uv = vector.reshape(-1, 2).copy()   # copy -> writable, keeps both columns
+        uv[:, 1] = 1.0 - uv[:, 1]           # invert V
+        return try_write_src(uv.ravel(), name, A_VEC2)
 
-    positions_id = try_write_src(mesh.verts.to_numpy_array(np.float32), "position", 3)
-    normals_id = try_write_src(mesh.norms.to_numpy_array(np.float32), "normals", 3, True)
-    uv0s_id = try_write_src(mesh.tverts0.to_numpy_array(np.float32), "uv0s", 2)
-    uv1s_id = try_write_src(mesh.tverts1.to_numpy_array(np.float32), "uv1s", 2)
-    color_id = try_write_src(mesh.get_vec4f_colors(), "colors", 4)
+    positions_id = try_write_src(mesh.verts.to_numpy_array(np.float32), "position", A_VEC3)
+    normals_id = try_write_src(mesh.norms.to_numpy_array(np.float32), "normals", A_VEC3)
+    uv0s_id = try_write_src_uv(mesh.tverts0.to_numpy_array(np.float32), "uv0s")
+    uv1s_id = try_write_src_uv(mesh.tverts1.to_numpy_array(np.float32), "uv1s")
+    color_id = try_write_src(mesh.get_vec4f_colors(), "colors", A_VEC4)
 
     # Vertices
     vert_id = make_id(geom_id, "vertices")
@@ -70,6 +119,7 @@ def write_geometry(mesh: CdaeV31.Mesh, lib_geometries: ET.Element, mesh_index: i
 
     # Triangles by draw region
     indices = mesh.indices.to_numpy_array(np.uint32)
+    indices = indices.reshape(-1, 3)[:, [2, 1, 0]].ravel()
     draw_regions = mesh.draw_regions.to_numpy_array(np.uint32).reshape(-1, 3)
     for draw_index, (start, count, mat_index) in enumerate(draw_regions):
         mat_name = f"mat_{mat_index}" if mat_index < len(materials) else "mat_0"
@@ -94,18 +144,20 @@ def write_geometry(mesh: CdaeV31.Mesh, lib_geometries: ET.Element, mesh_index: i
             p.text = (p.text or "") + f"{vi} "
 
 
-def add_matrix(quat: Quat4F, location: Vec3F, scale: Vec3F, values: list[float]):
-    matrix = quat.to_collada_matrix()
-    matrix.translation = location.tuple3
-    for col in range(4): 
-        for row in range(4):
-            values.append(matrix[col][row])
+def write_animation(xml: ET.Element, target_id: str, times: list[float], transforms: list[float]):
+    xml_anim = ET.SubElement(xml, "animation")
 
+    src_input_id = f"{target_id}-anim-input"
+    write_src_float(xml_anim, times, src_input_id, A_TIME)
+    src_output_id = f"{target_id}-anim-output"
+    write_src_float(xml_anim, transforms, src_output_id, A_TRANSFORM)
 
-def get_matrix(quat: Quat4F, location: Vec3F):
-    values: list[float] = []
-    add_matrix(quat, location, Vec3F(1,1,1), values)
-    return values
+    sampler_id = f"{target_id}-sampler"
+    xml_sampler = ET.SubElement(xml_anim, "sampler", {"id": sampler_id})
+    ET.SubElement(xml_sampler,"input", {"semantic":"INPUT", "source":f"#{src_input_id}"})
+    ET.SubElement(xml_sampler,"input", {"semantic":"OUTPUT", "source":f"#{src_output_id}"})
+
+    ET.SubElement(xml_anim, "channel", {"source":f"#{sampler_id}", "target":f"{target_id}/transform"})
 
 
 def write_to_tree(cdae: CdaeV31, dae: ET.Element):
@@ -145,20 +197,19 @@ def write_to_tree(cdae: CdaeV31, dae: ET.Element):
 
 
     cdae_tree = cdae.unpack_tree()
-    cdae_node_translations = cdae.defaultTranslations.unpack_list(Vec3F)
-    cdae_node_rotation = cdae.defaultRotations.unpack_list(Quat4I16)
+    default_translations = cdae.defaultTranslations.unpack_list(Vec3F)
+    default_rotation = cdae.defaultRotations.unpack_list(Quat4I16)
 
     # Build tree: recursively walk nodes and objects
     def process_node(node_index: int, node: CdaeV31.Node, parent_xml_node):
         node_name = cdae.names[node.nameIndex]
         xml_node = ET.SubElement(parent_xml_node, "node", {"id": node_name, "name": node_name, "type": "NODE"})
 
-        matrix = get_matrix(cdae_node_rotation[node_index], cdae_node_translations[node_index])
-        matrix_text = " ".join(f"{v:.6f}" for v in matrix)
-        ET.SubElement(xml_node, "matrix").text = matrix_text
+        matrix = get_matrix(default_rotation[node_index], default_translations[node_index])
+        ET.SubElement(xml_node, "matrix", {"sid": "transform"}).text = format_float_list(matrix)
 
-        for obj_index, obj in cdae_tree.enumerate_objects(node_index):
-
+        for obj_index, obj in cdae_tree.enumerate_child_objects(node_index):
+ 
             obj_name = cdae.names[obj.nameIndex]
             if obj_name != node_name:
                 xml_obj_node = ET.SubElement(xml_node, "node", {"id": obj_name, "name": obj_name, "type": "NODE"})
@@ -180,12 +231,53 @@ def write_to_tree(cdae: CdaeV31, dae: ET.Element):
                     })
 
 
-        for child_index, child in cdae_tree.enumerate_nodes(node_index):
+        for child_index, child in cdae_tree.enumerate_child_nodes(node_index):
             process_node(child_index, child, xml_node)
 
 
     for node_index, node in cdae_tree.enumerate_root():
         process_node(node_index, node, visual_scene)
+
+
+    if len(cdae.sequences) > 0:
+
+        seq = cdae.sequences[0]
+        lib_animations = ET.SubElement(collada, "library_animations")
+
+        num_keyframes = seq.numKeyframes
+        node_translations = cdae.nodeTranslations.unpack_list(Vec3F)
+        node_rotation = cdae.nodeRotations.unpack_list(Quat4I16)
+
+        keyframes_node_index = 0
+
+        for node_index, node in enumerate(cdae_tree.nodes):
+
+            if not seq.translationMatters[node_index]:
+                continue
+
+            keyframes_offset = keyframes_node_index * num_keyframes
+            keyframes_node_index += 1
+
+            times: list[float] = []
+            transforms: list[float] = []
+
+            for index in range(0, num_keyframes):
+
+                progress = index / num_keyframes
+                time = seq.duration * progress
+                times.append(time)
+                
+                keyframe_index = index + keyframes_offset
+                append_matrix(node_rotation[keyframe_index], node_translations[keyframe_index], Vec3F(1,1,1), transforms)
+
+            times.append(seq.duration)
+            append_matrix(node_rotation[keyframes_offset], node_translations[keyframes_offset], Vec3F(1,1,1), transforms)
+
+            node_name = cdae.names[node.nameIndex]
+            write_animation(lib_animations, node_name, times, transforms)
+
+            
+            
 
 
 def write_to_stream(cdae: CdaeV31, f: TextIOWrapper):

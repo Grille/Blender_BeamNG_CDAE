@@ -17,10 +17,17 @@ class NodeWalker():
         self.current = node
         self.group_stack = [] if stack is None else list(stack)
         self.skip_groups = True
+        self.last_socket_name: str = ""
+        self.last_socket_index: int = 0
 
 
-    def is_node_idname(self, idname: str):
-        return self.current.bl_idname == idname
+    def is_node_idname(self, ntype: str | bpy.types.Node):
+        current = self.current.bl_idname
+        if isinstance(ntype, str):
+            return current == ntype
+        elif hasattr(ntype, "bl_idname"):
+            return current == ntype.bl_idname
+        raise TypeError()
     
 
     def find_material_output(self, nodes: bpy.types.Nodes):
@@ -64,37 +71,39 @@ class NodeWalker():
         from_socket: bpy.types.NodeSocket = link.from_socket
         from_socket_index = lambda : list(from_node.outputs).index(from_socket)
 
-        if not self.skip_groups:
-            return from_node
+        self.last_socket_name = from_socket.name
+        self.last_socket_index = from_socket_index
 
-        if from_node.bl_idname == NodeName.Group:
-            for node in from_node.node_tree.nodes:
-                if node.bl_idname == NodeName.GroupOutput:
-                    group_output_node = node
-                    break
+        if self.skip_groups:
 
-            if group_output_node is None:
-                return None
+            if from_node.bl_idname == NodeName.Group:
+                for node in from_node.node_tree.nodes:
+                    if node.bl_idname == NodeName.GroupOutput:
+                        group_output_node = node
+                        break
 
-            inner_output_input = group_output_node.inputs[from_socket_index()]
-            if not inner_output_input.is_linked:
-                return None
-            
-            self.group_stack.append(from_node)
-            return self.walk_link_recursively(inner_output_input.links[0])
+                if group_output_node is None:
+                    return None
 
-        elif from_node.bl_idname == NodeName.GroupInput:
+                inner_output_input = group_output_node.inputs[from_socket_index()]
+                if not inner_output_input.is_linked:
+                    return None
+                
+                self.group_stack.append(from_node)
+                return self.walk_link_recursively(inner_output_input.links[0])
 
-            if len(self.group_stack) == 0:
-                raise NodeLayoutError("Group input found, but stack is empty.")
-            
-            outer_node = self.group_stack.pop()
-            outer_input = outer_node.inputs[from_socket_index()]
+            elif from_node.bl_idname == NodeName.GroupInput:
 
-            if not outer_input.is_linked:
-                return None
-            
-            return self.walk_link_recursively(outer_input.links[0])
+                if len(self.group_stack) == 0:
+                    raise NodeLayoutError("Group input found, but stack is empty.")
+                
+                outer_node = self.group_stack.pop()
+                outer_input = outer_node.inputs[from_socket_index()]
+
+                if not outer_input.is_linked:
+                    return None
+                
+                return self.walk_link_recursively(outer_input.links[0])
 
         return from_node
     

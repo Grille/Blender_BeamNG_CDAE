@@ -11,187 +11,7 @@ from collections import defaultdict
 
 from .cdae_v31 import *
 from .blender_object_properties import ObjectProperties, ObjectRole
-
-
-# Classes to help build serializable CdaeV31.
-
-
-class CdaeNodeList:
-
-    def __init__(self, nodes: 'list[CdaeTree.Node]'):
-        self.nodes = nodes
-
-
-    def get_child_node(self, name: str) -> 'CdaeTree.Node':
-
-        for node in self.nodes:
-            if node.name == name:
-                return node
-            
-        node = CdaeTree.Node(name, [], [])
-        self.nodes.append(node)
-        return node
-    
-
-    def print_nodes_recursive(self, indent = 0):
-        istr = ' '*indent
-        if indent > 8:
-            print(istr+"...")
-            return
-        print(istr+"[")
-        for node in self.nodes:
-            print(istr+node.name)
-            node.print_nodes_recursive(indent + 1)
-        print(istr+"]")
-        pass
-
-
-class CdaeTree(CdaeNodeList):
-
-    class Node(CdaeNodeList):
-
-        def __init__(self, name: str, nodes: 'list[CdaeTree.Node]', objects: 'list[CdaeTree.Object]'):
-
-            super().__init__(nodes)
-            self.bpy_obj: bpy.types.Object = None
-            self.name = name
-            self.objects = objects
-            self.position = Vec3F()
-            self.rotation = Quat4I16()
-
-
-        def get_object(self, name: str = None):
-            if name is None:
-                name = self.name
-            for obj in self.objects:
-                if obj.name == name:
-                    return obj
-            obj = CdaeTree.Object(name)
-            self.objects.append(obj)
-            return obj
-        
-
-        def append_mesh(self, obj):
-            mesh = CdaeTree.Mesh(obj)
-            self.get_object().meshes.append(mesh)
-            matrix = obj.matrix_world
-            self.position = Vec3F.from_list3(matrix.to_translation())
-            self.rotation = Quat4I16.from_blender_quaternion(matrix.to_quaternion())
-
-
-        def enumerate_meshes(self):
-
-            for obj in self.objects:
-                for mesh in obj.meshes:
-                    yield mesh
-
-            for node in self.nodes:
-                yield from node.enumerate_meshes()
-
-
-
-    class Object:
-
-        def __init__(self, name: str):
-            self.name = name
-            self.meshes: list[CdaeTree.Mesh] = []
-    
-
-
-    class Mesh:
-        def __init__(self, obj: bpy.types.Object):
-            self.bpy_obj = obj
-            self.scale = Vec3F()
-
-
-
-    def __init__(self):
-        super().__init__([])
-        self.build_scene_tree = True
-
-
-    def enumerate_meshes(self):
-        for node in self.nodes:
-            yield from node.enumerate_meshes()
-
-
-    def add_selected(self):
-        self.add_objects(set(bpy.context.selected_objects))
-
-
-    def get_node_by_path(self, path: str) -> 'CdaeTree.Node':
-
-        split_path = re.split(r'[\\/\.]', path)
-        if len(split_path) == 0:
-            raise Exception("no path")
-        
-        node = self.get_child_node(split_path[0])
-        for key in split_path[1:]:
-            node = node.get_child_node(key)
-
-        return node
-
-
-    def add_object(self, obj: bpy.types.Object):
-
-        has_mesh = ObjectProperties.has_mesh(obj)
-
-        if not self.build_scene_tree:
-            name = obj.name
-            node = self.get_node_by_path(name)
-            if has_mesh:
-                node.append_mesh(obj)
-            return
-
-        role = ObjectRole.from_obj(obj)
-        lod_size = getattr(obj, ObjectProperties.LOD_SIZE)
-        namespace = "base00.start01"
-
-        if role == ObjectRole.Generic:
-            path = getattr(obj, ObjectProperties.PATH)
-            node = self.get_node_by_path(path)
-            if has_mesh:
-                node.append_mesh(obj)
-
-        elif role == ObjectRole.Collision:
-            path = f"{namespace}.colmesh-1"
-            self.get_node_by_path(path).append_mesh(obj)
-
-        elif role == ObjectRole.Mesh:
-            path = f"{namespace}.model{lod_size}"
-            self.get_node_by_path(path).append_mesh(obj)
-            
-        elif role == ObjectRole.Billboard:
-            bb = "bbz" if getattr(obj, ObjectProperties.BB_FLAG0) else "bb"
-            path = f"{namespace}.{bb}_billboard{lod_size}"
-            self.get_node_by_path(path).append_mesh(obj)
-
-        elif role == ObjectRole.AutoBillboard:
-            path = f"{namespace}.bb_autobillboard{lod_size}"
-            self.get_node_by_path(path)
-
-        elif role == ObjectRole.NullDetail:
-            path = f"{namespace}.nulldetail{lod_size}"
-            self.get_node_by_path(path)
-
-
-
-    def add_objects(self, objects: set[bpy.types.Object]):
-        for obj in objects: self.add_object(obj)
-
-
-    @staticmethod
-    def from_objects(objects: set[bpy.types.Object]) -> 'CdaeTree':
-        tree = CdaeTree()
-        tree.add_objects(objects)
-        return tree
-    
-
-    @staticmethod
-    def from_selection() -> 'CdaeTree':
-        selected = set(bpy.context.selected_objects)
-        return CdaeTree.from_objects(selected)
-
+from .cdae_builder_tree import CdaeTree
 
 
 class CdaeMaterialIndexer:
@@ -213,8 +33,10 @@ class CdaeMaterialIndexer:
 
 class CdeaMeshBuilder:
 
-    def __init__(self):
+    def __init__(self, material_indexer: CdaeMaterialIndexer):
         self.mesh: bpy.types.Mesh = None
+        self.scale = Vec3F(1,1,1)
+        self.material_indexer = material_indexer
 
 
     def get_vtx_indices(self):
@@ -245,7 +67,9 @@ class CdeaMeshBuilder:
             uv_layer0 = self.mesh.uv_layers[index].data
             uv_data0 = np.empty(len(uv_layer0) * 2, dtype=np.float32)
             uv_layer0.foreach_get("uv", uv_data0)
-            return uv_data0.reshape((-1, 2))
+            uv_data0 = uv_data0.reshape((-1, 2))
+            uv_data0[:, 1] = 1.0 - uv_data0[:, 1]
+            return uv_data0
         else:
             return None
         
@@ -284,7 +108,7 @@ class CdeaMeshBuilder:
         return colors_u8
         
 
-    def build_from_mesh(self, mesh: bpy.types.Mesh, material_indexer: CdaeMaterialIndexer)-> CdaeV31.Mesh:
+    def build_from_mesh(self, mesh: bpy.types.Mesh)-> CdaeV31.Mesh:
 
         if any(len(p.vertices) > 4 for p in mesh.polygons):
             bm = bmesh.new()
@@ -300,7 +124,7 @@ class CdeaMeshBuilder:
         vertex_indices = self.get_vtx_indices()
         loop_positions = self.get_vtx_data("co", 3, vertex_indices)
         loop_normals = self.get_loop_data("normal", 3)
-        loop_tangents = self.get_loop_data("tangent", 4)
+        #loop_tangents = self.get_loop_data("tangent", 4)
         loop_uvs0 = self.get_uv_data(0)
         loop_uvs1 = self.get_uv_data(1)
         loop_colors = self.get_color_data(vertex_indices)
@@ -310,12 +134,12 @@ class CdeaMeshBuilder:
         for tri in mesh.loop_triangles:
             poly = mesh.polygons[tri.polygon_index]
             mat = mesh.materials[poly.material_index] if poly.material_index < len(mesh.materials) else None
-            global_mat_index = material_indexer.get_index(mat)
+            global_mat_index = self.material_indexer.get_index(mat)
 
             material_ranges[global_mat_index].append([
-                tri.loops[0],
+                tri.loops[2],
                 tri.loops[1],
-                tri.loops[2]
+                tri.loops[0]
             ])
 
         
@@ -345,12 +169,9 @@ class CdeaMeshBuilder:
         mesh_out = CdaeV31.Mesh()
         mesh_out.type = CdaeV31.MeshType.STANDARD
 
-        loop_normals = -loop_normals
-
         mesh_out.verts.set_numpy_array(loop_positions)
         mesh_out.norms.set_numpy_array(loop_normals)
-        mesh_out.encoded_norms.alloc(len(loop_positions))
-        mesh_out.tangents.set_numpy_array(loop_tangents)
+        #mesh_out.tangents.set_numpy_array(loop_tangents)
         mesh_out.indices.set_numpy_array(indices)
         mesh_out.draw_regions.set_numpy_array(draw_region_array)
 
@@ -367,15 +188,22 @@ class CdeaMeshBuilder:
         mesh_out.numMatFrames = 1
         mesh_out.vertsPerFrame = len(loop_positions)
 
+        mins = loop_positions.min(axis=0).astype(float)
+        maxs = loop_positions.max(axis=0).astype(float)
+        mesh_out.bounds = Box6F(*mins, *maxs)
+
         return mesh_out
 
 
-    def build_from_object(self, obj: bpy.types.Object, material_indexer: CdaeMaterialIndexer)-> CdaeV31.Mesh:
+    def build_from_object(self, obj: bpy.types.Object | None) -> CdaeV31.Mesh:
+        if obj is None:
+            null = CdaeV31.Mesh()
+            return null
         depsgraph = bpy.context.evaluated_depsgraph_get()
         eval_obj: bpy.types.Object = obj.evaluated_get(depsgraph)
         mesh = eval_obj.to_mesh()
         try:
-            return self.build_from_mesh(mesh, material_indexer)
+            return self.build_from_mesh(mesh)
         finally:
             eval_obj.to_mesh_clear()
 
@@ -383,37 +211,76 @@ class CdeaMeshBuilder:
 
 class CdaeKeyframeSampler:
 
+    @dataclass
+    class Result:
+        transforms: Transforms
+        has_keyframes: bool
+
+
+
     def __init__(self):
         self.start: int = 0
         self.end: int = 100
-        self.samples: int = 2
+        self.sample_count: int = 2
+        self.duration = 0.0
+        self.sample_transforms_enabled: bool = True
+        self.sample_keyframes_enabled: bool = False
+        self.keyframes: list[Transforms] = []
+        self.nodes_enabled: list[bool] = []
 
 
-    def sample(self, obj: bpy.types.Object):
+    def create_sequence(self) -> CdaeV31.Sequence:
+        seq = CdaeV31.Sequence()
+
+        print("seq")
+
+        for en in self.nodes_enabled:
+            print(en)
+        seq.numKeyframes = self.sample_count
+        seq.duration = self.duration
+        seq.translationMatters = self.nodes_enabled
+        seq.rotationMatters = self.nodes_enabled
+        return seq
+
+
+    def sample(self, obj: bpy.types.Object | None):
+        transforms_enabled = obj is not None and self.sample_transforms_enabled
+        keyframes_enabled = obj is not None and self.sample_keyframes_enabled
+        transforms = self.sample_current(obj) if transforms_enabled else Transforms()
+        if keyframes_enabled:
+            self.sample_keyframes(obj)
+        else:
+            self.nodes_enabled.append(False)
+        return CdaeKeyframeSampler.Result(transforms, keyframes_enabled)
+
+
+
+    def sample_keyframes(self, obj: bpy.types.Object):
         
         frame_backup = bpy.context.scene.frame_current
 
-        frame_range = self.end = self.start
-        frame_scale = self.samples / frame_range
+        frame_range = self.end - self.start
+        frame_scale = frame_range / self.sample_count
 
-        matrices: list[mathutils.Matrix] = []
-
-        for iframe in (range(self.samples)):
+        for iframe in (range(self.sample_count)):
             scaled_frame = iframe * frame_scale
             final_frame = scaled_frame + self.start
-            matrices.append(self.sample_frame(obj, final_frame))
+            self.keyframes.append(self.sample_frame(obj, final_frame))
 
         bpy.context.scene.frame_set(frame_backup)
 
-        return matrices
+        self.nodes_enabled.append(True)
 
 
-    def sample_frame(self, obj: bpy.types.Object, frame: float) -> mathutils.Matrix:
+    def sample_frame(self, obj: bpy.types.Object, frame: float) -> Transforms:
         intframe = int(frame)
         subframe = frame - intframe
-        bpy.context.scene.frame_set(intframe, subframe)
-        return obj.matrix_world.copy()
+        bpy.context.scene.frame_set(intframe, subframe=subframe)
+        return self.sample_current(obj)
+    
 
+    def sample_current(self, obj: bpy.types.Object) -> Transforms:
+        return Transforms.from_blender_matrix(obj.matrix_world)
 
 
 class CdeaBuilder:
@@ -421,10 +288,10 @@ class CdeaBuilder:
     def __init__(self):
         self.cdae = CdaeV31()
         self.tree = CdaeTree()
-        self.animations_enabled: bool = False
+        self.material_indexer = CdaeMaterialIndexer()
+        self.mesh_builder = CdeaMeshBuilder(self.material_indexer)
         self.sampler = CdaeKeyframeSampler()
         self.materials: list[bpy.types.Material] = []
-        self.use_transforms: bool = True
         self.apply_scale: bool = True
 
 
@@ -435,15 +302,17 @@ class CdeaBuilder:
         flat_tree = cdae.unpack_tree()
         flat_meshes = cdae.meshes
 
-        materials = CdaeMaterialIndexer()
-
         defaultRotations = []
         defaultTranslations = []
 
-        def add_node(node: 'CdaeTree.Node', parent_index: int = -1) -> int:
-            if self.use_transforms:
-                defaultRotations.append(node.rotation)
-                defaultTranslations.append(node.position)
+        def add_node(node: CdaeTree.Node, parent_index: int = -1) -> int:
+            
+            node_samples = self.sampler.sample(node.bpy_sample_obj)
+            trans = node_samples.transforms
+            defaultRotations.append(trans.rotation)
+            defaultTranslations.append(trans.translation)
+            scale = trans.scale if self.apply_scale else Vec3F(1,1,1)
+
             (node_index, flat_node) = flat_tree.create_node()
             flat_tree.link_node(parent_index, node_index)
             flat_node.nameIndex = cdae.get_name_index(node.name)
@@ -457,34 +326,69 @@ class CdeaBuilder:
                 flat_obj.startMeshIndex = len(flat_meshes)
    
                 for mesh in obj.meshes:
-                    mesh_builder = CdeaMeshBuilder()
-                    flat_meshes.append(mesh_builder.build_from_object(mesh.bpy_obj, materials))
+                    flat_meshes.append(self.mesh_builder.build_from_object(mesh.bpy_mesh_obj))
 
             for child in node.nodes:
                 add_node(child, node_index)
 
             return node_index
 
+        
+        shapes = cdae.unpack_subshapes()
+        shapes_dict: dict[CdaeTree.SubShape, int] = {}
+        for key, shape in self.tree.shapes.items():
+            
+            print(key)
+            first_node = len(flat_tree.nodes)
+            first_obj = len(flat_tree.objects)
 
-        for node in self.tree.nodes:
-            add_node(node)
+            for node in shape.nodes:
+                add_node(node)
 
-        for mat in materials.materials:
+            last_node = len(flat_tree.nodes)
+            last_obj = len(flat_tree.objects)
+            node_count = last_node-first_node
+            obj_count = last_obj-first_obj
+
+            if node_count > 0 or obj_count > 0:
+                shapes_dict[shape] = len(shapes)
+                shapes.append(CdaeV31.SubShape(first_node, first_obj, node_count, obj_count))
+
+
+        details = cdae.unpack_details()
+        for key, detail in self.tree.details.items():
+            shapeidx = shapes_dict.get(detail.shape, -1)
+            detail.template.nameIndex = self.cdae.get_name_index(key)
+            detail.template.subShapeNum = shapeidx
+            details.append(detail.template)
+
+
+        if self.sampler.sample_keyframes_enabled:
+            seq = self.sampler.create_sequence()
+            cdae.sequences.append(seq)
+            seq.nameIndex = self.cdae.get_name_index("ambiant")
+
+            print(f"ANIM {len(self.sampler.keyframes)}")
+            kf_loc = []
+            kf_rot = []
+            kf_scl = []
+            for frame in self.sampler.keyframes:
+                kf_loc.append(frame.translation)
+                kf_rot.append(frame.rotation)
+                kf_scl.append(frame.scale)
+
+            self.cdae.nodeTranslations.pack_list(kf_loc)
+            self.cdae.nodeRotations.pack_list(kf_rot)
+            self.cdae.nodeAlignedScales.pack_list(kf_scl)
+            
+
+        for mat in self.material_indexer.materials:
             res = CdaeV31.Material()
             self.cdae.materials.append(res)
             if mat is None:
                 res.name = "undefined"
             else:
                 res.name = mat.name
-
-        lod = CdaeV31.Detail()
-        lod.nameIndex = cdae.get_name_index("detail2")
-        lod.size = 2
-        lod.maxError = -1
-
-        sub = CdaeV31.SubShape()
-        sub.numNodes = len(flat_tree.nodes)
-        sub.numObjects = len(flat_tree.objects)
 
         self.cdae.defaultRotations.pack_list(defaultRotations)
         self.cdae.defaultTranslations.pack_list(defaultTranslations)
@@ -494,8 +398,8 @@ class CdeaBuilder:
 
         # Convert flat_nodes and flat_objects into PackedVectors
         self.cdae.pack_tree(flat_tree)
-        self.cdae.pack_subshapes([sub])
-        self.cdae.pack_details([lod])
+        self.cdae.pack_subshapes(shapes)
+        self.cdae.pack_details(details)
         self.cdae.meshes = flat_meshes
 
-        self.materials = materials.materials
+        self.materials = self.material_indexer.materials

@@ -1,9 +1,10 @@
 import bpy
 
-from .blender_material_properties import MaterialProperties
+from .blender_material_properties import *
+
+# pyright: reportInvalidTypeForm=false
 
 
-# Define the panel
 class MaterialPanel(bpy.types.Panel):
 
     bl_label = "BeamNG cdae"
@@ -27,5 +28,9 @@ class MaterialPanel(bpy.types.Panel):
         mat = context.material
 
         layout.prop(mat, MaterialProperties.VERSION)
-        layout.prop(mat, MaterialProperties.GROUND_TYPE)
+        gts = getattr(mat, MaterialProperties.GROUND_TYPE_SELECT)
+        layout.prop(mat, MaterialProperties.GROUND_TYPE_SELECT)
+        if gts == GROUNDMODEL_CUSTOM:
+            layout.prop(mat, MaterialProperties.GROUND_TYPE)
+            layout.separator()
         layout.prop(mat, MaterialProperties.UV1_HINT)

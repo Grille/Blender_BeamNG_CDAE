@@ -3,6 +3,8 @@ import json
 
 from dataclasses import dataclass, asdict
 
+from .cdae_v31 import CdaeV31
+
 
 @dataclass
 class Imposter:
@@ -15,11 +17,26 @@ class Imposter:
     polarSteps: int = 0,
     size: int = 25
 
+    def apply_detail(self, detail: CdaeV31.Detail):
+        self.detailLevel = detail.bbDetailLevel
+        self.dimension = detail.bbDimension
+        self.equatorSteps = detail.bbEquatorSteps
+        self.includePoles = detail.bbIncludePoles > 0
+        self.polarAngle = detail.bbPolarAngle
+        self.polarSteps = detail.bbPolarSteps
+        self.size = int(detail.size)
+
 
 class DaeAsset:
 
     def __init__(self):
         self.imposters: list[Imposter] = []
+
+
+    def create_imposter_from_deatil(self, detail: CdaeV31.Detail):
+        imp = Imposter()
+        imp.apply_detail(detail)
+        self.imposters.append(imp)
 
 
     def save(self, filepath: str):

@@ -1,6 +1,6 @@
 from enum import Enum
 
-class MaterialFlags(Enum):
+class MaterialFlags(int, Enum):
 
     S_WRAP = 1 << 0          
     T_WRAP = 1 << 1      
@@ -25,7 +25,7 @@ class MaterialFlags(Enum):
 
 
 
-class MeshFlags(Enum):
+class MeshFlags(int, Enum):
 
     BILLBOARD = 1 << 31,
     HAS_DETAIL_TEXTURE = 1 << 30,

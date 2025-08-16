@@ -37,6 +37,7 @@ class CdaeV31:
             return struct.pack("<5i", self.nameIndex, self.parentIndex, self.firstObject, self.firstChild, self.nextSibling)
 
 
+
     @dataclass
     class Object:
 
@@ -56,6 +57,7 @@ class CdaeV31:
             return struct.pack("<6i", self.nameIndex, self.numMeshes, self.startMeshIndex, self.nodeIndex, self.nextSibling, self.firstDecal)
 
     
+
     class Tree:
 
         def __init__(self, cdae: 'CdaeV31', nodes: 'list[CdaeV31.Node]', objects: 'list[CdaeV31.Object]'):
@@ -71,7 +73,7 @@ class CdaeV31:
                     yield (node_index, node)
 
 
-        def enumerate_nodes(self, node_index: int):
+        def enumerate_child_nodes(self, node_index: int):
             node_index = self.nodes[node_index].firstChild
             while node_index != -1:
                 node = self.nodes[node_index]
@@ -79,7 +81,7 @@ class CdaeV31:
                 node_index = node.nextSibling
 
 
-        def enumerate_objects(self, node_index: int):
+        def enumerate_child_objects(self, node_index: int):
             obj_index = self.nodes[node_index].firstObject
             while obj_index != -1:
                 obj = self.objects[obj_index]
@@ -170,6 +172,7 @@ class CdaeV31:
             return struct.pack("<fii", self.vis, self.frameIndex, self.matFrameIndex)
 
 
+
     @dataclass
     class Trigger:
 
@@ -184,6 +187,7 @@ class CdaeV31:
             return struct.pack("<if", self.state, self.pos)
 
 
+
     @dataclass
     class SubShape:
 
@@ -191,6 +195,7 @@ class CdaeV31:
         firstObject: int = 0
         numNodes: int = 0
         numObjects: int = 0
+
 
 
     @dataclass
@@ -234,7 +239,7 @@ class CdaeV31:
 
 
 
-    class MeshType(Enum):
+    class MeshType(int, Enum):
 
         STANDARD = 0
         SKIN = 1
@@ -249,18 +254,40 @@ class CdaeV31:
         @dataclass
         class DrawRegion:
 
+            class DrawType(int, Enum):
+                Triangles = 0x00000000
+                Strip = 0x40000000
+                Fan = 0x80000000
+
+
+            @dataclass
+            class DrawInfo:
+                type: 'CdaeV31.Mesh.DrawRegion.DrawType'
+                is_indexed: bool
+                has_no_mat: bool
+
+
             elements_start: int = 0
             elements_count: int = 0
-            info: int = 0
+            raw_info: int = 0
             
 
             @property
             def material(self) -> int:
-                return self.info & MATERIAL_MASK
+                return self.raw_info & MATERIAL_MASK
             
             @material.setter
             def material(self, value: int):
-                self.info = (self.info & ~MATERIAL_MASK) | (value & MATERIAL_MASK)
+                self.raw_info = (self.raw_info & ~MATERIAL_MASK) | (value & MATERIAL_MASK)
+
+            
+            @property
+            def info(self):
+                draw_type = CdaeV31.Mesh.DrawRegion.DrawType(self.raw_info & TYPE_MASK)
+                is_indexed = bool(self.raw_info & INDEXED)
+                has_no_mat = bool(self.raw_info & NO_MATERIAL)
+                return CdaeV31.Mesh.DrawRegion.DrawInfo(draw_type, is_indexed, has_no_mat)
+
 
             def get_polygon_range(self) -> range:
                 start = self.elements_start // 3
@@ -270,10 +297,10 @@ class CdaeV31:
 
 
             def unpack(self, data: bytes):
-                self.elements_start, self.elements_count, self.info = struct.unpack("<iii", data)
+                self.elements_start, self.elements_count, self.raw_info = struct.unpack("<iii", data)
 
             def pack(self):
-                return struct.pack("<iii", self.elements_start, self.elements_count, self.info)
+                return struct.pack("<iii", self.elements_start, self.elements_count, self.raw_info)
 
 
 
@@ -311,6 +338,11 @@ class CdaeV31:
             byte_array = self.colors.to_numpy_array(np.ubyte)
             float_array = byte_array.astype(np.float32) / 255.0
             return float_array
+        
+
+        def data_equals(self, other: 'CdaeV31.Mesh') -> bool:
+            pass
+
 
 
     class Sequence:
@@ -332,34 +364,35 @@ class CdaeV31:
             self.numTriggers: int = 0
             self.toolBegin: float = 0
 
-            self.rotationMatters: set[int] = set()
-            self.translationMatters: set[int] = set()
-            self.scaleMatters: set[int]= set()
-            self.visMatters: set[int] = set()
-            self.frameMatters: set[int] = set()
-            self.matFrameMatters: set[int] = set()
+            self.rotationMatters: list[bool] = []
+            self.translationMatters: list[bool] = []
+            self.scaleMatters: list[bool] = []
+            self.visMatters: list[bool] = []
+            self.frameMatters: list[bool] = []
+            self.matFrameMatters: list[bool] = []
+
 
 
     class Material:
 
         def __init__(self):
             self.name: str = ""
-            self.flags: int = 0
+            self.flags: int = 3
             self.reflect: int = 0
             self.bump: int = 0
             self.detail: int = 0
-            self.detailScale: float = 0
-            self.reflectionAmount: float = 0
+            self.detailScale: float = 1.0
+            self.reflectionAmount: float = 1.0
 
 
     def __init__(self):
 
-        self.smallest_visible_size: float = 0.0
+        self.smallest_visible_size: float = 2.0
         self.smallest_visible_dl: int = 0
-        self.radius: float = 0.0
-        self.tube_radius: float = 0.0
+        self.radius: float = 5.0
+        self.tube_radius: float = 5.0
         self.center: Vec3F = Vec3F()
-        self.bounds: Box6F = Box6F()
+        self.bounds: Box6F = Box6F(-2,-2,-2, 2, 2, 2)
 
         create_empty = PackedVector.create_empty
 
@@ -424,13 +457,16 @@ class CdaeV31:
         count = fn.size
         assert all(arr.size == count for arr in (nn, fo, no)), "Subshape buffers must have the same length"
 
+        shapes: list[CdaeV31.SubShape] = []
         for firstNode, numNodes, firstObject, numObjects in zip(fn, nn, fo, no):
-            yield CdaeV31.SubShape(
+            shape = CdaeV31.SubShape(
                 firstNode=int(firstNode),
                 numNodes=int(numNodes),
                 firstObject=int(firstObject),
                 numObjects=int(numObjects)
             )
+            shapes.append(shape)
+        return shapes
     
 
     def unpack_details(self):

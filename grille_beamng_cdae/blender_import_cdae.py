@@ -47,5 +47,8 @@ class ImportCdae(Operator, ImportHelper):
     def draw(self, context):
 
         layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+
         layout.prop(self, "validate_meshes")
         layout.prop(self, "debug_info")

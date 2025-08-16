@@ -28,7 +28,7 @@ class ObjectPanel(bpy.types.Panel):
 
         layout.prop(obj, ObjectProperties.ROLE)
 
-        role = ObjectRole.from_obj(obj)
+        role = ObjectProperties.get_role(obj)
         if role == ObjectRole.Generic:
             layout.prop(obj, ObjectProperties.PATH)
             return

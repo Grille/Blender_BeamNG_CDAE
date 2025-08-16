@@ -8,9 +8,14 @@ from bpy.props import BoolProperty, IntProperty, FloatProperty, EnumProperty, St
 from bpy_extras.io_utils import ExportHelper
 from enum import Enum
 
+from .beamng_asset import DaeAsset
+from .cdae_builder_tree import CdaeTreeBuildMode
 from .cdae_builder import CdeaBuilder
 from .cdae_v31 import CdaeV31
 from .material_libary import MaterialLibary
+from .material_builder import MaterialBuilder
+from . import cdae_serializer_text as CdaeTextSerializer
+from . import cdae_serializer_binary as CdaeBinarySerializer
 
 # pyright: reportInvalidTypeForm=false
 
@@ -21,13 +26,20 @@ class WriteMode(str, Enum):
     REPLACE = "REPLACE"
 
 
-def update_fps(self, ctx):
+class FileFormat(str, Enum):
+    NONE = "NONE"
+    DAE = ".dae"
+    CDAE = ".cdae"
+    DTS = ".dts"
+
+
+def update_fps(self: 'ExportBase', ctx):
     fps = self.anim_samples / self.anim_duration
     if self.anim_fps != fps:
         self.anim_fps = fps
 
 
-def update_samples(self, ctx):
+def update_samples(self: 'ExportBase', ctx):
     samples = round(self.anim_duration * self.anim_fps)
     if self.anim_samples != samples:
         self.anim_samples = samples
@@ -35,12 +47,38 @@ def update_samples(self, ctx):
 
 class ExportBase(Operator, ExportHelper):
 
-    write_file: BoolProperty(name="Write File", default=True)
-    use_transforms: BoolProperty(name="Use Transforms", default=True)
-    build_scene_tree: BoolProperty(
-        name="Build Scene Tree", default=True,
-        description="Builds a BeamNG Scene Tree for LOD, Collision and Billboards, disable this if you just want to drop objects into BeamNG."
+    bl_idname = "grille.export_beamng_dae"
+    bl_label = "Export BeamNG"
+    filename_ext = ""
+
+    file_format: EnumProperty(
+        name="Format",
+        description="How textures are saved",
+        items=[
+            (FileFormat.NONE, "None", ""),
+            (FileFormat.DAE, "Text (.dae)", ""),
+            (FileFormat.CDAE, "Binary (.cdae)", ""),
+            #(FileFormat.DTS, "Torque3D (.dts)", ""),
+        ],
+        default=FileFormat.DAE,
     )
+
+    limit_precision_enabled: BoolProperty(name="Limit Precision", default=False)
+    limit_precision_dp: IntProperty(name="Decimal Places", default=4, min=0)
+    asset_file_enabled: BoolProperty(name="Write '-.asset.json'", default=True)
+
+    use_transforms: BoolProperty(name="Use Transforms", default=True)
+    compression_enabled: BoolProperty(name="Compression", default=True)
+    build_mode: EnumProperty(
+        name="Build Mode",
+        description="",
+        items=[
+            (CdaeTreeBuildMode.FLAT_DUMP, "Flat Dump", ""),
+            (CdaeTreeBuildMode.DAE_NODE_TREE, "Collada Node Tree", ""),
+        ],
+        default=CdaeTreeBuildMode.FLAT_DUMP,
+    )
+
     apply_scale: BoolProperty(name="Apply Scale", default=True)
 
     save_textures: EnumProperty(
@@ -60,10 +98,10 @@ class ExportBase(Operator, ExportHelper):
         items=[
             (WriteMode.NONE, "None", "Don't write any materials"),
             (WriteMode.APPEND, "Append", "Append new materials, keep existing"),
-            (WriteMode.OVERRIDE, "Override", "Override existing materials"),
+            (WriteMode.OVERRIDE, "Override", "Override existing materials, keep other existing"),
             (WriteMode.REPLACE, 'Replace', "Replace materials file")
         ],
-        default=WriteMode.APPEND,
+        default=WriteMode.OVERRIDE,
     )
 
     material_path: StringProperty(
@@ -79,12 +117,13 @@ class ExportBase(Operator, ExportHelper):
     )
 
     material_default: EnumProperty(
-        name="Default",
+        name="Default Ver",
         items=[
-            ("1.0", "V1",""),
+            ("0.0", "Auto Detect", ""),
+            ("1.0", "V1", ""),
             ("1.5", "V1.5 (PBR)", ""),
         ],
-        default="1.5",
+        default="0.0",
     )
 
     write_animations: BoolProperty(name="Enabled", default=False)
@@ -94,35 +133,68 @@ class ExportBase(Operator, ExportHelper):
     anim_duration: FloatProperty(name="Duration (Seconds)", default=100, min=0.01, update=update_fps)
     anim_fps: FloatProperty(name="FPS", default=1, min=0, update=update_samples)
 
+    filter_glob: StringProperty(default="*.dae;*.cdae;*.json", options={'HIDDEN'})
+
 
     def execute_write_geometry(self, cdae: CdaeV31, filepath: str):
-        pass
+
+        CdaeTextSerializer.write_to_file(cdae, filepath)
+        print(f"Write dae: {filepath}")
+
+
+    def invoke(self, context, event):
+        return super().invoke(context, event)
 
 
     def execute(self, context):
         
+        if self.file_format == FileFormat.NONE:
+            build_mode = CdaeTreeBuildMode.NONE
+        else:
+            build_mode = self.build_mode
+
         builder = CdeaBuilder()
-        builder.use_transforms = self.use_transforms
-        builder.tree.build_scene_tree = self.build_scene_tree
-        self.builder_settings(builder)
+        builder.tree.build_mode = build_mode
+        sampler = builder.sampler
+        sampler.sample_transforms_enabled = self.use_transforms
+        sampler.sample_keyframes_enabled = self.write_animations
+        sampler.start = self.anim_frame_start
+        sampler.end = self.anim_frame_end
+        sampler.sample_count = self.anim_samples
+        sampler.duration = self.anim_duration
+
         builder.tree.add_selected()
         builder.build()
 
         filepath: str = self.filepath
         dirpath = os.path.dirname(filepath)
 
-        if self.write_file:
-            self.execute_write_geometry(builder.cdae, filepath)
+        match self.file_format:
+            case FileFormat.DAE:
+                CdaeTextSerializer.limit_precision_enabled = self.limit_precision_enabled
+                CdaeTextSerializer.limit_precision_dp = self.limit_precision_dp
+                CdaeTextSerializer.write_to_file(builder.cdae, filepath)
+            case FileFormat.CDAE:
+                CdaeBinarySerializer.write_to_file(builder.cdae, filepath, self.compression_enabled)
+
+        if self.asset_file_enabled:
+            self.write_asset_file(filepath, builder.cdae)
 
         self.export_materials(dirpath, builder.materials)
 
         return {'FINISHED'}
     
 
-    def builder_settings(self, builder: CdeaBuilder):
-        pass
+    def check(self, context):
+        format: FileFormat = self.file_format
+        path: str = self.filepath
+        filename, ext = os.path.splitext(path)
 
+        if format != FileFormat.NONE and format != ext:
+            self.filepath = f"{filename}{format}"
+            return True
     
+
     def export_textures(self, dirpath: str, libary: MaterialLibary, mode: WriteMode):
         texture_names: set[str] = set()
 
@@ -161,15 +233,18 @@ class ExportBase(Operator, ExportHelper):
 
 
         libary = MaterialLibary()
-        libary.default_version = float(self.material_default)
+
         if (material_mode != WriteMode.REPLACE):
             libary.try_load(mat_filepath)
 
         for bmat in materials:
-            if material_mode == WriteMode.APPEND:
-                libary.append_bmat(bmat)
-            else:
-                libary.overwrite_bmat(bmat)
+            if material_mode == WriteMode.APPEND and libary.bmat_exists(bmat):
+                continue
+
+            builder = MaterialBuilder()
+            builder.default_version = float(self.material_default)
+            builder.build_from_bmat(bmat)
+            libary.set_material(builder.material)
 
         save_textures = WriteMode[self.save_textures]
         if save_textures != WriteMode.NONE:
@@ -180,6 +255,29 @@ class ExportBase(Operator, ExportHelper):
 
         libary.save(mat_filepath)
         print(f"Write materials.json: {mat_filepath}")
+
+
+    def write_asset_file(self, filepath: str, cdae: CdaeV31):
+
+        filename, ext = os.path.splitext(filepath)
+        assetpath = f"{filename}.dae.asset.json"
+
+        def get_bb_autobillboard():
+            for detail in cdae.unpack_details():
+                print(f"Found {cdae.names[detail.nameIndex]}")
+                if cdae.names[detail.nameIndex] == "bb_autobillboard":
+                    return detail
+
+        detail = get_bb_autobillboard()
+        print(f"DETAIL {detail}")
+
+        if detail:
+            asset = DaeAsset()
+            asset.create_imposter_from_deatil(detail)
+            asset.save(assetpath)
+        else:
+            if os.path.exists(assetpath):
+                os.remove(assetpath)
         
 
     def draw(self, context):
@@ -188,38 +286,63 @@ class ExportBase(Operator, ExportHelper):
         layout.use_property_split = True
         layout.use_property_decorate = False
 
-        write_file = self.write_file
+        format = self.file_format
+        write_file = format != FileFormat.NONE
 
-        scn_box = layout.box()
-        scn_box.label(text="Scene", icon='SCENE_DATA')
-        scn_box.prop(self, "write_file")
+        def alert(obj, text):
+            row = obj.row()
+            row.alert = True
+            row.label(text=text, icon="ERROR")
+
+        box = layout.box()
+        box.label(text="File", icon='FILE_NEW')
+        box.prop(self, "file_format")
+
+        if format == FileFormat.DAE:
+            box.prop(self, "limit_precision_enabled")
+            if self.limit_precision_enabled:
+                box.prop(self, "limit_precision_dp")
+            box.prop(self, "asset_file_enabled")
+
+        if format == FileFormat.CDAE:
+            box.prop(self, "compression_enabled")
+            alert(self, f"Unstable, use 'Text (.dae)' instead.")
+
         if write_file:
-            scn_box.prop(self, "build_scene_tree")
-            scn_box.prop(self, "use_transforms")
-            #geo_box = layout.box()
-            #geo_box.label(text="Geometry", icon='MESH_DATA')
-            #geo_box.prop(self, "apply_scale")
+            box = layout.box()
+            box.label(text="Scene", icon='SCENE_DATA')
+            box.prop(self, "build_mode")
+            box.prop(self, "use_transforms")
+            box.label(text="Geometry", icon='MESH_DATA')
+            box.prop(self, "apply_scale")
 
-        mat_box = layout.box()
-        mat_box.label(text="Materials", icon='MATERIAL')
-        mat_box.prop(self, "material_write_mode")
-        if self.material_write_mode != WriteMode.NONE:
-            mat_box.prop(self, "material_default")
-            mat_box.prop(self, "material_path")
-            mat_box.label(text="Textures", icon='TEXTURE')
-            mat_box.prop(self, "save_textures")
-            if self.save_textures != WriteMode.NONE:
-                mat_box.prop(self, "texture_path")
-
-        if write_file:
-            ani_box = layout.box()
-            ani_box.label(text="Animations", icon='ANIM_DATA')
-            ani_box.prop(self, "write_animations")
-            ani_box.use_property_split = False
+            box = layout.box()
+            box.label(text="Animations", icon='ANIM_DATA')
+            box.prop(self, "write_animations")
+            box.use_property_split = False
             if self.write_animations:
-                ani_box.label(text="WIP", icon='ERROR')
-                ani_box.prop(self, "anim_frame_start")
-                ani_box.prop(self, "anim_frame_end")
-                ani_box.prop(self, "anim_duration")
-                ani_box.prop(self, "anim_samples")
-                ani_box.prop(self, "anim_fps")
+                box.label(text="WIP", icon='ERROR')
+                box.prop(self, "anim_frame_start")
+                box.prop(self, "anim_frame_end")
+                box.prop(self, "anim_duration")
+                box.prop(self, "anim_samples")
+                box.prop(self, "anim_fps")
+                if self.anim_duration > 500:
+                    alert(box, f"Long animations can break.")
+
+        box = layout.box()
+        box.label(text="Materials", icon='MATERIAL')
+        box.prop(self, "material_write_mode")
+        if self.material_write_mode != WriteMode.NONE:
+            box.prop(self, "material_default")
+            box.prop(self, "material_path")
+            box = box.box()
+            box.label(text="Textures", icon='TEXTURE')
+            box.prop(self, "save_textures")
+            if self.save_textures != WriteMode.NONE:
+                box.prop(self, "texture_path")
+
+
+    @staticmethod
+    def menu_func(self, context):
+        self.layout.operator(ExportBase.bl_idname, text="BeamNG (.dae/.cdae/.json)")

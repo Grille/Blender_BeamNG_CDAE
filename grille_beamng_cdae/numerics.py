@@ -23,13 +23,18 @@ class Vec2F:
         return (self.x, self.y)
     
 
+    def __eq__(self, value):
+        if not isinstance(value, Vec2F):
+            return False
+        return self.x == value.x and self.y == value.y
+    
 
-class Vec3F:
+
+class Vec3F(Vec2F):
 
     def __init__(self, x: float = 0.0, y: float = 0.0, z: float = 0.0):
-        self.x: float = x
-        self.y: float = y
-        self.z: float = z
+        super().__init__(x, y)
+        self.z: float = float(z)
 
 
     @classmethod
@@ -46,18 +51,34 @@ class Vec3F:
         return struct.pack("<3f", self.x, self.y, self.z)
     
 
+    def min(self, other: 'Vec3F'):
+        return Vec3F(min(self.x, other.x), min(self.y, other.y), min(self.z, other.z))
+    
+
+    def max(self, other: 'Vec3F'):
+        return Vec3F(max(self.x, other.x), max(self.y, other.y), max(self.z, other.z))
+    
+
     @property
     def tuple3(self):
         return (self.x, self.y, self.z)
+    
+
+    def __str__(self):
+        return f"<{self.x:.2f}, {self.y:.2f}, {self.z:.2f}>"
+    
+
+    def __eq__(self, value):
+        if not isinstance(value, Vec3F):
+            return False
+        return self.x == value.x and self.y == value.y and self.z == value.z
         
 
 
-class Vec4F:
+class Vec4F(Vec3F):
 
     def __init__(self, x: float = 0.0, y: float = 0.0, z: float = 0.0, w: float = 0.0):
-        self.x: float = x
-        self.y: float = y
-        self.z: float = z
+        super().__init__(x, y, z)
         self.w: float = w
 
 
@@ -76,11 +97,6 @@ class Vec4F:
     
 
     @property
-    def tuple3(self):
-        return (self.x, self.y, self.z)
-    
-
-    @property
     def tuple4(self):
         return (self.x, self.y, self.z, self.w)
         
@@ -88,6 +104,12 @@ class Vec4F:
     @property
     def list4(self):
         return [self.x, self.y, self.z, self.w]
+    
+
+    def __eq__(self, value):
+        if not isinstance(value, Vec4F):
+            return False
+        return self.x == value.x and self.y == value.y and self.z == value.z and self.w == value.w
     
 
 
@@ -142,6 +164,17 @@ class Box6F:
         self.max = Vec3F(maxx, maxy, maxz)
 
 
+    def extended(self, other: 'Box6F'):
+        min = self.min.min(other.min)
+        max = self.max.max(other.max)
+        return Box6F(*min, *max)
+    
+
+    def __str__(self):
+        return f"<{self.min}, {self.max}>"
+
+
+
 class Color4F(Vec4F):
 
     def __init__(self, r = 0.0, g = 0.0, b = 0.0, a = 0.0):
@@ -193,3 +226,30 @@ class Color4F(Vec4F):
     @a.setter
     def a(self, value: float): self.w = value
     
+
+
+class Transforms:
+
+    def __init__(self, position: Vec3F = None, scale: Vec3F = None, rotation: Quat4I16 = None):
+        self.translation = Vec3F(0.0, 0.0, 0.0) if position is None else position
+        self.scale = Vec3F(1.0, 1.0, 1.0) if scale is None else scale
+        self.rotation = Quat4I16() if rotation is None else rotation
+
+
+    @classmethod
+    def from_blender_matrix(cls, matrix: mathutils.Matrix):
+        position = Vec3F.from_list3(matrix.to_translation())
+        rotation = Quat4I16.from_blender_quaternion(matrix.to_quaternion())
+        scale = Vec3F.from_list3(matrix.to_scale())
+        return cls(position, scale, rotation)
+    
+
+    def __eq__(self, value):
+        if not isinstance(value, Transforms):
+            return False
+        return self.translation == value.translation and self.scale == value.scale and self.rotation == value.rotation
+
+
+
+
+

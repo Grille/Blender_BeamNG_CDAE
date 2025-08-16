@@ -12,7 +12,7 @@ Since [BeamNG's](https://www.beamng.com/game/) CDAE now has format [specificatio
 | CDAE.Mesh | ✅ Functional | ❌ Partial |
 | CDAE.Animations | ➖ | ❌ Planned |
 | DAE.Mesh | ➖ | ✅ Functional |
-| DAE.Animations | ➖ | ❌ Planned |
+| DAE.Animations | ➖ | ✅ Functional |
 | Main.Materials.JSON | ➖ | ✅ Functional (PBR) |
 
 ### Models
@@ -30,4 +30,5 @@ V1 can also be exported but support is still very lackluster.
 - 4.4
 
 ### Resources
-- [CDAE Specifications](https://documentation.beamng.com/modding/file_formats/cdae/)
+- [BeamNG.CDAE Specsfications](https://documentation.beamng.com/modding/file_formats/cdae/)
+- [Torque3D.DTS Specsfications](https://torquegameengines.github.io/T3D-Documentation/content/documentation/Artist%20Guide/Formats/dts_format.html)

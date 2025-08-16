@@ -68,39 +68,35 @@ class MsgpackReader:
         raise Exception()
         
 
-    def read_integerset(self) -> set[int]:
+    def read_integerset(self) -> list[bool]:
         value = self.read_next()
 
-        if isinstance(value, list):
-            integerset = set()
-
-            count = value[0]
-            values = value[1]
-
-            actual_count = len(values)
-
-            if count != actual_count:
-                raise Exception(f"expected: {count}, actual: {actual_count}")
-
-            for item in values:
-                integerset.add(int(item))
-
-            return integerset
+        if not isinstance(value, list):
+            raise Exception()
         
-        raise Exception()
-        
+        bits: list[bool] = []
+        chunk_count: int = value[0]
+        chunks: list[int] = value[1]
 
+        if chunk_count != len(chunks):
+            raise Exception(f"expected: {chunk_count}, actual: {len(chunks)}")
+        
+        for chunk in chunks:
+            for i in range(32):
+                bits.append(bool((chunk >> i) & 1))
+
+        return bits
+        
+        
     def _read_float_list(self, size: int) -> list[float]:
         value = self.read_next()
 
         if isinstance(value, list):
-            print("read list")
             if (len(value) != size):
                 raise Exception()
             return value
             
         elif isinstance(value, bytes):
-            print("read bytes")
             if (len(value) != size * 4):
                 raise Exception()
             return list(struct.unpack(f"<{size}f", value))
@@ -121,7 +117,5 @@ class MsgpackReader:
 
     def read_box6f(self):
         values = self._read_float_list(6)
-        min = Vec3F(values[0], values[1], values[2])
-        max = Vec3F(values[3], values[4], values[5])
-        return Box6F(min, max)
+        return Box6F(*values)
 

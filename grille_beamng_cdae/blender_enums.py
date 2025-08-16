@@ -8,6 +8,8 @@ class NodeName(str, Enum):
     GroupOutput = "NodeGroupOutput"
     OutputMaterial = "ShaderNodeOutputMaterial"
     BsdfPrincipled = "ShaderNodeBsdfPrincipled"
+    BsdfDiffuse = "ShaderNodeBsdfDiffuse"
+    BsdfMetallic = "ShaderNodeBsdfMetallic"
     BsdfTransparent = "ShaderNodeBsdfTransparent"
     Mix = "ShaderNodeMix"
     MixRGB = "ShaderNodeMixRGB"
@@ -22,6 +24,7 @@ class NodeName(str, Enum):
     LightPath = "ShaderNodeLightPath"
     Geometry = "ShaderNodeNewGeometry"
     CombineXYZ = "ShaderNodeCombineXYZ"
+    ColorAttribute = "ColorAttribute"
 
     RGB = "ShaderNodeRGB"
     Value = "ShaderNodeValue"
@@ -33,9 +36,11 @@ class SocketName(str, Enum):
     ColorHDR = "Color HDR"
     BaseColor = "Base Color"
     VertexColor = "Vertex Color"
+    VertexAlpha = "Vertex Alpha"
     Metallic = "Metallic"
     Roughness = "Roughness"
     Alpha = "Alpha"
+    BaseAlpha = "Base Alpha"
     Normal = "Normal"
 
     DetailColor = "Detail Color"
@@ -48,6 +53,7 @@ class SocketName(str, Enum):
 
     EmissionColor = "Emission Color"
     EmissionStrength = "Emission Strength"
+    EdgeTint = "Edge Tint"
 
     CoatWeight = "Coat Weight"
     CoatRoughness = "Coat Roughness"
@@ -55,9 +61,21 @@ class SocketName(str, Enum):
 
     BSDF = "BSDF"
     Shader = "Shader"
+    Surface = "Surface"
 
     IsShadowRay = "Is Shadow Ray"
     Backfacing = "Backfacing"
+
+
+
+class SocketIndex(int, Enum):
+    MixFactor = 0
+    MixFloatIn0 = 1,
+    MixFloatIn1 = 2,
+    MixFloatOut = 0,
+    MixColorIn0 = 6,
+    MixColorIn1 = 7,
+    MixColorOut = 2,
 
 
 
@@ -87,3 +105,8 @@ class Operation(str, Enum):
     LESS_THAN = 'LESS_THAN'
     MINIMUM = 'MINIMUM'
     MAXIMUM = 'MAXIMUM'
+    FLOAT = "FLOAT"
+    RGBA = 'RGBA'
+    MIX = 'MIX'
+    LINEAR_LIGHT = 'LINEAR_LIGHT'
+    OVERLAY = 'OVERLAY'

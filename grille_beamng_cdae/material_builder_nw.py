@@ -7,12 +7,13 @@ from dataclasses import dataclass
 from .node_walker import NodeWalker
 from .numerics import *
 from .blender_shader_nodes import *
+from .material import Material
 
 
 class MaterialNodeWalker(NodeWalker):
 
     @dataclass
-    class MatSocket:
+    class MatSocketInfo:
         exists: bool = False
         connected: bool = False
         image: bpy.types.Image = None
@@ -21,7 +22,7 @@ class MaterialNodeWalker(NodeWalker):
         factor: float = None
         strength: float = None
         scale: Vec2F = None
-        child: 'MaterialNodeWalker.MatSocket' = None
+        child: 'MaterialNodeWalker.MatSocketInfo' = None
         issues: list[str] = None
 
         def set_value_or_color(self, value: float | tuple):
@@ -42,14 +43,14 @@ class MaterialNodeWalker(NodeWalker):
 
     
     @dataclass
-    class MatStage:
+    class MatStageInfo:
         context: 'MaterialNodeWalker'
 
 
-    def parse_socket_tree(self, socket: 'MaterialNodeWalker.MatSocket'):
+    def parse_socket_tree(self, socket: 'MaterialNodeWalker.MatSocketInfo'):
 
         if self.is_node_idname(BeamDetailColor.bl_idname):
-            child = MaterialNodeWalker.MatSocket(issues=[])
+            child = MaterialNodeWalker.MatSocketInfo(issues=[])
             child.strength = self.get_float_value("Strength")
             self.get_socket("Detail", child)
             socket.child = child
@@ -57,7 +58,7 @@ class MaterialNodeWalker(NodeWalker):
             self.follow("Base")
 
         if self.is_node_idname(BeamDetailNormal.bl_idname):
-            child = MaterialNodeWalker.MatSocket(issues=[])
+            child = MaterialNodeWalker.MatSocketInfo(issues=[])
             self.get_socket("Detail", child)
             socket.child = child
             self.follow("Base")
@@ -109,10 +110,10 @@ class MaterialNodeWalker(NodeWalker):
             socket.layer = self.current.uv_map
 
 
-    def get_socket(self, input_key: str | int, socket: 'MaterialNodeWalker.MatSocket' = None) -> 'MaterialNodeWalker.MatSocket':
+    def get_socket(self, input_key: str | int, socket: 'MaterialNodeWalker.MatSocketInfo' = None) -> 'MaterialNodeWalker.MatSocketInfo':
 
         if socket is None:
-            socket = MaterialNodeWalker.MatSocket(issues=[])
+            socket = MaterialNodeWalker.MatSocketInfo(issues=[])
 
         try:
             input = self.get_input(input_key, False)
@@ -130,9 +131,37 @@ class MaterialNodeWalker(NodeWalker):
 
         finally:
             return socket
+        
+
+    def try_get_version_hint(self) -> float:
+
+        print(f"HINT {self.current.bl_idname}")
+
+        if self.is_node_idname(BeamBDSF10Basic):
+            return 1.0
+        
+        elif self.is_node_idname(BeamBSDF15):
+            return 1.5
+        
+        elif self.is_node_idname(BeamStageMix):
+            return 1.5
+        
+        return 0.0
+        
+
+    def get_any_socket(self, keys: list[str|int]):
+        if not isinstance(keys, list):
+            return self.get_socket(keys)
+        if len(keys) == 0:
+            raise ValueError()
+        for key in keys:
+            socket = self.get_socket(key)
+            if socket.exists:
+                return socket
+        return socket
 
 
-    def parse_stage_recursively(self, stages: list['MaterialNodeWalker.MatStage'] = None):
+    def parse_stages_recursively(self, stages: list['MaterialNodeWalker.MatStageInfo'] = None):
 
         if stages is None:
             stages = []
@@ -140,24 +169,38 @@ class MaterialNodeWalker(NodeWalker):
         if self.is_node_idname(BeamStageMix.bl_idname):
             context = self.fork("Overlay")
             self.follow("Base")
-            self.parse_stage_recursively(stages)
-            context.parse_stage_recursively(stages)
+            self.parse_stages_recursively(stages)
+            context.parse_stages_recursively(stages)
         else:
-            stages.append(MaterialNodeWalker.MatStage(self))
+            stages.append(MaterialNodeWalker.MatStageInfo(self))
 
         return stages
     
 
-    def parse_mat_settings(self) -> 'MaterialNodeWalker.MatSettings':
-        mat = MaterialNodeWalker.MatSettings()
-        if self.is_node_idname(BeamMaterial.bl_idname):
-            mat.alpha_clip = self.get_float_value(BeamMaterial.Sockets.CLIP) > 0.5
-            mat.alpha_clip_threshold = self.get_float_value(BeamMaterial.Sockets.CLIP_T)
-            mat.alpha_blend = self.get_float_value(BeamMaterial.Sockets.BLEND) > 0.5
-            mat.double_sided = self.get_float_value(BeamMaterial.Sockets.DS) > 0.5
-            mat.invert_backface_normals = self.get_float_value(BeamMaterial.Sockets.IBN) > 0.5
-            mat.cast_shadows = self.get_float_value(BeamMaterial.Sockets.SHADOWS) > 0.5
-            self.try_follow(SocketName.Shader)
-        return mat
+    def is_collider(self):
+        return self.is_node_idname(BeamBSDFCollision.bl_idname)
+    
+
+    def try_parse_mat_settings(self, mat: Material):
+
+        if not self.is_node_idname(BeamMaterial.bl_idname):
+            return
+        
+        alpha_clip = self.get_float_value(BeamMaterial.Sockets.CLIP) > 0.5
+        alpha_clip_threshold = self.get_float_value(BeamMaterial.Sockets.CLIP_T)
+        alpha_blend = self.get_float_value(BeamMaterial.Sockets.BLEND) > 0.5
+        double_sided = self.get_float_value(BeamMaterial.Sockets.DOUBLE_SIDED) > 0.5
+        invert_backface_normals = self.get_float_value(BeamMaterial.Sockets.INVERT_BACKFACE_NORMALS) > 0.5
+        cast_shadows = self.get_float_value(BeamMaterial.Sockets.SHADOWS) > 0.5
+
+        mat.alpha_test = alpha_clip
+        mat.alpha_ref = int(alpha_clip_threshold * 255)
+        mat.translucent = alpha_blend
+        mat.translucent_blend_op = "PreMulAlpha" if alpha_blend else None
+        mat.double_sided = double_sided
+        mat.invert_backface_normals = double_sided and invert_backface_normals
+        mat.cast_shadows = cast_shadows
+
+        self.try_follow(SocketName.Shader)
             
 

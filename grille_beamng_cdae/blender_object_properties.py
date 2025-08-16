@@ -2,6 +2,7 @@ import bpy
 
 from enum import Enum
 from bpy.props import StringProperty, EnumProperty, IntProperty, BoolProperty
+from bpy.types import Object as BObj
 
 
 class ObjectRole(str, Enum):
@@ -12,11 +13,6 @@ class ObjectRole(str, Enum):
     AutoBillboard = "AutoBillboard"
     NullDetail = "NullDetail"
     Generic = "Generic"
-
-
-    @classmethod
-    def from_obj(cls, obj):
-        return cls(getattr(obj, ObjectProperties.ROLE))
 
 
     @property
@@ -42,9 +38,19 @@ class ObjectProperties(str, Enum):
 
 
     @staticmethod
-    def has_mesh(obj) -> bool:
+    def has_mesh(obj: BObj) -> bool:
         return obj.type == 'MESH'
+    
 
+    @staticmethod
+    def get_role(obj: BObj) -> ObjectRole:
+        return ObjectRole(getattr(obj, ObjectProperties.ROLE))
+
+
+    @staticmethod
+    def get_lod(obj: BObj) -> int:
+        return getattr(obj, ObjectProperties.LOD_SIZE)
+    
 
     @staticmethod
     def register():
@@ -66,7 +72,7 @@ class ObjectProperties(str, Enum):
                 (ObjectRole.NullDetail, "NullDetail", ""),
                 (ObjectRole.Generic, "Generic", ""),
             ],
-            default=ObjectRole.Generic,
+            default=ObjectRole.Mesh,
         ))
 
         _set(ObjectProperties.LOD_SIZE, IntProperty(
@@ -76,12 +82,12 @@ class ObjectProperties(str, Enum):
 
         _set(ObjectProperties.BB_DIMENSION, IntProperty(
             name="BB Dimension (PX)", 
-            default=0,
+            default=64,
         ))
 
         _set(ObjectProperties.BB_EQUATOR_STEPS, IntProperty(
             name="BB Equator Steps", 
-            default=0,
+            default=16,
         ))
 
         _set(ObjectProperties.BB_FLAG0, BoolProperty(

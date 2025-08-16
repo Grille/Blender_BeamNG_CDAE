@@ -66,3 +66,20 @@ class PackedVector:
         self.element_count = len(self.data) // self.element_size
 
 
+    def __eq__(self, other: 'PackedVector') -> bool:
+        if self is other:
+            return True
+        if not isinstance(other, PackedVector):
+            return NotImplemented
+        return (
+            self.element_count == other.element_count
+            and self.element_size == other.element_size
+            and self.data == other.data
+        )
+    
+
+    def __hash__(self):
+        return hash((self.element_count, self.element_size, self.data))
+        
+
+

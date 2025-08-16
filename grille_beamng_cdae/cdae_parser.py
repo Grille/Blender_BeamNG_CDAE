@@ -44,7 +44,7 @@ class CdaeParser:
 
 
         def build_scene(self, cdae: CdaeV31):
-
+            
             for cdae_node in cdae.unpack_nodes():
                 name = cdae.names[cdae_node.nameIndex]
                 obj = bpy.data.objects.new(f"node:{name}", None)
@@ -200,11 +200,30 @@ class CdaeParser:
             }
             new_obj(f"state[{idx}]:", states_obj, info)
 
-        cdae.nodeRotations.element_count
+        materials = cdae.materials
+        materials_obj = new_obj(f"materials[{len(materials)}]", debug_obj)
+        for mat in materials:
+            info = {
+                "flags": mat.flags,
+                "reflect": mat.reflect,
+                "bump": mat.bump,
+                "detail": mat.detail,
+                "detailScale": mat.detailScale,
+                "reflectAmount": mat.reflectionAmount,
+            }
+            new_obj(f"mat[{mat.name}]", materials_obj, info)
 
         info = {
+            "bounds": f"{cdae.bounds}",
+            "center": f"{cdae.center}",
+            "radius": f"{cdae.radius}",
+            "tube_radius": f"{cdae.tube_radius}",
+            "smallest_visible_size": f"{cdae.smallest_visible_size}",
+            "smallest_visible_dl": f"{cdae.smallest_visible_dl}",
             "nodeRotations.count": cdae.nodeRotations.element_count,
-            "nodeTranslations.count": cdae.nodeTranslations.element_count
+            "nodeTranslations.count": cdae.nodeTranslations.element_count,
+            "groundRotations.count": cdae.groundRotations.element_count,
+            "groundTranslations.count": cdae.groundTranslations.element_count,
         }
         new_obj("misc", debug_obj, info)
 
@@ -236,13 +255,39 @@ class CdaeParser:
         for mat_info in scene.materials:
             mesh.materials.append(mat_info.material)
 
+
+    def get_clean_data(self, info: CdaeV31.Mesh):
+
+        all_indices = info.indices.to_numpy_array(np.int32).reshape(-1, 3)
+        positions = info.verts.to_numpy_array(np.float32).reshape(-1, 3)
+
+        # Collect filtered triangles and material mapping
+        region_triangles = []
+        region_materials = []
+
+        for region in info.unpack_regions():
+            tris = all_indices[region.get_polygon_range()]
+
+            # Filter out triangles where any two vertices share the same position
+            p0 = positions[tris[:, 0]]
+            p1 = positions[tris[:, 1]]
+            p2 = positions[tris[:, 2]]
+            mask = ~((np.all(p0 == p1, axis=1)) | (np.all(p1 == p2, axis=1)) | (np.all(p0 == p2, axis=1)))
+            tris = tris[mask]
+
+            region_triangles.append(tris)
+            region_materials.extend([region.material] * len(tris))
+
+        indices = np.vstack(region_triangles).ravel()
+        return (positions, indices, region_materials)
+    
+
     def build_mesh(self, info: CdaeV31.Mesh, mesh: bpy.types.Mesh):
 
         if (info.type != CdaeV31.MeshType.STANDARD):
             return
-
-        positions = info.verts.to_numpy_array(np.float32).reshape(-1, 3)
-        indices = info.indices.to_numpy_array(np.int32)
+        
+        positions, indices, mat_indices = self.get_clean_data(info)
 
         loop_count = len(indices)
         face_count = loop_count // 3
@@ -254,28 +299,17 @@ class CdaeParser:
         loop_start = np.arange(face_count, dtype=np.int32) * 3
         loop_total = np.full(face_count, 3, dtype=np.int32)
 
-        unique_edges, loop_edge_indices = self.build_mesh_edges(vert_indices)
-        edge_count = len(unique_edges)
-
         mesh.vertices.add(vert_count)
-        mesh.edges.add(edge_count)
         mesh.loops.add(loop_count)
         mesh.polygons.add(face_count)
 
         mesh.vertices.foreach_set("co", vert_positions.ravel())
-        mesh.edges.foreach_set("vertices", unique_edges.ravel())
         mesh.loops.foreach_set("vertex_index", vert_indices)
-        mesh.loops.foreach_set("edge_index", loop_edge_indices)
         mesh.polygons.foreach_set("loop_start", loop_start)
         mesh.polygons.foreach_set("loop_total", loop_total)
+        mesh.update(calc_edges=True)
 
-        for region in info.unpack_regions():
-            for i in region.get_polygon_range():
-                mesh.polygons[i].material_index = region.material
-
-        if info.norms.element_count:
-            loop_normals = -info.norms.to_numpy_array(np.float32).reshape(-1, 3)[indices]
-            mesh.normals_split_custom_set(loop_normals)
+        mesh.polygons.foreach_set("material_index", np.array(mat_indices, dtype=np.int32))
 
         if info.tverts0.element_count:
             loop_tverts = info.tverts0.to_numpy_array(np.float32).reshape(-1, 2)[indices]
@@ -292,43 +326,11 @@ class CdaeParser:
             layer = mesh.color_attributes.new(name="Color", domain='CORNER', type='FLOAT_COLOR')
             layer.data.foreach_set("color", loop_colors.ravel())
 
+        if info.norms.element_count:
+            loop_normals = -info.norms.to_numpy_array(np.float32).reshape(-1, 3)[indices]
+            mesh.normals_split_custom_set(loop_normals)
+
         if self.validate:
             mesh.validate(verbose=self.debug)
 
         mesh.update()
-
-
-    def build_mesh_edges(self, vert_indices: np.ndarray):
-        # triangles: shape (face_count, 3)
-        triangles = vert_indices.reshape(-1, 3)
-
-        # Step 1: Build all edges from faces (unordered)
-        face_edges = np.stack([
-            triangles[:, [0, 1]],
-            triangles[:, [1, 2]],
-            triangles[:, [2, 0]],
-        ], dtype=np.int32, axis=1)  # shape (face_count, 3, 2)
-
-        # Flatten all edges
-        all_edges = face_edges.reshape(-1, 2)
-
-        # Make unordered for deduplication
-        all_edges_sorted = np.sort(all_edges, axis=1)
-        unique_edges = np.unique(all_edges_sorted, axis=0)
-
-        # Step 2: Build edge lookup dict: (min, max) → edge_index
-        edge_map = {tuple(e): i for i, e in enumerate(unique_edges)}
-
-        # Step 3: Build loop.edge_index
-        loop_edge_indices = []
-
-        for tri in triangles:
-            for i in range(3):
-                v1 = tri[i]
-                v2 = tri[(i + 1) % 3]
-                ekey = tuple(sorted((v1, v2)))
-                loop_edge_indices.append(edge_map[ekey])
-
-        loop_edge_indices = np.array(loop_edge_indices, dtype=np.int32)
-
-        return (unique_edges, loop_edge_indices)

@@ -43,9 +43,21 @@ class MsgpackWriter:
         self.write(value)
 
 
-    def write_integerset(self, value: set[int]):
-        values = list(value)
-        self.write([len(values), values])
+    def write_integerset(self, bits: list[bool]):
+        
+        chunk_count = (len(bits) + 31) // 32
+        chunks: list[int] = []
+
+        for ichunk in range(chunk_count):
+            offset = ichunk * 32
+            chunk = 0
+            for i in range(0, 32):
+                index = i + offset
+                bit = int(bits[index]) if index < len(bits) else 0
+                chunk |= bit << i
+            chunks.append(chunk)
+            
+        self.write([len(chunks), chunks])
 
 
     def write_vec2f(self, value: Vec2F):

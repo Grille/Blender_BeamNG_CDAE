@@ -8,12 +8,13 @@ from enum import Enum
 from .blender_material_properties import MaterialProperties
 from .material import Material
 
+
+
 class MaterialLibary:
 
     def __init__(self):
         self.materials: dict[str, Material] = {}
         self.new_materials: list[Material] = []
-        self.default_version: float = 1.5
 
 
     def try_load(self, filepath: str):
@@ -46,18 +47,10 @@ class MaterialLibary:
             json.dump(rawdict, f, indent=4)
 
 
-    def append_bmat(self, bmat: bpy.types.Material):
-        if bmat.name in self.materials:
-            return
-        self.overwrite_bmat(bmat)
+    def bmat_exists(self, bmat: bpy.types.Material):
+        return bmat.name in self.materials
+    
 
-
-    def overwrite_bmat(self, bmat: bpy.types.Material):
-
-        version = float(getattr(bmat, MaterialProperties.VERSION))
-        if version == 0.0:
-            version = self.default_version
-
-        mat = Material.from_bmat(bmat, version)
+    def set_material(self, mat: Material):
         self.materials[mat.name] = mat
         self.new_materials.append(mat)

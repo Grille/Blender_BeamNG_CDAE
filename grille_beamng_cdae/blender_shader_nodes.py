@@ -17,7 +17,6 @@ class BaseShaderNode(bpy.types.ShaderNodeCustomGroup):
     bl_label = "BNG Node"
     bl_icon = 'NONE'
     tree_type = NodeName.ShaderNodeTree
-    default_width = 150
 
 
     @classmethod
@@ -27,7 +26,11 @@ class BaseShaderNode(bpy.types.ShaderNodeCustomGroup):
 
     def init(self, context):
         self.node_tree = self.get_node_group()
-        self.width = self.default_width
+        self.post_init()
+
+
+    def post_init(self):
+        pass
 
 
     def draw_buttons(self, context, layout):
@@ -59,7 +62,7 @@ class BeamImageTex(bpy.types.ShaderNodeCustomGroup):
     bl_label = "BNG Image Texture"
     bl_icon = 'TEXTURE'
 
-    default_width = 240
+    bl_width_default = 240
     _updating = False
 
 
@@ -213,6 +216,7 @@ class BeamFactorColor(BaseShaderNode):
 
     bl_idname = f"{SHADER_NODE_PREFIX}FactorColor"
     bl_label = "BNG Factor (Color)"
+    bl_nclass = "OP_COLOR"
 
 
     @staticmethod
@@ -237,6 +241,7 @@ class BeamFactorFloat(BaseShaderNode):
 
     bl_idname = f"{SHADER_NODE_PREFIX}FactorFloat"
     bl_label = "BNG Factor"
+    bl_nclass = "CONVERTER"
 
 
     @staticmethod
@@ -261,14 +266,15 @@ class BeamDetailUVScale(BaseShaderNode):
 
     bl_idname = f"{SHADER_NODE_PREFIX}DetailUVSCale"
     bl_label = "BNG Detail UV Scale"
+    bl_nclass = "OP_VECTOR"
 
 
     @staticmethod
     def create_node_group(ngb: NodeGroupBuilder):
         
         ngb.create_vector_input("UV", True)
-        ngb.create_float_input("Scale U", default_value=1.0, range=None)
-        ngb.create_float_input("Scale V", default_value=1.0, range=None)
+        ngb.create_float_input("Scale U", default_value=1.0, range=None, subtype=None)
+        ngb.create_float_input("Scale V", default_value=1.0, range=None, subtype=None)
         ngb.create_vector_output("UV")
 
         inputs, outputs = ngb.create_io()
@@ -289,6 +295,7 @@ class BeamDetailColor(BaseShaderNode):
 
     bl_idname = f"{SHADER_NODE_PREFIX}DetailColor"
     bl_label = "BNG Detail Color"
+    bl_nclass = "OP_COLOR"
 
 
     @staticmethod
@@ -309,7 +316,7 @@ class BeamDetailColor(BaseShaderNode):
         def create_mix(mode: str):
             mix = ngb.create_node(
                 NodeName.Mix,
-                data_type = 'RGBA',
+                data_type = Operation.RGBA,
                 blend_type = mode,
                 clamp_factor = False,
                 clamp_result = False,
@@ -317,27 +324,27 @@ class BeamDetailColor(BaseShaderNode):
             bpy.context.view_layer.update()
             return mix
         
-        mix = create_mix("MIX")
-        light = create_mix("LINEAR_LIGHT")
-        overlay = create_mix("OVERLAY")
+        mix = create_mix(Operation.MIX)
+        light = create_mix(Operation.LINEAR_LIGHT)
+        overlay = create_mix(Operation.OVERLAY)
         
         ngb.link(inputs, 0, light, 0)
         ngb.link(inputs, 0, multiply, 0)
         ngb.link(multiply, 0, overlay, 0)
 
-        ngb.link(inputs, 1, light, 6)
-        ngb.link(inputs, 1, overlay, 6)
+        ngb.link(inputs, 1, light, SocketIndex.MixColorIn0)
+        ngb.link(inputs, 1, overlay, SocketIndex.MixColorIn0)
 
-        ngb.link(inputs, 2, light, 7)
-        ngb.link(inputs, 2, overlay, 7)
+        ngb.link(inputs, 2, light, SocketIndex.MixColorIn1)
+        ngb.link(inputs, 2, overlay, SocketIndex.MixColorIn1)
         ngb.link(inputs, 2, separate, 0)
 
         ngb.link(separate, 2, greater, 0)
         ngb.link(greater, 0, mix, 0)
-        ngb.link(light, 2, mix, 6)
-        ngb.link(overlay, 2, mix, 7)
+        ngb.link(light, SocketIndex.MixColorOut, mix, SocketIndex.MixColorIn0)
+        ngb.link(overlay, SocketIndex.MixColorOut, mix, SocketIndex.MixColorIn1)
 
-        ngb.link(mix, 2, outputs, 0)
+        ngb.link(mix, SocketIndex.MixColorOut, outputs, 0)
 
 
 
@@ -345,6 +352,7 @@ class BeamDetailNormal(BaseShaderNode):
 
     bl_idname = f"{SHADER_NODE_PREFIX}DetailNormal"
     bl_label = "BNG Detail Normal"
+    bl_nclass = "OP_VECTOR"
 
 
     @staticmethod
@@ -365,12 +373,96 @@ class BeamDetailNormal(BaseShaderNode):
 
 
 
+class BeamBSDFCollision(BaseShaderNode):
+
+    bl_idname = f"{SHADER_NODE_PREFIX}BSDFCollision"
+    bl_label = "BNG Collision BSDF"
+    bl_icon = 'MOD_PHYSICS'
+    bl_nclass = "SHADER"
+    bl_width_default = 200
+
+    @staticmethod
+    def create_node_group(ngb: NodeGroupBuilder):
+
+        Display = "Debug Display"
+        ngb.create_bool_input(Display)
+        ngb.create_shader_output(SocketName.BSDF)
+
+        inputs, outputs = ngb.create_io()
+        diffuse = ngb.create_node(NodeName.BsdfDiffuse)
+        transparent = ngb.create_node(NodeName.BsdfTransparent)
+        mix = ngb.create_node(NodeName.MixShader)
+
+        diffuse.inputs[SocketName.Color].default_value = (1,0,1,1)
+
+        ngb.link(inputs, 0, mix, 0)
+        ngb.link(transparent, 0, mix, 1)
+        ngb.link(diffuse, 0, mix, 2)
+        ngb.link(mix, 0, outputs, 0)
+
+
+
+class BeamBDSF10Basic(BaseShaderNode):
+
+    bl_idname = f"{SHADER_NODE_PREFIX}BSDF10Basic"
+    bl_label = "BNG 1.0 Basic BSDF"
+    bl_icon = 'SHADERFX'
+    bl_nclass = "SHADER"
+    bl_width_default = 240
+
+    @staticmethod
+    def create_node_group(ngb: NodeGroupBuilder):
+
+        ReflectionEnabled = "Reflection Enabled"
+
+        ngb.create_color_input(SocketName.BaseColor)
+        ngb.create_float_input(SocketName.BaseAlpha)
+        ngb.create_color_input(SocketName.VertexColor, True) 
+        ngb.create_float_input(SocketName.VertexAlpha, True)
+        ngb.create_vector_input(SocketName.Normal, True)
+        ngb.create_bool_input(ReflectionEnabled)
+
+        ngb.create_shader_output(SocketName.BSDF)
+        ngb.create_float_output(SocketName.Alpha)
+
+        inputs, outputs = ngb.create_io()
+        diffuse = ngb.create_node(NodeName.BsdfDiffuse)
+        metallic = ngb.create_node(NodeName.BsdfMetallic)
+        metallic.inputs[SocketName.Roughness].default_value = 0.0
+        metallic.inputs[SocketName.BaseColor].default_value = (1,1,1,1)
+        metallic.inputs[SocketName.EdgeTint].default_value = (1,1,1,1)
+        mix_shader = ngb.create_node(NodeName.MixShader)
+        mix_rgb = ngb.create_node(NodeName.VectorMath, operation=Operation.MULTIPLY)
+        mix_alpha = ngb.create_math(Operation.MULTIPLY)
+        mix_reflect = ngb.create_math(Operation.MULTIPLY)
+
+        ngb.link(inputs, SocketName.BaseColor, mix_rgb, 0)
+        ngb.link(inputs, SocketName.VertexColor, mix_rgb, 1)
+        ngb.link(mix_rgb, 0, diffuse, SocketName.Color)
+
+        ngb.link(inputs, SocketName.BaseAlpha, mix_alpha, 0)
+        ngb.link(inputs, SocketName.VertexAlpha, mix_alpha, 1)
+        ngb.link(mix_alpha, 0, mix_reflect, 0)
+        ngb.link(inputs, ReflectionEnabled, mix_reflect, 1)
+        ngb.link(mix_reflect, 0, mix_shader, 0)
+
+        ngb.link(inputs, SocketName.Normal, diffuse, SocketName.Normal)
+        ngb.link(inputs, SocketName.Normal, metallic, SocketName.Normal)
+        ngb.link(diffuse, 0, mix_shader, 1)
+        ngb.link(metallic, 0, mix_shader, 2)
+
+        ngb.link(mix_shader, 0, outputs, SocketName.BSDF)
+        ngb.link(mix_alpha, 0, outputs, SocketName.Alpha)
+
+
+
 class BeamBSDF15(BaseShaderNode):
 
     bl_idname = f"{SHADER_NODE_PREFIX}BSDF"
-    bl_label = "BNG BSDF 1.5"
+    bl_label = "BNG 1.5 BSDF"
     bl_icon = 'SHADERFX'
-    default_width = 250
+    bl_nclass = "SHADER"
+    bl_width_default = 240
 
     @staticmethod
     def create_node_group(ngb: NodeGroupBuilder):
@@ -420,9 +512,9 @@ class BeamBSDF15(BaseShaderNode):
 class BeamStageMix(BaseShaderNode):
 
     bl_idname = f"{SHADER_NODE_PREFIX}StageMix"
-    bl_label = "BNG Stage Mix"
-    bl_icon = 'SHADERFX'
-    default_width = 200
+    bl_label = "BNG Stage Mix 1.5"
+    bl_nclass = "SHADER"
+    #bl_icon = 'SHADERFX'
 
 
     def create_node_group(ngb: NodeGroupBuilder):
@@ -461,18 +553,19 @@ class BeamStageMix(BaseShaderNode):
 
 class BeamMaterial(BaseShaderNode):
 
-    bl_idname = "ShaderNodeCustom.grille_beamng_cdae_Material"
+    bl_idname = f"{SHADER_NODE_PREFIX}Material"
     bl_label = "BNG Material"
     bl_icon = "MATERIAL"
-    default_width = 200
+    bl_nclass = "SHADER"
+    bl_width_default = 200
 
 
     class Sockets(str, Enum):
         CLIP = "Alpha Clip"
         CLIP_T = "Alpha Clip Threshold"
         BLEND = "Alpha Blend"
-        DS = "Double Sided"
-        IBN = "Invert Backface Normals"
+        DOUBLE_SIDED = "Double Sided"
+        INVERT_BACKFACE_NORMALS = "Invert Backface Normals"
         SHADOWS = "Cast Shadows"
 
 
@@ -487,8 +580,8 @@ class BeamMaterial(BaseShaderNode):
         ngb.create_bool_input(LS.CLIP)
         ngb.create_float_input(LS.CLIP_T, default_value = 0)
         ngb.create_bool_input(LS.BLEND)
-        ngb.create_bool_input(LS.DS)
-        ngb.create_bool_input(LS.IBN, default_value=True)
+        ngb.create_bool_input(LS.DOUBLE_SIDED)
+        ngb.create_bool_input(LS.INVERT_BACKFACE_NORMALS, default_value=True)
         ngb.create_bool_input(LS.SHADOWS, default_value=True)
         ngb.create_shader_output(SocketName.Shader)
 
@@ -524,7 +617,7 @@ class BeamMaterial(BaseShaderNode):
         ngb.link(clip_t, 0, clip_enabled, 0)
         ngb.link_bool(inputs, LS.CLIP, clip_enabled, 1, True)
 
-        ngb.link_bool(inputs, LS.DS, backface_enabled, 0)
+        ngb.link_bool(inputs, LS.DOUBLE_SIDED, backface_enabled, 0)
         ngb.link_bool(geometry, SocketName.Backfacing, backface_enabled, 1, True)
 
         ngb.link_bool(inputs, LS.SHADOWS, shadows_enabled, 0)
@@ -545,15 +638,23 @@ class ShaderNodeTree(bpy.types.Menu):
     bl_label = "BeamNG"
     tree_type = NodeName.ShaderNodeTree
     node_items = [
-        BeamBSDF15, 
+        "Material",
+        BeamBDSF10Basic,
+        BeamBSDF15,
         BeamStageMix, 
         BeamMaterial, 
-        None, 
+        None,
+        "Factor", 
         BeamFactorColor, 
         BeamFactorFloat, 
+        None,
+        "Detail",
         BeamDetailUVScale, 
         BeamDetailColor, 
-        BeamDetailNormal
+        BeamDetailNormal,
+        None,
+        "Utils",
+        BeamBSDFCollision,
     ]
 
 
@@ -571,6 +672,9 @@ class ShaderNodeTree(bpy.types.Menu):
                 layout.separator()
                 continue
 
+            elif isinstance(item, str):
+                layout.label(text=item, icon="REMOVE")
+
             else:
                 op = layout.operator("node.add_node", text=item.bl_label)
                 op.type = item.bl_idname
@@ -585,15 +689,36 @@ class ShaderNodeTree(bpy.types.Menu):
         self.layout.menu(ShaderNodeTree.bl_idname)
 
 
-    @staticmethod
-    def register_nodes():
-        for cls in ShaderNodeTree.node_items:
-            if cls is not None:
-                bpy.utils.register_class(cls)
+
+class ShaderNodeRegistry:
+
+    nodes = [
+        BeamBSDF15, 
+        BeamBDSF10Basic,
+        BeamBSDFCollision,
+        BeamStageMix, 
+        BeamMaterial, 
+        BeamFactorColor, 
+        BeamFactorFloat, 
+        BeamDetailUVScale, 
+        BeamDetailColor, 
+        BeamDetailNormal,
+    ]
 
 
     @staticmethod
-    def unregister_nodes():
-        for cls in ShaderNodeTree.node_items:
-            if cls is not None:
-                bpy.utils.unregister_class(cls)
+    def register():
+        for cls in ShaderNodeRegistry.nodes:
+            bpy.utils.register_class(cls)
+
+        bpy.utils.register_class(ShaderNodeTree)
+        bpy.types.NODE_MT_add.append(ShaderNodeTree.addmenu_append)
+
+
+    @staticmethod
+    def unregister():
+        bpy.types.NODE_MT_add.remove(ShaderNodeTree.addmenu_append)
+        bpy.utils.unregister_class(ShaderNodeTree)
+
+        for cls in ShaderNodeRegistry.nodes:
+            bpy.utils.unregister_class(cls)
