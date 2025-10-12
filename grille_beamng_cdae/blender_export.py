@@ -8,12 +8,15 @@ from bpy.props import BoolProperty, IntProperty, FloatProperty, EnumProperty, St
 from bpy_extras.io_utils import ExportHelper
 from enum import Enum
 
+from .blender_object_collector import ObjectCollector
 from .beamng_asset import DaeAsset
 from .cdae_builder_tree import CdaeTreeBuildMode
 from .cdae_builder import CdeaBuilder
 from .cdae_v31 import CdaeV31
 from .material_libary import MaterialLibary
 from .material_builder import MaterialBuilder
+from .local_storage import LocalStorage
+from .blender_op_presets import OpPresetsUtils
 from . import cdae_serializer_text as CdaeTextSerializer
 from . import cdae_serializer_binary as CdaeBinarySerializer
 
@@ -45,15 +48,23 @@ def update_samples(self: 'ExportBase', ctx):
         self.anim_samples = samples
 
 
+
 class ExportBase(Operator, ExportHelper):
 
     bl_idname = "grille.export_beamng_dae"
     bl_label = "Export BeamNG"
     filename_ext = ""
 
+    selection_only: BoolProperty(name="Selection Only", default=True, description="Include Objects that are hidden in Viewport")
+    include_children: BoolProperty(name="Include Children", default=False, description="Include Objects that are hidden in Viewport")
+    include_hidden: BoolProperty(name="Include Hidden", default=False, description="Include Objects that are hidden in Viewport")
+
+    temp_presets_file: StringProperty(default="export")
+    temp_presets_selection: StringProperty()
+
     file_format: EnumProperty(
         name="Format",
-        description="How textures are saved",
+        description="File format used for geometry",
         items=[
             (FileFormat.NONE, "None", ""),
             (FileFormat.DAE, "Text (.dae)", ""),
@@ -143,6 +154,7 @@ class ExportBase(Operator, ExportHelper):
 
 
     def invoke(self, context, event):
+        OpPresetsUtils.apply_default(self)
         return super().invoke(context, event)
 
 
@@ -153,8 +165,17 @@ class ExportBase(Operator, ExportHelper):
         else:
             build_mode = self.build_mode
 
+        collector = ObjectCollector()
+        collector.include_hidden = self.include_hidden
+        collector.include_children = self.include_children
+        if self.selection_only:
+            collector.collect_selected()
+        else:
+            collector.collect_scene()
+
         builder = CdeaBuilder()
         builder.tree.build_mode = build_mode
+        builder.tree.include_hidden = self.include_hidden
         sampler = builder.sampler
         sampler.sample_transforms_enabled = self.use_transforms
         sampler.sample_keyframes_enabled = self.write_animations
@@ -163,7 +184,7 @@ class ExportBase(Operator, ExportHelper):
         sampler.sample_count = self.anim_samples
         sampler.duration = self.anim_duration
 
-        builder.tree.add_selected()
+        builder.tree.add_objects(collector.objects)
         builder.build()
 
         filepath: str = self.filepath
@@ -286,6 +307,8 @@ class ExportBase(Operator, ExportHelper):
         layout.use_property_split = True
         layout.use_property_decorate = False
 
+        OpPresetsUtils.draw(self, layout)
+
         format = self.file_format
         write_file = format != FileFormat.NONE
 
@@ -294,6 +317,12 @@ class ExportBase(Operator, ExportHelper):
             row.alert = True
             row.label(text=text, icon="ERROR")
 
+        box = layout.box()
+        box.label(text="Input (Object Collecton)", icon='RESTRICT_SELECT_ON')
+        box.prop(self, "selection_only")
+        box.prop(self, "include_children")
+        box.prop(self, "include_hidden")
+        
         box = layout.box()
         box.label(text="File", icon='FILE_NEW')
         box.prop(self, "file_format")
@@ -306,7 +335,7 @@ class ExportBase(Operator, ExportHelper):
 
         if format == FileFormat.CDAE:
             box.prop(self, "compression_enabled")
-            alert(self, f"Unstable, use 'Text (.dae)' instead.")
+            alert(box, f"Unstable, use 'Text (.dae)' instead.")
 
         if write_file:
             box = layout.box()
@@ -321,7 +350,6 @@ class ExportBase(Operator, ExportHelper):
             box.prop(self, "write_animations")
             box.use_property_split = False
             if self.write_animations:
-                box.label(text="WIP", icon='ERROR')
                 box.prop(self, "anim_frame_start")
                 box.prop(self, "anim_frame_end")
                 box.prop(self, "anim_duration")
@@ -346,3 +374,18 @@ class ExportBase(Operator, ExportHelper):
     @staticmethod
     def menu_func(self, context):
         self.layout.operator(ExportBase.bl_idname, text="BeamNG (.dae/.cdae/.json)")
+
+
+
+class ExportRegistry:
+
+    @staticmethod
+    def register():
+        bpy.utils.register_class(ExportBase)
+        bpy.types.TOPBAR_MT_file_export.append(ExportBase.menu_func)
+
+
+    @staticmethod
+    def unregister():
+        bpy.types.TOPBAR_MT_file_export.remove(ExportBase.menu_func)
+        bpy.utils.unregister_class(ExportBase)

@@ -72,7 +72,7 @@ class ObjectProperties(str, Enum):
                 (ObjectRole.NullDetail, "NullDetail", ""),
                 (ObjectRole.Generic, "Generic", ""),
             ],
-            default=ObjectRole.Mesh,
+            default=ObjectRole.Generic,
         ))
 
         _set(ObjectProperties.LOD_SIZE, IntProperty(

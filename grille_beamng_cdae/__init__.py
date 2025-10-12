@@ -16,17 +16,15 @@ ensure_package("numpy")
 
 
 import bpy
-import bl_ui
-import nodeitems_utils as nutils
-import nodeitems_builtins
 
 from .blender_object_properties import ObjectProperties
 from .blender_object_panel import ObjectPanel
 from .blender_material_properties import MaterialProperties
 from .blender_material_panel import MaterialPanel
 from .blender_import_cdae import ImportCdae
-from .blender_export import ExportBase
+from .blender_export import ExportRegistry
 from .blender_shader_nodes import ShaderNodeRegistry
+from .blender_op_presets import OpPresetsUtils
 
 
 def register():
@@ -40,9 +38,8 @@ def register():
     bpy.utils.register_class(ImportCdae)
     bpy.types.TOPBAR_MT_file_import.append(ImportCdae.menu_func)
 
-    bpy.utils.register_class(ExportBase)
-    bpy.types.TOPBAR_MT_file_export.append(ExportBase.menu_func)
-
+    OpPresetsUtils.register()
+    ExportRegistry.register()
     ShaderNodeRegistry.register()
 
 
@@ -56,7 +53,6 @@ def unregister():
     bpy.utils.unregister_class(ImportCdae)
     bpy.types.TOPBAR_MT_file_import.remove(ImportCdae.menu_func)
 
-    bpy.utils.unregister_class(ExportBase)
-    bpy.types.TOPBAR_MT_file_export.remove(ExportBase.menu_func)
-
+    OpPresetsUtils.unregister()
+    ExportRegistry.unregister()
     ShaderNodeRegistry.unregister()

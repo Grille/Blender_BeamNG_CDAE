@@ -71,6 +71,7 @@ class CdaeTreeBuildMode(str, Enum):
     SINGLE_SHAPE = "SINGLE_SHAPE"
     DAE_NODE_TREE = "DAE_NODE_TREE"
     FLAT_DUMP = "FLAT_DUMP"
+    BLENDER_HIERACHY = "BLENDER_HIERACHY"
 
 
 
@@ -163,6 +164,7 @@ class CdaeTree():
         self.shapes: dict[str, CdaeTree.SubShape] = {}
         self.details: dict[str, CdaeTree.Detail] = {}
         self.build_mode = CdaeTreeBuildMode.NONE
+        self.include_hidden = True
         self._mesh_index_counter = 0
 
 
@@ -227,6 +229,9 @@ class CdaeTree():
 
 
     def add_object(self, obj: bpy.types.Object):
+
+        if not self.include_hidden and obj.hide_viewport:
+            return
 
         match self.build_mode:
             case CdaeTreeBuildMode.NONE:
@@ -296,8 +301,8 @@ class CdaeTree():
         for obj in objects: self.add_object(obj)
 
 
-    def add_selected(self):
-        self.add_objects(set(bpy.context.selected_objects))
+    def add_lock_tocken(self):
+        pass
 
 
     @staticmethod
