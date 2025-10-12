@@ -54,10 +54,11 @@ class ExportBase(Operator, ExportHelper):
     bl_idname = "grille.export_beamng_dae"
     bl_label = "Export BeamNG"
     filename_ext = ""
+    initialized = False
 
-    selection_only: BoolProperty(name="Selection Only", default=True, description="Include Objects that are hidden in Viewport")
-    include_children: BoolProperty(name="Include Children", default=False, description="Include Objects that are hidden in Viewport")
-    include_hidden: BoolProperty(name="Include Hidden", default=False, description="Include Objects that are hidden in Viewport")
+    selection_only: BoolProperty(name="Selection Only", default=True, description="Use selected Objects.")
+    include_children: BoolProperty(name="Include Children", default=False, description="Include all Children of selected Objects.")
+    include_hidden: BoolProperty(name="Include Hidden", default=False, description="Include Objects that are hidden in Viewport.")
 
     temp_presets_file: StringProperty(default="export")
     temp_presets_selection: StringProperty()
@@ -84,10 +85,11 @@ class ExportBase(Operator, ExportHelper):
         name="Build Mode",
         description="",
         items=[
-            (CdaeTreeBuildMode.FLAT_DUMP, "Flat Dump", ""),
-            (CdaeTreeBuildMode.DAE_NODE_TREE, "Collada Node Tree", ""),
+            (CdaeTreeBuildMode.FLAT_DUMP, "Flat Dump", "Objects get added without any hierarchy, \nuse if you want to display all exported objects."),
+            (CdaeTreeBuildMode.BLENDER_HIERACHY, "Blender Hierarchy", "Uses Blender object hierarchy like in the legacy Collada addon."),
+            (CdaeTreeBuildMode.DAE_NODE_TREE, "Collada Node Tree (R)", "Builds Collada (DAE/Text) node tree using assigned roles."),
         ],
-        default=CdaeTreeBuildMode.FLAT_DUMP,
+        default=CdaeTreeBuildMode.BLENDER_HIERACHY,
     )
 
     apply_scale: BoolProperty(name="Apply Scale", default=True)
@@ -100,7 +102,7 @@ class ExportBase(Operator, ExportHelper):
             (WriteMode.APPEND, "Missing", "Save missing textures"),
             (WriteMode.REPLACE, "Replace", "Save all textures"),
         ],
-        default=WriteMode.REPLACE,
+        default=WriteMode.APPEND,
     )
 
     material_write_mode: EnumProperty(
@@ -112,7 +114,7 @@ class ExportBase(Operator, ExportHelper):
             (WriteMode.OVERRIDE, "Override", "Override existing materials, keep other existing"),
             (WriteMode.REPLACE, 'Replace', "Replace materials file")
         ],
-        default=WriteMode.OVERRIDE,
+        default=WriteMode.APPEND,
     )
 
     material_path: StringProperty(
@@ -154,7 +156,9 @@ class ExportBase(Operator, ExportHelper):
 
 
     def invoke(self, context, event):
-        OpPresetsUtils.apply_default(self)
+        if not ExportBase.initialized:
+            OpPresetsUtils.apply_default(self)
+            ExportBase.initialized = True
         return super().invoke(context, event)
 
 
@@ -175,7 +179,6 @@ class ExportBase(Operator, ExportHelper):
 
         builder = CdeaBuilder()
         builder.tree.build_mode = build_mode
-        builder.tree.include_hidden = self.include_hidden
         sampler = builder.sampler
         sampler.sample_transforms_enabled = self.use_transforms
         sampler.sample_keyframes_enabled = self.write_animations
@@ -320,7 +323,8 @@ class ExportBase(Operator, ExportHelper):
         box = layout.box()
         box.label(text="Input (Object Collecton)", icon='RESTRICT_SELECT_ON')
         box.prop(self, "selection_only")
-        box.prop(self, "include_children")
+        if self.selection_only:
+            box.prop(self, "include_children")
         box.prop(self, "include_hidden")
         
         box = layout.box()

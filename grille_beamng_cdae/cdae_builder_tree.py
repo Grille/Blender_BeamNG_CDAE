@@ -75,7 +75,15 @@ class CdaeTreeBuildMode(str, Enum):
 
 
 
-class CdaeTree():
+class TempTreeNode:
+
+    def __init__(self, obj: bpy.types.Object):
+        self.obj = obj
+        self.children: list[TempTreeNode] = []
+
+
+
+class CdaeTree:
 
     class Mesh:
         def __init__(self, obj: bpy.types.Object):
@@ -164,7 +172,6 @@ class CdaeTree():
         self.shapes: dict[str, CdaeTree.SubShape] = {}
         self.details: dict[str, CdaeTree.Detail] = {}
         self.build_mode = CdaeTreeBuildMode.NONE
-        self.include_hidden = True
         self._mesh_index_counter = 0
 
 
@@ -174,6 +181,11 @@ class CdaeTree():
             shape = CdaeTree.SubShape()
             self.shapes[name] = shape
         return shape
+    
+
+    def _get_obj_name(self, obj: bpy.types.Object) -> str:
+        name: str = obj.name
+        return name.replace(".", "_")
     
 
     def iter_meshes(self):
@@ -187,7 +199,7 @@ class CdaeTree():
             return
 
         shape = self.get_shape()
-        node = shape.get_child_node(obj.name)
+        node = shape.get_child_node(self._get_obj_name(obj))
         node.bpy_sample_obj = obj
         node.get_object().set_mesh(0, obj)
 
@@ -230,9 +242,6 @@ class CdaeTree():
 
     def add_object(self, obj: bpy.types.Object):
 
-        if not self.include_hidden and obj.hide_viewport:
-            return
-
         match self.build_mode:
             case CdaeTreeBuildMode.NONE:
                 return
@@ -244,61 +253,44 @@ class CdaeTree():
                 raise ValueError()
             
         return
-            
+    
+
+    def _add_objs_BLENDER_HIERACHY(self, objects: set[bpy.types.Object]):
+
+        tnodes: dict[bpy.types.Object, TempTreeNode] = {}
+        
+        for obj in objects:
+            tnodes[obj] = TempTreeNode(obj)
+        
+        roots: list[TempTreeNode] = []
+        for obj, tnode in tnodes.items():
+            parent = obj.parent
+            if parent and parent in objects:
+                parent_node = tnodes[parent]
+                parent_node.children.append(tnode)
+            else:
+                roots.append(tnode)
+        
         shape = self.get_shape()
+        def add(tnode: TempTreeNode, path: str):
+            print(f"get {path}")
+            node = shape.get_node_by_path(path)
+            if ObjectProperties.has_mesh(tnode.obj):
+                node.bpy_sample_obj = obj
+                node.get_object().set_mesh(0, tnode.obj)
+            for child in tnode.children:
+                add(child, f"{path}.{self._get_obj_name(child.obj)}")
 
-
-        def get_detail(key: str, size: int):
-            detail = CdaeTree.Detail(shape, self._mesh_index_counter)
-            detail.template.size = size
-            self.details[key] = detail
-            return detail
-
-
-        def get_node(key: str):
-            return shape.get_node_by_path(key)
-        
-
-        def set_mesh(key: str):
-            get_node(key).get_object().set_mesh(self._mesh_index_counter, obj)
-            self._mesh_index_counter += 1
-
-
-        
-        if role == ObjectRole.Generic:
-            path = getattr(obj, ObjectProperties.PATH)
-#            shape = self.get_shape(path)
-#            node = shape.get_node_by_path(DEFAULT)
-#            if has_mesh:
-##                node.append_mesh(obj)
-
-        elif role == ObjectRole.Collision:
-            get_detail(f"collision-1", -1.0)
-            set_mesh("base00.Colmesh-1")
-
-        elif role == ObjectRole.Mesh:
-            get_detail(f"detail{lod_size}", lod_size)
-            #get_node(f"base00.start01.detail{lod_size}")
-            set_mesh(f"base00.start01.detail{lod_size}")
-            
-        #elif role == ObjectRole.Billboard:
-            #bb = "bbz" if getattr(obj, ObjectProperties.BB_FLAG0) else "bb"
-            #shape = self.get_shape(f"{bb}_billboard{lod_size}")
-            #shape.get_node_by_path(DEFAULT).append_mesh(obj)
-
-        #elif role == ObjectRole.AutoBillboard:
-        #    shape = self.get_shape(f"bbDetail{lod_size}")
-
-        #elif role == ObjectRole.NullDetail:
-        #    shape = self.get_shape(f"nullDetail{lod_size}")
-        #    shape.get_node_by_path(f"nulldetail{lod_size}")
-
-        #shape.detail.size = lod_size
-
+        for tnode in roots:
+            add(tnode, self._get_obj_name(tnode.obj))
 
 
     def add_objects(self, objects: set[bpy.types.Object]):
-        for obj in objects: self.add_object(obj)
+        match self.build_mode:
+            case CdaeTreeBuildMode.BLENDER_HIERACHY:
+                self._add_objs_BLENDER_HIERACHY(objects)
+            case _:
+                for obj in objects: self.add_object(obj)
 
 
     def add_lock_tocken(self):

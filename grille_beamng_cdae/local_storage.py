@@ -45,18 +45,19 @@ class LocalStorage:
 
     @staticmethod
     def get(key: str) ->  dict[str, Any]:
+        
         if key in LocalStorage.cache:
             return LocalStorage.cache[key]
+        
         filepath = LocalStorage._get_file_path(key)
         try:
             with open(filepath, 'r') as f:
                 data = json.load(f)
-                LocalStorage.cache[key] = data
-                return data
         except:
             data = {}
-            LocalStorage.cache[key] = data
-            return data
+
+        LocalStorage.cache[key] = data
+        return data
 
 
     @staticmethod

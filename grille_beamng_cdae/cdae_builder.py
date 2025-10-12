@@ -196,7 +196,7 @@ class CdeaMeshBuilder:
 
 
     def build_from_object(self, obj: bpy.types.Object | None) -> CdaeV31.Mesh:
-        if obj is None:
+        if obj is None or not ObjectProperties.has_mesh(obj):
             null = CdaeV31.Mesh()
             return null
         depsgraph = bpy.context.evaluated_depsgraph_get()
