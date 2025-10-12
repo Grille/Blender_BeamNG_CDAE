@@ -86,10 +86,10 @@ class ExportBase(Operator, ExportHelper):
         description="",
         items=[
             (CdaeTreeBuildMode.FLAT_DUMP, "Flat Dump", "Objects get added without any hierarchy, \nuse if you want to display all exported objects."),
-            (CdaeTreeBuildMode.BLENDER_HIERACHY, "Blender Hierarchy", "Uses Blender object hierarchy like in the legacy Collada addon."),
+            (CdaeTreeBuildMode.BLENDER_HIERARCHY, "Blender Hierarchy", "Uses Blender object hierarchy like in the legacy Collada addon."),
             (CdaeTreeBuildMode.DAE_NODE_TREE, "Collada Node Tree (R)", "Builds Collada (DAE/Text) node tree using assigned roles."),
         ],
-        default=CdaeTreeBuildMode.BLENDER_HIERACHY,
+        default=CdaeTreeBuildMode.BLENDER_HIERARCHY,
     )
 
     apply_scale: BoolProperty(name="Apply Scale", default=True)

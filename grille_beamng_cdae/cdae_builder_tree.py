@@ -71,7 +71,7 @@ class CdaeTreeBuildMode(str, Enum):
     SINGLE_SHAPE = "SINGLE_SHAPE"
     DAE_NODE_TREE = "DAE_NODE_TREE"
     FLAT_DUMP = "FLAT_DUMP"
-    BLENDER_HIERACHY = "BLENDER_HIERACHY"
+    BLENDER_HIERARCHY = "BLENDER_HIERARCHY"
 
 
 
@@ -121,7 +121,7 @@ class CdaeTree:
             self.bpy_sample_obj: bpy.types.Object = None
             self.name = name
             self.objects = objects
-            self.transfroms: Transforms = Transforms()
+            self.transforms: Transforms = Transforms()
             self.keyframes: list[Transforms] = []
 
 
@@ -276,7 +276,7 @@ class CdaeTree:
             print(f"get {path}")
             node = shape.get_node_by_path(path)
             if ObjectProperties.has_mesh(tnode.obj):
-                node.bpy_sample_obj = obj
+                node.bpy_sample_obj = tnode.obj
                 node.get_object().set_mesh(0, tnode.obj)
             for child in tnode.children:
                 add(child, f"{path}.{self._get_obj_name(child.obj)}")
@@ -287,7 +287,7 @@ class CdaeTree:
 
     def add_objects(self, objects: set[bpy.types.Object]):
         match self.build_mode:
-            case CdaeTreeBuildMode.BLENDER_HIERACHY:
+            case CdaeTreeBuildMode.BLENDER_HIERARCHY:
                 self._add_objs_BLENDER_HIERACHY(objects)
             case _:
                 for obj in objects: self.add_object(obj)

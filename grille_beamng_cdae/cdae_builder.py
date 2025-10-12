@@ -31,7 +31,7 @@ class CdaeMaterialIndexer:
     
     
 
-class CdeaMeshBuilder:
+class CdaeMeshBuilder:
 
     def __init__(self, material_indexer: CdaeMaterialIndexer):
         self.mesh: bpy.types.Mesh = None
@@ -289,7 +289,7 @@ class CdeaBuilder:
         self.cdae = CdaeV31()
         self.tree = CdaeTree()
         self.material_indexer = CdaeMaterialIndexer()
-        self.mesh_builder = CdeaMeshBuilder(self.material_indexer)
+        self.mesh_builder = CdaeMeshBuilder(self.material_indexer)
         self.sampler = CdaeKeyframeSampler()
         self.materials: list[bpy.types.Material] = []
         self.apply_scale: bool = True
