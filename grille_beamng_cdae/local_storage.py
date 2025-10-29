@@ -29,7 +29,10 @@ class Presets:
             return
         preset = self.presets[preset_key]
         for key, value in preset.items():
-            setattr(obj, key, value)
+            try:
+                setattr(obj, key, value)
+            except Exception as e:
+                print(e)
 
 
 
@@ -45,7 +48,7 @@ class LocalStorage:
 
     @staticmethod
     def get(key: str) ->  dict[str, Any]:
-        
+
         if key in LocalStorage.cache:
             return LocalStorage.cache[key]
         
@@ -53,7 +56,8 @@ class LocalStorage:
         try:
             with open(filepath, 'r') as f:
                 data = json.load(f)
-        except:
+        except Exception as e:
+            print(e)
             data = {}
 
         LocalStorage.cache[key] = data

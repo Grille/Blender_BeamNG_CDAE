@@ -293,6 +293,7 @@ class CdeaBuilder:
         self.sampler = CdaeKeyframeSampler()
         self.materials: list[bpy.types.Material] = []
         self.apply_scale: bool = True
+        self.readonly: bool = False
 
 
     def build(self):

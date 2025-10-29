@@ -2,6 +2,7 @@ import os
 import shutil
 import bpy
 import struct
+import time
 
 from bpy.types import Operator
 from bpy.props import BoolProperty, IntProperty, FloatProperty, EnumProperty, StringProperty
@@ -74,6 +75,7 @@ class ExportBase(Operator, ExportHelper):
         ],
         default=FileFormat.DAE,
     )
+    file_readonly: BoolProperty(name="Readonly", default=False)
 
     limit_precision_enabled: BoolProperty(name="Limit Precision", default=False)
     limit_precision_dp: IntProperty(name="Decimal Places", default=4, min=0)
@@ -164,6 +166,14 @@ class ExportBase(Operator, ExportHelper):
 
     def execute(self, context):
         
+        now = time.time()
+
+        def log(name: str):
+            nonlocal now
+            delta = time.time()-now
+            now = time.time()
+            print(f"{name}: {delta}")
+
         if self.file_format == FileFormat.NONE:
             build_mode = CdaeTreeBuildMode.NONE
         else:
@@ -176,8 +186,10 @@ class ExportBase(Operator, ExportHelper):
             collector.collect_selected()
         else:
             collector.collect_scene()
+        log("collect")
 
         builder = CdeaBuilder()
+        builder.readonly = self.file_readonly
         builder.tree.build_mode = build_mode
         sampler = builder.sampler
         sampler.sample_transforms_enabled = self.use_transforms
@@ -189,6 +201,7 @@ class ExportBase(Operator, ExportHelper):
 
         builder.tree.add_objects(collector.objects)
         builder.build()
+        log("build")
 
         filepath: str = self.filepath
         dirpath = os.path.dirname(filepath)
@@ -200,11 +213,13 @@ class ExportBase(Operator, ExportHelper):
                 CdaeTextSerializer.write_to_file(builder.cdae, filepath)
             case FileFormat.CDAE:
                 CdaeBinarySerializer.write_to_file(builder.cdae, filepath, self.compression_enabled)
+        log("write file")
 
         if self.asset_file_enabled:
             self.write_asset_file(filepath, builder.cdae)
 
         self.export_materials(dirpath, builder.materials)
+        log("misc")
 
         return {'FINISHED'}
     
@@ -342,6 +357,7 @@ class ExportBase(Operator, ExportHelper):
             alert(box, f"Unstable, use 'Text (.dae)' instead.")
 
         if write_file:
+            #box.prop(self, "file_readonly")
             box = layout.box()
             box.label(text="Scene", icon='SCENE_DATA')
             box.prop(self, "build_mode")

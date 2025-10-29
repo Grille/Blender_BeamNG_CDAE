@@ -68,10 +68,11 @@ class MaterialBuilder:
             if detail and nw_socket.child:
                 self.parse_socket(detail, nw_socket.child, MAP_ONLY)
 
-        
+        stage.color.factor = (1,1,1)
+
         parse_socket(stage.color, [SocketName.ColorHDR, SocketName.Color, SocketName.BaseColor], COLOR4, stage.detail)
-        stage.color.move("baseColorMapUseUV", "diffuseMapUseUV")
-        stage.detail.move("detailMapStrength", "detailBaseColorMapStrength")
+        stage.move("baseColorMapUseUV", "diffuseMapUseUV")
+        stage.move("detailMapStrength", "detailBaseColorMapStrength")
 
         stage.vertex_color = ctx.get_socket(SocketName.VertexColor).connected
 
@@ -80,7 +81,8 @@ class MaterialBuilder:
         parse_socket(stage.roughness, SocketName.Roughness, FLOAT)
 
         parse_socket(stage.normal, SocketName.Normal, MAP_ONLY, stage.detail_normal)
-        stage.detail_normal.move("detailNormalMapUseUV", "normalDetailMapUseUV")
+        stage.move("detailNormalScale", "detailScale")
+        stage.move("detailNormalMapUseUV", "normalDetailMapUseUV")
 
         parse_socket(stage.opacity, SocketName.Alpha, FLOAT)
 
@@ -127,6 +129,7 @@ class MaterialBuilder:
         mat.name = bmat.name
         mat.map_to = mat.name
         mat.class_name = "Material"
+        mat.dynamic_cubemap = True
         mat.version = version
         mat.ground_type = MaterialProperties.get_ground_type(bmat)
 

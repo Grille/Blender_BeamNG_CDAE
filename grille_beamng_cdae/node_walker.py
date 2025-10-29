@@ -1,6 +1,7 @@
 import bpy
 
 from dataclasses import dataclass
+from typing import Any
 
 from .numerics import *
 from .blender_enums import *
@@ -19,6 +20,7 @@ class NodeWalker():
         self.skip_groups = True
         self.last_socket_name: str = ""
         self.last_socket_index: int = 0
+        self.last_socket_value: Any = None
 
 
     def is_node_idname(self, ntype: str | bpy.types.Node):
@@ -73,6 +75,7 @@ class NodeWalker():
 
         self.last_socket_name = from_socket.name
         self.last_socket_index = from_socket_index
+        self.last_socket_value = None
 
         if self.skip_groups:
 
@@ -101,6 +104,8 @@ class NodeWalker():
                 outer_input = outer_node.inputs[from_socket_index()]
 
                 if not outer_input.is_linked:
+                    self.last_socket_value = outer_input.default_value
+                    print(f"Store Group Input {self.last_socket_value}")
                     return None
                 
                 return self.walk_link_recursively(outer_input.links[0])
@@ -133,6 +138,9 @@ class NodeWalker():
         try:
             node = self.get_node(input, throw=False)
             if node is None:
+                if self.last_socket_value is not None:
+                    print("USE")
+                    return self.last_socket_value
                 return input.default_value
             elif node.bl_idname == idname:
                 return node.outputs[0].default_value

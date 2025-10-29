@@ -40,12 +40,6 @@ class Socket:
         self.dict = dict
 
 
-    def move(self, src: str, dst: str):
-        value = self.dict.pop(src, None)
-        if value is not None:
-            self.dict[dst] = value
-
-
 
 class Stage:
 
@@ -88,6 +82,12 @@ class Stage:
                 socket.map = os.path.join(relpath, socket.map)
 
 
+    def move(self, src: str, dst: str):
+        value = self.dict.pop(src, None)
+        if value is not None:
+            self.dict[dst] = value
+
+
 class Material:
 
     STAGES_KEY = "Stages"
@@ -103,12 +103,12 @@ class Material:
     alpha_test: bool = DictProperty("alphaTest")
     alpha_ref: int = DictProperty("alphaRef")
     translucent: bool = DictProperty("translucent")
-    translucent_blend_op: str = DictProperty("translucentBlendOp")
+    translucent_blend_op: str = DictProperty("translucentBlendOp") #"PreMulAlpha"
+    translucent_zwrite: bool = DictProperty("translucentZWrite")
+    translucent_recv_shadows: bool = DictProperty("translucentRecvShadows")
     double_sided: bool = DictProperty("doubleSided")
     invert_backface_normals: bool = DictProperty("invertBackFaceNormals")
     cast_shadows: bool = DictProperty("castShadows")
-    translucent_zwrite: bool = DictProperty("translucentZWrite")
-    translucent_recv_shadows: bool = DictProperty("translucentRecvShadows")
     dynamic_cubemap: bool = DictProperty("dynamicCubemap")
     cubemap: str = DictProperty("cubemap")
 

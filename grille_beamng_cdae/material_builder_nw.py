@@ -49,21 +49,6 @@ class MaterialNodeWalker(NodeWalker):
 
     def parse_socket_tree(self, socket: 'MaterialNodeWalker.MatSocketInfo'):
 
-        if self.is_node_idname(BeamDetailColor.bl_idname):
-            child = MaterialNodeWalker.MatSocketInfo(issues=[])
-            child.strength = self.get_float_value("Strength")
-            self.get_socket("Detail", child)
-            socket.child = child
-            socket.color = self.get_color_value("Base")
-            self.follow("Base")
-
-        if self.is_node_idname(BeamDetailNormal.bl_idname):
-            child = MaterialNodeWalker.MatSocketInfo(issues=[])
-            self.get_socket("Detail", child)
-            socket.child = child
-            self.follow("Base")
-
-
         if self.is_node_idname(BeamFactorFloat.bl_idname):
             socket.factor = self.get_float_value("Factor")
             self.follow("Texture Map")
@@ -83,6 +68,21 @@ class MaterialNodeWalker(NodeWalker):
         if self.is_node_idname(NodeName.Math):
             socket.factor = self.get_float_value(1)
             self.follow(0)
+
+
+        if self.is_node_idname(BeamDetailColor.bl_idname):
+            child = MaterialNodeWalker.MatSocketInfo(issues=[])
+            child.strength = self.get_float_value("Strength")
+            self.get_socket("Detail", child)
+            socket.child = child
+            self.follow("Base")
+
+        if self.is_node_idname(BeamDetailNormal.bl_idname):
+            child = MaterialNodeWalker.MatSocketInfo(issues=[])
+            self.get_socket("Detail", child)
+            socket.child = child
+            self.follow("Base")
+
 
         if self.is_node_idname(NodeName.NormalMap):
             socket.strength = self.get_float_value("Strength")

@@ -302,7 +302,7 @@ class BeamDetailColor(BaseShaderNode):
     def create_node_group(ngb: NodeGroupBuilder):
 
         ngb.create_float_input("Strength")
-        ngb.create_color_input("Base")
+        ngb.create_color_input("Base", True, default_value=(1.0,1.0,1.0,1.0))
         ngb.create_color_input("Detail", True, default_value=(0.5,0.5,0.5,1.0))
 
         ngb.create_color_output("Color")
@@ -310,8 +310,13 @@ class BeamDetailColor(BaseShaderNode):
         inputs, outputs = ngb.create_io()
 
         separate = ngb.create_node(NodeName.SeparateColor, mode='HSV')
-        multiply = ngb.create_math(Operation.MULTIPLY, value1=4.0)
         greater = ngb.create_math(Operation.GREATER_THAN, value1=0.5)
+
+        light_multiply = ngb.create_math(Operation.MULTIPLY, value1=4.0)
+        light_vm_sub  = ngb.create_node(NodeName.VectorMath, operation=Operation.SUBTRACT)
+        light_vm_sub.inputs[1].default_value = (0.5,0.5,0.5)
+        light_vm_mul  = ngb.create_node(NodeName.VectorMath, operation=Operation.MULTIPLY)
+        light_vm_add  = ngb.create_node(NodeName.VectorMath, operation=Operation.ADD)
 
         def create_mix(mode: str):
             mix = ngb.create_node(
@@ -325,24 +330,26 @@ class BeamDetailColor(BaseShaderNode):
             return mix
         
         mix = create_mix(Operation.MIX)
-        light = create_mix(Operation.LINEAR_LIGHT)
-        overlay = create_mix(Operation.OVERLAY)
-        
-        ngb.link(inputs, 0, light, 0)
-        ngb.link(inputs, 0, multiply, 0)
-        ngb.link(multiply, 0, overlay, 0)
+        dark = create_mix(Operation.LINEAR_LIGHT)
 
-        ngb.link(inputs, 1, light, SocketIndex.MixColorIn0)
-        ngb.link(inputs, 1, overlay, SocketIndex.MixColorIn0)
+        ngb.link(light_vm_sub, 0, light_vm_mul, 0)
+        ngb.link(light_vm_mul, 0, light_vm_add, 0)
 
-        ngb.link(inputs, 2, light, SocketIndex.MixColorIn1)
-        ngb.link(inputs, 2, overlay, SocketIndex.MixColorIn1)
+        ngb.link(inputs, 0, dark, 0)
+        ngb.link(inputs, 0, light_multiply, 0)
+        ngb.link(light_multiply, 0, light_vm_mul, 1)
+
+        ngb.link(inputs, 1, dark, SocketIndex.MixColorIn0)
+        ngb.link(inputs, 1, light_vm_add, 1)
+
+        ngb.link(inputs, 2, dark, SocketIndex.MixColorIn1)
+        ngb.link(inputs, 2, light_vm_sub, 0)
         ngb.link(inputs, 2, separate, 0)
 
         ngb.link(separate, 2, greater, 0)
         ngb.link(greater, 0, mix, 0)
-        ngb.link(light, SocketIndex.MixColorOut, mix, SocketIndex.MixColorIn0)
-        ngb.link(overlay, SocketIndex.MixColorOut, mix, SocketIndex.MixColorIn1)
+        ngb.link(dark, SocketIndex.MixColorOut, mix, SocketIndex.MixColorIn0)
+        ngb.link(light_vm_add, 0, mix, SocketIndex.MixColorIn1)
 
         ngb.link(mix, SocketIndex.MixColorOut, outputs, 0)
 

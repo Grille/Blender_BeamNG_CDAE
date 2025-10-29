@@ -8,10 +8,8 @@ from io import BufferedReader, TextIOWrapper
 from numpy.typing import NDArray
 
 from .cdae_v31 import CdaeV31
-from .packed_vector import PackedVector
-from .msgpack_reader import MsgpackReader
-from .msgpack_writer import MsgpackWriter
 from .numerics import *
+from .debug import Stopwatch
 
 
 @dataclass(frozen=True)
@@ -138,10 +136,7 @@ def write_geometry(mesh: CdaeV31.Mesh, lib_geometries: ET.Element, mesh_index: i
         if color_id is not None:
             ET.SubElement(tris, "input", {"semantic": "COLOR", "source": f"#{color_id}", "offset": "0"})
 
-        p = ET.SubElement(tris, "p")
-        for i in range(start, start + count):
-            vi = indices[i]
-            p.text = (p.text or "") + f"{vi} "
+        ET.SubElement(tris, "p").text = " ".join(str(indices[i]) for i in range(start, start + count))
 
 
 def write_animation(xml: ET.Element, target_id: str, times: list[float], transforms: list[float]):
@@ -281,13 +276,18 @@ def write_to_tree(cdae: CdaeV31, dae: ET.Element):
 
 
 def write_to_stream(cdae: CdaeV31, f: TextIOWrapper):
+    sw = Stopwatch()
     dae = ET.Element("COLLADA")
     dae.set("version", "1.4.1")
     dae.set("xmlns", "http://www.collada.org/2005/11/COLLADASchema")
     write_to_tree(cdae, dae)
+    sw.log("xml_build")
     tree = ET.ElementTree(dae)
     ET.indent(tree, space="  ", level=0)  # Only available in Python 3.9+
+    sw.log("xml_indent")
     tree.write(f, encoding="unicode", xml_declaration=True)
+    sw.log("xml_write")
+    sw.print()
 
 
 def write_to_file(cdae: CdaeV31, filepath: str):
