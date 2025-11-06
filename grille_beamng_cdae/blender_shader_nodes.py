@@ -12,6 +12,28 @@ SHADER_NODE_PREFIX = "ShaderNodeCustom.grille_beamng_cdae_"
 
 
 
+class NodeRuntimeData:
+
+    _node_runtime_dict: dict[int, "NodeRuntimeData"] = {}
+
+
+    @staticmethod
+    def get_instance(node: bpy.types.Struct):
+        dict = NodeRuntimeData._node_runtime_dict
+        key = node.as_pointer()
+        data = dict.get(key)
+        if data is None:
+            data = NodeRuntimeData()
+            dict[key] = data
+        return data
+
+
+    def __init__(self):
+        self.update_alpha_link_lock: bool = False
+        self.messages: list[str] = []
+
+
+
 class BaseShaderNode(bpy.types.ShaderNodeCustomGroup):
 
     bl_label = "BNG Node"
@@ -19,9 +41,67 @@ class BaseShaderNode(bpy.types.ShaderNodeCustomGroup):
     tree_type = NodeName.ShaderNodeTree
 
 
+    @property
+    def runtime(self) -> NodeRuntimeData:
+        return NodeRuntimeData.get_instance(self)
+
+
     @classmethod
     def poll(cls, ntree):
         return ntree.bl_idname == NodeName.ShaderNodeTree
+    
+
+    def update_alpha_link(self, key: str, alpha_key: str):
+        if self.runtime.update_alpha_link_lock:
+            return
+        
+        self.runtime.update_alpha_link_lock = True
+
+        try:
+        
+            shader_input = self.inputs[key]
+            alpha_input = self.inputs[alpha_key]
+
+            if not shader_input.is_linked:
+                if alpha_input.is_linked:
+                    for link in list(alpha_input.links):
+                        self.id_data.links.remove(link)
+                return
+            
+            link = shader_input.links[0]
+            from_node = link.from_node
+            from_socket = link.from_socket
+
+            out_sockets = from_node.outputs
+            try:
+                socket_idx = out_sockets.find(from_socket.name)
+                if socket_idx == -1:
+                    return
+                next_idx = socket_idx + 1
+                if next_idx >= len(out_sockets):
+                    return
+                next_socket = out_sockets[next_idx]
+            except Exception:
+                return
+
+            # If already linked to the correct socket, skip
+            already_linked = (
+                alpha_input.is_linked
+                and alpha_input.links[0].from_socket == next_socket
+            )
+            if already_linked:
+                return
+
+            # Remove existing links
+            for l in list(alpha_input.links):
+                self.id_data.links.remove(l)
+
+            # Create the new link
+            self.id_data.links.new(next_socket, alpha_input)
+
+        finally:
+
+            self.runtime.update_alpha_link_lock = False
 
 
     def init(self, context):
@@ -34,8 +114,13 @@ class BaseShaderNode(bpy.types.ShaderNodeCustomGroup):
 
 
     def draw_buttons(self, context, layout):
-        pass
-        #layout.prop(self, 'Colors', text='')
+        messages = self.runtime.messages
+        if len(messages) > 0:
+            col = layout.column()
+            col.scale_y = 0.8
+            col.alert = True
+            for msg in messages:
+                col.label(text=msg)
     
 
     @classmethod 
@@ -47,6 +132,7 @@ class BaseShaderNode(bpy.types.ShaderNodeCustomGroup):
         
         ngb = NodeGroupBuilder(idname)
         cls.create_node_group(ngb)
+        ngb.ng.color_tag = "SHADER"
         return ngb.ng
     
 
@@ -224,16 +310,29 @@ class BeamFactorColor(BaseShaderNode):
         
         ngb.create_color_input("Texture Map", True)
         ngb.create_color_input("Factor", False)
-
+        
         ngb.create_color_output("Result")
+
+        ngb.create_panel("Advanced")
+        ngb.create_color_input(SocketName.VertexColor, True, default_value=(1,1,1,1))
+        ngb.create_color_input(SocketName.InstanceColor, True, default_value=(1,1,1,1))
 
         inputs, outputs = ngb.create_io()
 
         mul = ngb.create_node(NodeName.VectorMath, operation=Operation.MULTIPLY)
+        mul_ic = ngb.create_node(NodeName.VectorMath, operation=Operation.MULTIPLY)
+        mul_vc = ngb.create_node(NodeName.VectorMath, operation=Operation.MULTIPLY)
 
         ngb.link(inputs, 0, mul, 0)
         ngb.link(inputs, 1, mul, 1)
-        ngb.link(mul, 0, outputs)
+
+        ngb.link(mul, 0, mul_vc, 0)
+        ngb.link(inputs, SocketName.VertexColor, mul_vc, 1)
+
+        ngb.link(mul_vc, 0, mul_ic, 0)
+        ngb.link(inputs, SocketName.InstanceColor, mul_ic, 1)
+
+        ngb.link(mul_ic, 0, outputs)
 
 
         
@@ -296,6 +395,17 @@ class BeamDetailColor(BaseShaderNode):
     bl_idname = f"{SHADER_NODE_PREFIX}DetailColor"
     bl_label = "BNG Detail Color"
     bl_nclass = "OP_COLOR"
+
+
+    def update(self):
+        messages = self.runtime.messages
+        messages.clear()
+        nlv = NodeLayoutValidator(self)
+
+        if nlv.try_follow(1):
+            if nlv.is_node_idname(BeamFactorColor.bl_idname):
+                messages.append("- Base:")
+                messages.append(f"{BeamFactorColor.bl_label} must come after {BeamDetailColor.bl_label}")
 
 
     @staticmethod
@@ -417,17 +527,22 @@ class BeamBDSF10Basic(BaseShaderNode):
     bl_nclass = "SHADER"
     bl_width_default = 240
 
+
+    def post_init(self):
+        super().post_init()
+        self.inputs[SocketName.VertexColor].hide = True
+        self.inputs[SocketName.VertexAlpha].hide = True
+
+
     @staticmethod
     def create_node_group(ngb: NodeGroupBuilder):
-
-        ReflectionEnabled = "Reflection Enabled"
 
         ngb.create_color_input(SocketName.BaseColor)
         ngb.create_float_input(SocketName.BaseAlpha)
         ngb.create_color_input(SocketName.VertexColor, True) 
         ngb.create_float_input(SocketName.VertexAlpha, True)
         ngb.create_vector_input(SocketName.Normal, True)
-        ngb.create_bool_input(ReflectionEnabled)
+        ngb.create_bool_input(SocketName.ReflectionEnabled)
 
         ngb.create_shader_output(SocketName.BSDF)
         ngb.create_float_output(SocketName.Alpha)
@@ -450,7 +565,7 @@ class BeamBDSF10Basic(BaseShaderNode):
         ngb.link(inputs, SocketName.BaseAlpha, mix_alpha, 0)
         ngb.link(inputs, SocketName.VertexAlpha, mix_alpha, 1)
         ngb.link(mix_alpha, 0, mix_reflect, 0)
-        ngb.link(inputs, ReflectionEnabled, mix_reflect, 1)
+        ngb.link(inputs, SocketName.ReflectionEnabled, mix_reflect, 1)
         ngb.link(mix_reflect, 0, mix_shader, 0)
 
         ngb.link(inputs, SocketName.Normal, diffuse, SocketName.Normal)
@@ -471,11 +586,21 @@ class BeamBSDF15(BaseShaderNode):
     bl_nclass = "SHADER"
     bl_width_default = 240
 
+
+    def update(self):
+        messages = self.runtime.messages
+        messages.clear()
+        nlv = NodeLayoutValidator(self)
+
+        if not nlv.assert_image_colorspace(SocketName.BaseColor, ColorSpace.NON_COLOR):
+            messages.append(f"- {SocketName.BaseColor.value}:")
+            messages.append(f"{ColorSpace.NON_COLOR.value} Expected")
+        
+
     @staticmethod
     def create_node_group(ngb: NodeGroupBuilder):
 
         ngb.create_color_input(SocketName.BaseColor)
-        ngb.create_color_input(SocketName.VertexColor, True) 
         ngb.create_float_input(SocketName.Metallic, default_value=0.0)
         ngb.create_float_input(SocketName.Roughness, default_value=0.5)
         ngb.create_float_input(SocketName.Alpha)
@@ -493,20 +618,18 @@ class BeamBSDF15(BaseShaderNode):
         inputs, outputs = ngb.create_io()
         principled = ngb.create_node(NodeName.BsdfPrincipled)
         principled.inputs[SocketName.EmissionStrength].default_value = 1.0
-        mix_vtx = ngb.create_node(NodeName.VectorMath, operation=Operation.MULTIPLY)
         ao_scale = ngb.create_node(NodeName.VectorMath, [None, (0.5,0.5,0.5), (0.5,0.5,0.5)], operation=Operation.MULTIPLY_ADD)
         ao_mix = ngb.create_node(NodeName.VectorMath, operation=Operation.MULTIPLY)
 
         ngb.link(inputs, SocketName.AmbientOcclusion, ao_scale, 0)
-        ngb.link(inputs, SocketName.BaseColor, mix_vtx, 0)
-        ngb.link(inputs, SocketName.VertexColor, mix_vtx, 1)
-        ngb.link(mix_vtx, 0, ao_mix, 0)
+        ngb.link(inputs, SocketName.BaseColor, ao_mix, 0)
         ngb.link(ao_scale, 0, ao_mix, 1)
         ngb.link(ao_mix, 0, principled, SocketName.BaseColor)
 
         ngb.link(inputs, SocketName.Metallic, principled)
         ngb.link(inputs, SocketName.Roughness, principled)
         ngb.link(inputs, SocketName.Normal, principled)
+        ngb.link(inputs, SocketName.Normal, principled, SocketName.CoatNormal)
         ngb.link(inputs, SocketName.Emissive, principled, SocketName.EmissionColor)
         ngb.link(inputs, SocketName.ClearCoat, principled, SocketName.CoatWeight)
         ngb.link(inputs, SocketName.ClearCoatRoughness, principled, SocketName.CoatRoughness)
@@ -522,6 +645,17 @@ class BeamStageMix(BaseShaderNode):
     bl_label = "BNG Stage Mix 1.5"
     bl_nclass = "SHADER"
     #bl_icon = 'SHADERFX'
+
+
+    def update(self):
+        self.update_alpha_link(0, 1)
+        self.update_alpha_link(2, 3)
+
+
+    def post_init(self):
+        pass
+        #self.inputs["Base.Alpha"].hide = True
+        #self.inputs["Overlay.Alpha"].hide = True
 
 
     def create_node_group(ngb: NodeGroupBuilder):
@@ -574,6 +708,10 @@ class BeamMaterial(BaseShaderNode):
         DOUBLE_SIDED = "Double Sided"
         INVERT_BACKFACE_NORMALS = "Invert Backface Normals"
         SHADOWS = "Cast Shadows"
+
+
+    def update(self):
+        self.update_alpha_link(0, 1)
 
 
     @staticmethod

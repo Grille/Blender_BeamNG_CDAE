@@ -81,26 +81,10 @@ class MaterialProperties(str, Enum):
             default=""
         ))
 
-        _set(MaterialProperties.VERSION, EnumProperty(
-            name="Version",
-            items=[
-                ("0.0", "Global Default", ""),
-                ("1.0", "V1",""),
-                ("1.5", "V1.5 (PBR)", ""),
-            ],
-            default="0.0",
-        ))
-
-        _set(MaterialProperties.UV1_HINT, StringProperty(
-            name="UV Map 1 Hint",
-            default="1"
-        ))
-
 
     @staticmethod
     def unregister():
         def _del(key): delattr(bpy.types.Material, key)
         
+        _del(MaterialProperties.GROUND_TYPE_SELECT)
         _del(MaterialProperties.GROUND_TYPE)
-        _del(MaterialProperties.VERSION)
-        _del(MaterialProperties.UV1_HINT)

@@ -45,6 +45,7 @@ class Stage:
 
     use_anisotropic: bool = DictProperty("useAnisotropic")
     vertex_color: bool = DictProperty("vertColor")
+    instance_diffuse: bool = DictProperty("instanceDiffuse")
 
 
     def __init__(self, basedict: dict[str, any] = None):

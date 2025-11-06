@@ -58,23 +58,27 @@ class MaterialBuilder:
         stage.use_anisotropic = True
         ctx = info.context
 
-        if self.material.version == 0.0:
-            self.material.version = ctx.try_get_version_hint()
-            print(f"Hint Res {self.material.version}")
+        self.material.version = ctx.try_get_version_hint()
+        self.material.dynamic_cubemap = ctx.try_get_reflect_hint()
 
         def parse_socket(socket: Socket, socket_name: str | list[str], settings: SocketParserSettings, detail: Socket = None):
             nw_socket = ctx.get_any_socket(socket_name)
             self.parse_socket(socket, nw_socket, settings)
             if detail and nw_socket.child:
                 self.parse_socket(detail, nw_socket.child, MAP_ONLY)
+            return nw_socket
 
-        stage.color.factor = (1,1,1)
+        stage.color.factor = (1,1,1,1)
 
-        parse_socket(stage.color, [SocketName.ColorHDR, SocketName.Color, SocketName.BaseColor], COLOR4, stage.detail)
+        bc_socket = parse_socket(stage.color, [SocketName.ColorHDR, SocketName.Color, SocketName.BaseColor], COLOR4, stage.detail)
         stage.move("baseColorMapUseUV", "diffuseMapUseUV")
         stage.move("detailMapStrength", "detailBaseColorMapStrength")
+        basealpha = ctx.get_socket(SocketName.BaseAlpha)
+        if basealpha.factor is not None:
+            stage.color.factor = stage.color.factor[:3] + (basealpha.factor,)
 
-        stage.vertex_color = ctx.get_socket(SocketName.VertexColor).connected
+        stage.vertex_color = bc_socket.enabled_vc
+        stage.instance_diffuse = bc_socket.enabled_ic
 
         parse_socket(stage.metallic, SocketName.Metallic, FLOAT)
 
@@ -117,20 +121,10 @@ class MaterialBuilder:
 
     def build_from_bmat(self, bmat: bpy.types.Material):
 
-        version = MaterialProperties.get_version(bmat)
-        if version == 0.0:
-            version = self.default_version
-
-        print(f"Ver {version}")
-
-        self.uv1_hint = getattr(bmat, MaterialProperties.UV1_HINT)
-
         mat = self.material
         mat.name = bmat.name
         mat.map_to = mat.name
         mat.class_name = "Material"
-        mat.dynamic_cubemap = True
-        mat.version = version
         mat.ground_type = MaterialProperties.get_ground_type(bmat)
 
         if bmat.node_tree is not None:
@@ -140,12 +134,8 @@ class MaterialBuilder:
             ctx.follow(SocketName.Surface)
             self.parse_node_tree(ctx)
 
-        print(f"Ver1 {mat.version}")
-
         if mat.version == 0.0:
-            mat.version = 1.0
-
-        print(f"Ver2 {mat.version}")
+            mat.version = self.default_version
 
         return mat
     

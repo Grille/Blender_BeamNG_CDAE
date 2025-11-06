@@ -37,11 +37,13 @@ class SocketName(str, Enum):
     BaseColor = "Base Color"
     VertexColor = "Vertex Color"
     VertexAlpha = "Vertex Alpha"
+    InstanceColor = "Instance Color"
     Metallic = "Metallic"
     Roughness = "Roughness"
     Alpha = "Alpha"
     BaseAlpha = "Base Alpha"
     Normal = "Normal"
+    ReflectionEnabled = "Reflection Enabled"
 
     DetailColor = "Detail Color"
     DetailNormal = "Detail Normal"
@@ -61,6 +63,8 @@ class SocketName(str, Enum):
 
     BSDF = "BSDF"
     Shader = "Shader"
+    BSDF_Alpha = "BSDF.Alpha"
+    Shader_Alpha = "Shader.Alpha"
     Surface = "Surface"
 
     IsShadowRay = "Is Shadow Ray"
@@ -110,3 +114,9 @@ class Operation(str, Enum):
     MIX = 'MIX'
     LINEAR_LIGHT = 'LINEAR_LIGHT'
     OVERLAY = 'OVERLAY'
+
+
+
+class ColorSpace(str, Enum):
+    SRGB = "sRGB"
+    NON_COLOR = "Non-Color"

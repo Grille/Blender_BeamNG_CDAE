@@ -7,7 +7,7 @@ from .blender_material_properties import *
 
 class MaterialPanel(bpy.types.Panel):
 
-    bl_label = "BeamNG cdae"
+    bl_label = "BeamNG CDAE"
     bl_idname = "MATERIAL_PT_beamng_cdae_matpanel"
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
@@ -27,10 +27,8 @@ class MaterialPanel(bpy.types.Panel):
 
         mat = context.material
 
-        layout.prop(mat, MaterialProperties.VERSION)
         gts = getattr(mat, MaterialProperties.GROUND_TYPE_SELECT)
         layout.prop(mat, MaterialProperties.GROUND_TYPE_SELECT)
         if gts == GROUNDMODEL_CUSTOM:
             layout.prop(mat, MaterialProperties.GROUND_TYPE)
             layout.separator()
-        layout.prop(mat, MaterialProperties.UV1_HINT)

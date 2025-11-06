@@ -19,6 +19,8 @@ class MaterialNodeWalker(NodeWalker):
         image: bpy.types.Image = None
         layer: str = None
         color: Color4F = None
+        enabled_vc: bool = False
+        enabled_ic: bool = False
         factor: float = None
         strength: float = None
         scale: Vec2F = None
@@ -49,11 +51,13 @@ class MaterialNodeWalker(NodeWalker):
 
     def parse_socket_tree(self, socket: 'MaterialNodeWalker.MatSocketInfo'):
 
-        if self.is_node_idname(BeamFactorFloat.bl_idname):
+        if self.is_node_idname(BeamFactorFloat):
             socket.factor = self.get_float_value("Factor")
             self.follow("Texture Map")
 
-        if self.is_node_idname(BeamFactorColor.bl_idname):
+        if self.is_node_idname(BeamFactorColor):
+            socket.enabled_vc = self.is_linked(SocketName.VertexColor)
+            socket.enabled_ic = self.is_linked(SocketName.InstanceColor)
             socket.color = self.get_color_value("Factor")
             self.follow("Texture Map")
 
@@ -70,14 +74,14 @@ class MaterialNodeWalker(NodeWalker):
             self.follow(0)
 
 
-        if self.is_node_idname(BeamDetailColor.bl_idname):
+        if self.is_node_idname(BeamDetailColor):
             child = MaterialNodeWalker.MatSocketInfo(issues=[])
             child.strength = self.get_float_value("Strength")
             self.get_socket("Detail", child)
             socket.child = child
             self.follow("Base")
 
-        if self.is_node_idname(BeamDetailNormal.bl_idname):
+        if self.is_node_idname(BeamDetailNormal):
             child = MaterialNodeWalker.MatSocketInfo(issues=[])
             self.get_socket("Detail", child)
             socket.child = child
@@ -94,7 +98,7 @@ class MaterialNodeWalker(NodeWalker):
             if not self.try_follow("Vector"): return
 
 
-        if self.is_node_idname(BeamDetailUVScale.bl_idname):
+        if self.is_node_idname(BeamDetailUVScale):
             u = self.get_float_value("Scale U")
             v = self.get_float_value("Scale V")
             socket.scale = Vec2F(u, v)
@@ -135,8 +139,6 @@ class MaterialNodeWalker(NodeWalker):
 
     def try_get_version_hint(self) -> float:
 
-        print(f"HINT {self.current.bl_idname}")
-
         if self.is_node_idname(BeamBDSF10Basic):
             return 1.0
         
@@ -147,6 +149,17 @@ class MaterialNodeWalker(NodeWalker):
             return 1.5
         
         return 0.0
+    
+
+    def try_get_reflect_hint(self) -> bool:
+
+        if self.is_node_idname(BeamBDSF10Basic):
+            return self.get_bool_value(SocketName.ReflectionEnabled)
+        
+        elif self.is_node_idname(BeamBSDF15):
+            return True
+        
+        return False
         
 
     def get_any_socket(self, keys: list[str|int]):
@@ -166,7 +179,7 @@ class MaterialNodeWalker(NodeWalker):
         if stages is None:
             stages = []
 
-        if self.is_node_idname(BeamStageMix.bl_idname):
+        if self.is_node_idname(BeamStageMix):
             context = self.fork("Overlay")
             self.follow("Base")
             self.parse_stages_recursively(stages)
@@ -178,12 +191,12 @@ class MaterialNodeWalker(NodeWalker):
     
 
     def is_collider(self):
-        return self.is_node_idname(BeamBSDFCollision.bl_idname)
+        return self.is_node_idname(BeamBSDFCollision)
     
 
     def try_parse_mat_settings(self, mat: Material):
 
-        if not self.is_node_idname(BeamMaterial.bl_idname):
+        if not self.is_node_idname(BeamMaterial):
             return
         
         alpha_clip = self.get_float_value(BeamMaterial.Sockets.CLIP) > 0.5

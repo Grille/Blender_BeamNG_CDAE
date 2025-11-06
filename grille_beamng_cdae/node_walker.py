@@ -18,6 +18,7 @@ class NodeWalker():
         self.current = node
         self.group_stack = [] if stack is None else list(stack)
         self.skip_groups = True
+        self.raise_layout_errors = True
         self.last_socket_name: str = ""
         self.last_socket_index: int = 0
         self.last_socket_value: Any = None
@@ -98,7 +99,9 @@ class NodeWalker():
             elif from_node.bl_idname == NodeName.GroupInput:
 
                 if len(self.group_stack) == 0:
-                    raise NodeLayoutError("Group input found, but stack is empty.")
+                    if self.raise_layout_errors:
+                        raise NodeLayoutError("Group input found, but stack is empty.")
+                    return None
                 
                 outer_node = self.group_stack.pop()
                 outer_input = outer_node.inputs[from_socket_index()]
@@ -156,6 +159,14 @@ class NodeWalker():
             return float(value)
         except:
             return None
+        
+
+    def get_bool_value(self, input_key: str | int) -> bool | None:
+        try:
+            value = self._get_any_value(input_key, NodeName.Value)
+            return bool(value)
+        except:
+            return None
     
 
     def get_color_value(self, input_key: str | int) -> Color4F | None:
@@ -164,6 +175,13 @@ class NodeWalker():
             return Color4F.from_list4(value)
         except:
             return None
+        
+
+    def is_linked(self, input_key: str | int) -> bool:
+        input = self.get_input(input_key)
+        if input is None:
+            return False
+        return input.is_linked
             
 
     def get_image(self) -> bpy.types.Image:

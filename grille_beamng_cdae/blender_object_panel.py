@@ -6,7 +6,7 @@ from .blender_object_properties import ObjectProperties, ObjectRole
 # Define the panel
 class ObjectPanel(bpy.types.Panel):
 
-    bl_label = "BeamNG cdae"
+    bl_label = "BeamNG CDAE"
     bl_idname = "OBJECT_PT_grille_beamng_cdae_objpanel"
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'

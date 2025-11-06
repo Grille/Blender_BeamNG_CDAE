@@ -139,13 +139,28 @@ def write_geometry(mesh: CdaeV31.Mesh, lib_geometries: ET.Element, mesh_index: i
         ET.SubElement(tris, "p").text = " ".join(str(indices[i]) for i in range(start, start + count))
 
 
+def collapse_animation(times: list[float], transforms: list[float]) -> tuple[list[float], list[float]]:
+    transforms_np = np.array(transforms).reshape(-1, 16)
+    collapsed_times = [times[0]]
+    collapsed_transforms = [transforms_np[0].tolist()]
+
+    for i in range(1, len(times)):
+        if not np.allclose(transforms_np[i], transforms_np[i - 1]):
+            collapsed_times.append(times[i])
+            collapsed_transforms.append(transforms_np[i].tolist())
+
+    return collapsed_times, [v for mat in collapsed_transforms for v in mat]
+
+
 def write_animation(xml: ET.Element, target_id: str, times: list[float], transforms: list[float]):
     xml_anim = ET.SubElement(xml, "animation")
 
+    ctimes, ctransforms = collapse_animation(times, transforms)
+
     src_input_id = f"{target_id}-anim-input"
-    write_src_float(xml_anim, times, src_input_id, A_TIME)
+    write_src_float(xml_anim, ctimes, src_input_id, A_TIME)
     src_output_id = f"{target_id}-anim-output"
-    write_src_float(xml_anim, transforms, src_output_id, A_TRANSFORM)
+    write_src_float(xml_anim, ctransforms, src_output_id, A_TRANSFORM)
 
     sampler_id = f"{target_id}-sampler"
     xml_sampler = ET.SubElement(xml_anim, "sampler", {"id": sampler_id})

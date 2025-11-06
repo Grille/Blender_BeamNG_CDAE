@@ -119,6 +119,11 @@ class ExportBase(Operator, ExportHelper):
         default=WriteMode.APPEND,
     )
 
+    material_uv1: StringProperty(
+        name="UV Map 1 Hint",
+        default="1"
+    )
+
     material_path: StringProperty(
         name="Path",
         description="(Relative) Path to your materials file",
@@ -132,13 +137,12 @@ class ExportBase(Operator, ExportHelper):
     )
 
     material_default: EnumProperty(
-        name="Default Ver",
+        name="Fallback Ver",
         items=[
-            ("0.0", "Auto Detect", ""),
             ("1.0", "V1", ""),
             ("1.5", "V1.5 (PBR)", ""),
         ],
-        default="0.0",
+        default="1.5",
     )
 
     write_animations: BoolProperty(name="Enabled", default=False)
@@ -158,8 +162,10 @@ class ExportBase(Operator, ExportHelper):
 
 
     def invoke(self, context, event):
+        print("_______________invoke")
         if not ExportBase.initialized:
             OpPresetsUtils.apply_default(self)
+            print("___apply")
             ExportBase.initialized = True
         return super().invoke(context, event)
 
@@ -282,6 +288,7 @@ class ExportBase(Operator, ExportHelper):
 
             builder = MaterialBuilder()
             builder.default_version = float(self.material_default)
+            builder.uv1_hint = self.material_uv1
             builder.build_from_bmat(bmat)
             libary.set_material(builder.material)
 
@@ -383,6 +390,7 @@ class ExportBase(Operator, ExportHelper):
         box.prop(self, "material_write_mode")
         if self.material_write_mode != WriteMode.NONE:
             box.prop(self, "material_default")
+            box.prop(self, "material_uv1")
             box.prop(self, "material_path")
             box = box.box()
             box.label(text="Textures", icon='TEXTURE')
