@@ -74,12 +74,12 @@ class SocketName(str, Enum):
 
 class SocketIndex(int, Enum):
     MixFactor = 0
-    MixFloatIn0 = 1,
-    MixFloatIn1 = 2,
-    MixFloatOut = 0,
-    MixColorIn0 = 6,
-    MixColorIn1 = 7,
-    MixColorOut = 2,
+    MixFloatIn0 = 1
+    MixFloatIn1 = 2
+    MixFloatOut = 0
+    MixColorIn0 = 6
+    MixColorIn1 = 7
+    MixColorOut = 2
 
 
 
@@ -92,7 +92,7 @@ class PrincipledSocketIndex(int, Enum):
 class SocketType(str, Enum):
     INPUT = "INPUT"
     OUTPUT = "OUTPUT"
-    Bool = "Bool",
+    Bool = "Bool"
     Float = "Float"
     Vector = "Vector"
     Color = "Color"

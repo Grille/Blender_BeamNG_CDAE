@@ -81,6 +81,8 @@ class NodeWalker():
         if self.skip_groups:
 
             if from_node.bl_idname == NodeName.Group:
+
+                group_output_node = None
                 for node in from_node.node_tree.nodes:
                     if node.bl_idname == NodeName.GroupOutput:
                         group_output_node = node
@@ -108,7 +110,6 @@ class NodeWalker():
 
                 if not outer_input.is_linked:
                     self.last_socket_value = outer_input.default_value
-                    print(f"Store Group Input {self.last_socket_value}")
                     return None
                 
                 return self.walk_link_recursively(outer_input.links[0])
@@ -142,7 +143,6 @@ class NodeWalker():
             node = self.get_node(input, throw=False)
             if node is None:
                 if self.last_socket_value is not None:
-                    print("USE")
                     return self.last_socket_value
                 return input.default_value
             elif node.bl_idname == idname:

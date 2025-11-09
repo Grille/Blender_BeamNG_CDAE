@@ -33,6 +33,60 @@ class CdaeMaterialIndexer:
 
 class CdaeMeshBuilder:
 
+    class NpMesh:
+
+        def __init__(self):
+
+            self.draw_regions: NDArray = None
+            self.indices: NDArray = None
+            self.positions: NDArray = None
+            self.normals: NDArray = None
+            self.tangents: NDArray = None
+            self.uvs0: NDArray = None
+            self.uvs1: NDArray = None
+            self.colors: NDArray = None
+
+
+        def concatenate(self):
+
+            keys = []
+            def append(array: NDArray):
+                if array is not None:
+                    keys.append(array)
+            
+            append(self.positions)
+            append(self.normals)
+            append(self.uvs0)
+            append(self.uvs1)
+            append(self.colors)
+
+            return np.concatenate(keys, axis=1)
+        
+
+        def collapse_vertices(self):
+
+            combined = self.concatenate()
+            _, unique_indices, inverse = np.unique(
+                combined,
+                axis=0,
+                return_inverse=True,
+                return_index=True
+            )
+
+            self.indices = inverse[self.indices].astype(np.int32)
+
+            self.positions = self.positions[unique_indices]
+            self.normals = self.normals[unique_indices]
+            if self.uvs0 is not None:
+                self.uvs0 = self.uvs0[unique_indices]
+            if self.uvs1 is not None:
+                self.uvs1 = self.uvs1[unique_indices]
+            if self.colors is not None:
+                self.colors = self.colors[unique_indices]
+
+
+
+
     def __init__(self, material_indexer: CdaeMaterialIndexer):
         self.mesh: bpy.types.Mesh = None
         self.scale = Vec3F(1,1,1)
@@ -122,12 +176,14 @@ class CdaeMeshBuilder:
         mesh.calc_tangents()
 
         vertex_indices = self.get_vtx_indices()
-        loop_positions = self.get_vtx_data("co", 3, vertex_indices)
-        loop_normals = self.get_loop_data("normal", 3)
-        #loop_tangents = self.get_loop_data("tangent", 4)
-        loop_uvs0 = self.get_uv_data(0)
-        loop_uvs1 = self.get_uv_data(1)
-        loop_colors = self.get_color_data(vertex_indices)
+
+        npmesh = CdaeMeshBuilder.NpMesh()
+        npmesh.positions = self.get_vtx_data("co", 3, vertex_indices)
+        npmesh.normals = self.get_loop_data("normal", 3)
+        npmesh.tangents = None #self.get_loop_data("tangent", 4)
+        npmesh.uvs0 = self.get_uv_data(0)
+        npmesh.uvs1 = self.get_uv_data(1)
+        npmesh.colors = self.get_color_data(vertex_indices)
 
 
         material_ranges: defaultdict[int, list] = defaultdict(list)
@@ -147,7 +203,7 @@ class CdaeMeshBuilder:
         for mat_index in material_ranges:
             range = material_ranges[mat_index]
             indices_list.extend(range)
-        indices = np.array(indices_list, dtype=np.int32)
+        npmesh.indices = np.array(indices_list, dtype=np.int32)
 
 
         draw_regions = []
@@ -162,34 +218,34 @@ class CdaeMeshBuilder:
             ('elements_count', np.int32),
             ('material_index', np.int32),
         ])
-        draw_region_array = np.array(draw_regions, dtype=DrawRegion)
-
+        npmesh.draw_regions = np.array(draw_regions, dtype=DrawRegion)
 
 
         mesh_out = CdaeV31.Mesh()
         mesh_out.type = CdaeV31.MeshType.STANDARD
 
-        mesh_out.verts.set_numpy_array(loop_positions)
-        mesh_out.norms.set_numpy_array(loop_normals)
-        #mesh_out.tangents.set_numpy_array(loop_tangents)
-        mesh_out.indices.set_numpy_array(indices)
-        mesh_out.draw_regions.set_numpy_array(draw_region_array)
+        npmesh.collapse_vertices()
+        mesh_out.draw_regions.set_numpy_array(npmesh.draw_regions)
+        mesh_out.indices.set_numpy_array(npmesh.indices)
+        mesh_out.verts.set_numpy_array(npmesh.positions)
+        mesh_out.norms.set_numpy_array(npmesh.normals)
 
-        if loop_uvs0 is not None:
-            mesh_out.tverts0.set_numpy_array(loop_uvs0)
+        if npmesh.uvs0 is not None:
+            mesh_out.tverts0.set_numpy_array(npmesh.uvs0)
 
-        if loop_uvs1 is not None:
-            mesh_out.tverts1.set_numpy_array(loop_uvs1)
+        if npmesh.uvs1 is not None:
+            mesh_out.tverts1.set_numpy_array(npmesh.uvs1)
 
-        if loop_colors is not None:
-            mesh_out.colors.set_numpy_array(loop_colors)
+        if npmesh.colors is not None:
+            mesh_out.colors.set_numpy_array(npmesh.colors)
+
 
         mesh_out.numFrames = 1
         mesh_out.numMatFrames = 1
-        mesh_out.vertsPerFrame = len(loop_positions)
+        mesh_out.vertsPerFrame = len(npmesh.positions)
 
-        mins = loop_positions.min(axis=0).astype(float)
-        maxs = loop_positions.max(axis=0).astype(float)
+        mins = npmesh.positions.min(axis=0).astype(float)
+        maxs = npmesh.positions.max(axis=0).astype(float)
         mesh_out.bounds = Box6F(*mins, *maxs)
 
         return mesh_out

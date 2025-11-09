@@ -67,7 +67,7 @@ class LocalStorage:
     @staticmethod
     def set(key: str, data: dict[str, Any]):
         filepath = LocalStorage._get_file_path(key)
-        if (data is None or len(data) == 0) and os.path.isfile(key):
+        if (data is None or len(data) == 0) and os.path.isfile(filepath):
             LocalStorage.cache[key] = {}
             os.remove(filepath)
             return
