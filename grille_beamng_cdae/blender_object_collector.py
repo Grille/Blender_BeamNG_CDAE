@@ -11,6 +11,7 @@ class ObjectCollector:
     def add_object(self, obj: bpy.types.Object):
         if obj.hide_get() and not self.include_hidden:
             return
+        
         self.objects.add(obj)
         if self.include_children:
             self.add_objects(obj.children)

@@ -295,18 +295,3 @@ class CdaeTree:
 
     def add_lock_tocken(self):
         pass
-
-
-    @staticmethod
-    def from_objects(objects: set[bpy.types.Object]) -> 'CdaeTree':
-        tree = CdaeTree()
-        tree.add_objects(objects)
-        return tree
-    
-
-    @staticmethod
-    def from_selection() -> 'CdaeTree':
-        selected = set(bpy.context.selected_objects)
-        return CdaeTree.from_objects(selected)
-
-

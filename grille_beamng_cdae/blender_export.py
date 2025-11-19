@@ -20,6 +20,7 @@ from .local_storage import LocalStorage
 from .blender_op_presets import OpPresetsUtils
 from . import cdae_serializer_text as CdaeTextSerializer
 from . import cdae_serializer_binary as CdaeBinarySerializer
+from .cdae_serializer_dts import CdaeDtsSerializer
 
 # pyright: reportInvalidTypeForm=false
 
@@ -35,6 +36,12 @@ class FileFormat(str, Enum):
     DAE = ".dae"
     CDAE = ".cdae"
     DTS = ".dts"
+
+
+class UvMode(str, Enum):
+    NONE = "NONE"
+    INDEX = "INDEX"
+    STRING = "STRING"
 
 
 def update_fps(self: 'ExportBase', ctx):
@@ -69,9 +76,9 @@ class ExportBase(Operator, ExportHelper):
         description="File format used for geometry",
         items=[
             (FileFormat.NONE, "None", ""),
-            (FileFormat.DAE, "Text (.dae)", ""),
-            (FileFormat.CDAE, "Binary (.cdae)", ""),
-            #(FileFormat.DTS, "Torque3D (.dts)", ""),
+            (FileFormat.DAE, "Collada (.dae)", "Human-readable XML-based 3D format."),
+            (FileFormat.CDAE, "Cached v31 (.cdae)", "Optimized binary version of Collada for faster loading and reduced file size."),
+            (FileFormat.DTS, "Torque3D v26 (.dts)", ""),
         ],
         default=FileFormat.DAE,
     )
@@ -95,6 +102,22 @@ class ExportBase(Operator, ExportHelper):
     )
 
     apply_scale: BoolProperty(name="Apply Scale", default=True)
+    geo_uv_mode: EnumProperty(
+        name="UV Mode",
+        items=[
+            (UvMode.INDEX, "Index", ""),
+            (UvMode.STRING, "String", ""),
+        ],
+        default=UvMode.INDEX,
+    )
+    geo_uv0: StringProperty(
+        name="UV0",
+        default="0",
+    )
+    geo_uv1: StringProperty(
+        name="UV1",
+        default="1",
+    )
 
     save_textures: EnumProperty(
         name="Write Mode",
@@ -120,7 +143,7 @@ class ExportBase(Operator, ExportHelper):
     )
 
     material_uv1: StringProperty(
-        name="UV Map 1 Hint",
+        name="UV1 Hint",
         default="1"
     )
 
@@ -195,6 +218,11 @@ class ExportBase(Operator, ExportHelper):
         log("collect")
 
         builder = CdeaBuilder()
+        builder.mesh_builder.use_uv_hint = self.geo_uv_mode == UvMode.STRING
+        builder.mesh_builder.uv0_hint = self.geo_uv0
+        builder.mesh_builder.uv1_hint = self.geo_uv1
+        builder.mesh_builder.compute_tangents = self.file_format == FileFormat.CDAE
+        builder.mesh_builder.compute_encoded_normals = self.file_format == FileFormat.CDAE
         builder.readonly = self.file_readonly
         builder.tree.build_mode = build_mode
         sampler = builder.sampler
@@ -204,8 +232,11 @@ class ExportBase(Operator, ExportHelper):
         sampler.end = self.anim_frame_end
         sampler.sample_count = self.anim_samples
         sampler.duration = self.anim_duration
+        log("setup")
 
         builder.tree.add_objects(collector.objects)
+        log("add obj")
+
         builder.build()
         log("build")
 
@@ -219,6 +250,8 @@ class ExportBase(Operator, ExportHelper):
                 CdaeTextSerializer.write_to_file(builder.cdae, filepath)
             case FileFormat.CDAE:
                 CdaeBinarySerializer.write_to_file(builder.cdae, filepath, self.compression_enabled)
+            case FileFormat.DTS:
+                CdaeDtsSerializer().write_to_file(builder.cdae, filepath)
         log("write file")
 
         if self.asset_file_enabled:
@@ -347,7 +380,7 @@ class ExportBase(Operator, ExportHelper):
         box.prop(self, "selection_only")
         if self.selection_only:
             box.prop(self, "include_children")
-        box.prop(self, "include_hidden")
+        #box.prop(self, "include_hidden")
         
         box = layout.box()
         box.label(text="File", icon='FILE_NEW')
@@ -361,7 +394,7 @@ class ExportBase(Operator, ExportHelper):
 
         if format == FileFormat.CDAE:
             box.prop(self, "compression_enabled")
-            alert(box, f"Unstable, use 'Text (.dae)' instead.")
+            alert(box, f"Unstable, use 'Collada (.dae)' instead.")
 
         if write_file:
             #box.prop(self, "file_readonly")
@@ -370,7 +403,11 @@ class ExportBase(Operator, ExportHelper):
             box.prop(self, "build_mode")
             box.prop(self, "use_transforms")
             box.label(text="Geometry", icon='MESH_DATA')
-            box.prop(self, "apply_scale")
+            #box.prop(self, "apply_scale")
+            box.prop(self, "geo_uv_mode")
+            if self.geo_uv_mode == UvMode.STRING:
+                box.prop(self, "geo_uv0")
+                box.prop(self, "geo_uv1")
 
             box = layout.box()
             box.label(text="Animations", icon='ANIM_DATA')
@@ -401,7 +438,7 @@ class ExportBase(Operator, ExportHelper):
 
     @staticmethod
     def menu_func(self, context):
-        self.layout.operator(ExportBase.bl_idname, text="BeamNG (.dae/.cdae/.json)")
+        self.layout.operator(ExportBase.bl_idname, text="BeamNG (.dae/.cdae/.dts/.json)")
 
 
 

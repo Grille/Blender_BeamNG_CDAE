@@ -13,6 +13,15 @@ from .material import Material
 class MaterialNodeWalker(NodeWalker):
 
     @dataclass
+    class PalleteFlags:
+        base_color: bool
+        clear_coat: bool
+        clear_coat_roughness: bool
+        metallic: bool
+        roughness: bool
+
+
+    @dataclass
     class MatSocketInfo:
         exists: bool = False
         connected: bool = False

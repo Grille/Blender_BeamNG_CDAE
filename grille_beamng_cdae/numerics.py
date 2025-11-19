@@ -33,8 +33,9 @@ class Vec2F:
 class Vec3F(Vec2F):
 
     def __init__(self, x: float = 0.0, y: float = 0.0, z: float = 0.0):
-        super().__init__(x, y)
-        self.z: float = float(z)
+        self.x = float(x)
+        self.y = float(y)
+        self.z = float(z)
 
 
     @classmethod
@@ -57,6 +58,10 @@ class Vec3F(Vec2F):
 
     def max(self, other: 'Vec3F'):
         return Vec3F(max(self.x, other.x), max(self.y, other.y), max(self.z, other.z))
+    
+
+    def dot(self, other: 'Vec3F') -> float:
+        return self.x * other.x + self.y * other.y + self.z * other.z
     
 
     @property

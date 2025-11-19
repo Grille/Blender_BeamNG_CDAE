@@ -12,6 +12,8 @@ from collections import defaultdict
 from .cdae_v31 import *
 from .blender_object_properties import ObjectProperties, ObjectRole
 from .cdae_builder_tree import CdaeTree
+from .torque3d import Torque3D
+from .debug import Stopwatch
 
 
 class CdaeMaterialIndexer:
@@ -86,11 +88,15 @@ class CdaeMeshBuilder:
 
 
 
-
     def __init__(self, material_indexer: CdaeMaterialIndexer):
         self.mesh: bpy.types.Mesh = None
         self.scale = Vec3F(1,1,1)
         self.material_indexer = material_indexer
+        self.use_uv_hint: bool = False
+        self.uv0_hint: str = None
+        self.uv1_hint: str = None
+        self.compute_tangents: bool = False
+        self.compute_encoded_normals: bool = False
 
 
     def get_vtx_indices(self):
@@ -114,18 +120,34 @@ class CdaeMeshBuilder:
         loop_data = np.empty(len(self.mesh.loops) * size, dtype=np.float32)
         self.mesh.loops.foreach_get(key, loop_data)
         return loop_data.reshape((-1, size))
+    
 
+    def get_uv_layer(self, index: int, uv_hint: str):
 
-    def get_uv_data(self, index = 0):
-        if len(self.mesh.uv_layers) > index:
-            uv_layer0 = self.mesh.uv_layers[index].data
-            uv_data0 = np.empty(len(uv_layer0) * 2, dtype=np.float32)
-            uv_layer0.foreach_get("uv", uv_data0)
-            uv_data0 = uv_data0.reshape((-1, 2))
-            uv_data0[:, 1] = 1.0 - uv_data0[:, 1]
-            return uv_data0
-        else:
+        if self.use_uv_hint:
+            for item in self.mesh.uv_layers:
+                key: str = item.name
+                if uv_hint in key.lower():
+                    return item.data
             return None
+
+        elif len(self.mesh.uv_layers) > index:
+            return self.mesh.uv_layers[index].data
+
+        return None
+    
+
+    def get_uv_data(self, index: int, uv_hint: str):
+
+        uv_layer = self.get_uv_layer(index, uv_hint)
+        if uv_layer is None:
+            return None
+        
+        uv_data = np.empty(len(uv_layer) * 2, dtype=np.float32)
+        uv_layer.foreach_get("uv", uv_data)
+        uv_data = uv_data.reshape((-1, 2))
+        uv_data[:, 1] = 1.0 - uv_data[:, 1]
+        return uv_data
         
 
     def get_color_data(self, indices):
@@ -163,7 +185,7 @@ class CdaeMeshBuilder:
         
 
     def build_from_mesh(self, mesh: bpy.types.Mesh)-> CdaeV31.Mesh:
-
+        
         if any(len(p.vertices) > 4 for p in mesh.polygons):
             bm = bmesh.new()
             bm.from_mesh(mesh)
@@ -173,17 +195,19 @@ class CdaeMeshBuilder:
 
         self.mesh = mesh
         mesh.calc_loop_triangles()
-        mesh.calc_tangents()
 
         vertex_indices = self.get_vtx_indices()
 
         npmesh = CdaeMeshBuilder.NpMesh()
         npmesh.positions = self.get_vtx_data("co", 3, vertex_indices)
         npmesh.normals = self.get_loop_data("normal", 3)
-        npmesh.tangents = None #self.get_loop_data("tangent", 4)
-        npmesh.uvs0 = self.get_uv_data(0)
-        npmesh.uvs1 = self.get_uv_data(1)
+        npmesh.uvs0 = self.get_uv_data(0, self.uv0_hint)
+        npmesh.uvs1 = self.get_uv_data(1, self.uv1_hint)
         npmesh.colors = self.get_color_data(vertex_indices)
+
+        if self.compute_tangents and npmesh.uvs0 is not None and len(npmesh.uvs0) > 0:
+            mesh.calc_tangents()
+            npmesh.tangents = self.get_loop_data("tangent", 4)
 
 
         material_ranges: defaultdict[int, list] = defaultdict(list)
@@ -201,8 +225,8 @@ class CdaeMeshBuilder:
         
         indices_list = []
         for mat_index in material_ranges:
-            range = material_ranges[mat_index]
-            indices_list.extend(range)
+            matrange = material_ranges[mat_index]
+            indices_list.extend(matrange)
         npmesh.indices = np.array(indices_list, dtype=np.int32)
 
 
@@ -230,6 +254,15 @@ class CdaeMeshBuilder:
         mesh_out.verts.set_numpy_array(npmesh.positions)
         mesh_out.norms.set_numpy_array(npmesh.normals)
 
+        if self.compute_encoded_normals:
+            encoded_norms = np.zeros(len(npmesh.normals), dtype=np.uint8)
+            for i in range(len(npmesh.normals)):
+                encoded_norms[i] = Torque3D.encode_normal(npmesh.normals[i])
+            mesh_out.encoded_norms.set_numpy_array(encoded_norms)
+
+        if npmesh.tangents is not None:
+            mesh_out.tangents.set_numpy_array(npmesh.tangents)
+
         if npmesh.uvs0 is not None:
             mesh_out.tverts0.set_numpy_array(npmesh.uvs0)
 
@@ -244,18 +277,20 @@ class CdaeMeshBuilder:
         mesh_out.numMatFrames = 1
         mesh_out.vertsPerFrame = len(npmesh.positions)
 
-        mins = npmesh.positions.min(axis=0).astype(float)
-        maxs = npmesh.positions.max(axis=0).astype(float)
-        mesh_out.bounds = Box6F(*mins, *maxs)
+        if mesh_out.vertsPerFrame > 0:
+            mins = npmesh.positions.min(axis=0).astype(float)
+            maxs = npmesh.positions.max(axis=0).astype(float)
+            mesh_out.bounds = Box6F(*mins, *maxs)
 
         return mesh_out
 
 
-    def build_from_object(self, obj: bpy.types.Object | None) -> CdaeV31.Mesh:
+    def build_from_object(self, obj: bpy.types.Object | None, depsgraph) -> CdaeV31.Mesh:
+        
         if obj is None or not ObjectProperties.has_mesh(obj):
             null = CdaeV31.Mesh()
             return null
-        depsgraph = bpy.context.evaluated_depsgraph_get()
+        
         eval_obj: bpy.types.Object = obj.evaluated_get(depsgraph)
         mesh = eval_obj.to_mesh()
         try:
@@ -362,6 +397,8 @@ class CdeaBuilder:
         defaultRotations = []
         defaultTranslations = []
 
+        depsgraph = bpy.context.evaluated_depsgraph_get()
+
         def add_node(node: CdaeTree.Node, parent_index: int = -1) -> int:
             
             node_samples = self.sampler.sample(node.bpy_sample_obj)
@@ -383,19 +420,17 @@ class CdeaBuilder:
                 flat_obj.startMeshIndex = len(flat_meshes)
    
                 for mesh in obj.meshes:
-                    flat_meshes.append(self.mesh_builder.build_from_object(mesh.bpy_mesh_obj))
+                    flat_meshes.append(self.mesh_builder.build_from_object(mesh.bpy_mesh_obj, depsgraph))
 
             for child in node.nodes:
                 add_node(child, node_index)
 
             return node_index
-
         
         shapes = cdae.unpack_subshapes()
         shapes_dict: dict[CdaeTree.SubShape, int] = {}
         for key, shape in self.tree.shapes.items():
             
-            print(key)
             first_node = len(flat_tree.nodes)
             first_obj = len(flat_tree.objects)
 
@@ -437,7 +472,7 @@ class CdeaBuilder:
             self.cdae.nodeTranslations.pack_list(kf_loc)
             self.cdae.nodeRotations.pack_list(kf_rot)
             self.cdae.nodeAlignedScales.pack_list(kf_scl)
-            
+
 
         for mat in self.material_indexer.materials:
             res = CdaeV31.Material()
@@ -446,6 +481,7 @@ class CdeaBuilder:
                 res.name = "undefined"
             else:
                 res.name = mat.name
+
 
         self.cdae.defaultRotations.pack_list(defaultRotations)
         self.cdae.defaultTranslations.pack_list(defaultTranslations)

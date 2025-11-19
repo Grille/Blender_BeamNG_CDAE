@@ -52,6 +52,10 @@ class BaseShaderNode(bpy.types.ShaderNodeCustomGroup):
     
 
     def update_alpha_link(self, key: str, alpha_key: str):
+
+        if self.node_tree is None:
+            return
+        
         if self.runtime.update_alpha_link_lock:
             return
         
@@ -310,7 +314,7 @@ class BeamFactorColor(BaseShaderNode):
         
         ngb.create_color_input("Texture Map", True)
         ngb.create_color_input("Factor", False)
-        
+
         ngb.create_color_output("Result")
 
         ngb.create_panel("Advanced")
@@ -422,7 +426,7 @@ class BeamDetailColor(BaseShaderNode):
         separate = ngb.create_node(NodeName.SeparateColor, mode='HSV')
         greater = ngb.create_math(Operation.GREATER_THAN, value1=0.5)
 
-        light_multiply = ngb.create_math(Operation.MULTIPLY, value1=4.0)
+        light_multiply = ngb.create_math(Operation.MULTIPLY, value1=1.0)
         light_vm_sub  = ngb.create_node(NodeName.VectorMath, operation=Operation.SUBTRACT)
         light_vm_sub.inputs[1].default_value = (0.5,0.5,0.5)
         light_vm_mul  = ngb.create_node(NodeName.VectorMath, operation=Operation.MULTIPLY)
@@ -611,6 +615,7 @@ class BeamBSDF15(BaseShaderNode):
         ngb.create_float_output(SocketName.Alpha)
 
         ngb.create_panel("Advanced")
+        ngb.create_color_input(SocketName.Palette, True)
         ngb.create_color_input(SocketName.Emissive, default_value=(0,0,0,1))
         ngb.create_float_input(SocketName.ClearCoat, default_value=0)
         ngb.create_float_input(SocketName.ClearCoatRoughness, default_value=1)
@@ -654,8 +659,6 @@ class BeamStageMix(BaseShaderNode):
 
     def post_init(self):
         pass
-        #self.inputs["Base.Alpha"].hide = True
-        #self.inputs["Overlay.Alpha"].hide = True
 
 
     def create_node_group(ngb: NodeGroupBuilder):

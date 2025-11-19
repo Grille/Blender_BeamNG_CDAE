@@ -46,7 +46,14 @@ class Stage:
     use_anisotropic: bool = DictProperty("useAnisotropic")
     vertex_color: bool = DictProperty("vertColor")
     instance_diffuse: bool = DictProperty("instanceDiffuse")
+    vertex_emissive: bool = DictProperty("vertColorEmissive")
+    instance_emissive: bool = DictProperty("instanceEmissive")
 
+    #"paletteBaseColor": false,
+    #"paletteClearCoat": false,
+    #"paletteClearCoatRoughness": false,
+    #"paletteMetallic": false,
+    #"paletteRoughness": false,
 
     def __init__(self, basedict: dict[str, any] = None):
         self.prefix = ""
@@ -67,6 +74,7 @@ class Stage:
         self.roughness = CreateSocket("roughness")
         self.opacity = CreateSocket("opacity")
         self.ambient_occlusion = CreateSocket("ambientOcclusion")
+        self.palette = CreateSocket("colorPalette")
         self.emissive = CreateSocket("emissive")
         self.clear_coat = CreateSocket("clearCoat")
         self.clear_coat_roughness = CreateSocket("clearCoatRoughness")

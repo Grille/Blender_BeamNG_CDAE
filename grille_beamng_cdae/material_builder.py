@@ -44,7 +44,7 @@ class MaterialBuilder:
             socket.scale = [src.scale.x, src.scale.y]
 
         if src.layer is not None:
-            socket.use_uv = 1 if set.uv1hint in src.layer else 0
+            socket.use_uv = 1 if set.uv1hint.lower() in src.layer.lower() else 0
 
 
     def parse_stage(self, stage: Stage, info: MaterialNodeWalker.MatStageInfo):
@@ -70,15 +70,15 @@ class MaterialBuilder:
 
         stage.color.factor = (1,1,1,1)
 
-        bc_socket = parse_socket(stage.color, [SocketName.ColorHDR, SocketName.Color, SocketName.BaseColor], COLOR4, stage.detail)
+        socket = parse_socket(stage.color, [SocketName.ColorHDR, SocketName.Color, SocketName.BaseColor], COLOR4, stage.detail)
         stage.move("baseColorMapUseUV", "diffuseMapUseUV")
         stage.move("detailMapStrength", "detailBaseColorMapStrength")
+        stage.vertex_color = socket.enabled_vc
+        stage.instance_diffuse = socket.enabled_ic
+        
         basealpha = ctx.get_socket(SocketName.BaseAlpha)
         if basealpha.factor is not None:
             stage.color.factor = stage.color.factor[:3] + (basealpha.factor,)
-
-        stage.vertex_color = bc_socket.enabled_vc
-        stage.instance_diffuse = bc_socket.enabled_ic
 
         parse_socket(stage.metallic, SocketName.Metallic, FLOAT)
 
@@ -92,7 +92,11 @@ class MaterialBuilder:
 
         parse_socket(stage.ambient_occlusion, SocketName.AmbientOcclusion, FLOAT)
         
-        parse_socket(stage.emissive, SocketName.Emissive, COLOR3)
+        parse_socket(stage.palette, SocketName.Palette, MAP_ONLY)
+
+        socket = parse_socket(stage.emissive, SocketName.Emissive, COLOR3)
+        stage.vertex_emissive = socket.enabled_vc
+        stage.instance_emissive = socket.enabled_ic
 
         parse_socket(stage.clear_coat, SocketName.ClearCoat, FLOAT)
 
