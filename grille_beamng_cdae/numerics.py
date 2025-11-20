@@ -29,6 +29,11 @@ class Vec2F:
         return self.x == value.x and self.y == value.y
     
 
+    def __iter__(self):
+        yield self.x
+        yield self.y
+    
+
 
 class Vec3F(Vec2F):
 
@@ -64,6 +69,10 @@ class Vec3F(Vec2F):
         return self.x * other.x + self.y * other.y + self.z * other.z
     
 
+    def max_unit(self) -> float:
+        return max(self.x, self.y, self.z)
+    
+
     @property
     def tuple3(self):
         return (self.x, self.y, self.z)
@@ -77,6 +86,12 @@ class Vec3F(Vec2F):
         if not isinstance(value, Vec3F):
             return False
         return self.x == value.x and self.y == value.y and self.z == value.z
+    
+
+    def __iter__(self):
+        yield self.x
+        yield self.y
+        yield self.z
         
 
 
@@ -124,20 +139,20 @@ class Quat4F(Vec4F):
     def from_blender_quaternion(cls, quat: mathutils.Quaternion | tuple):
         if isinstance(quat, tuple): quat = mathutils.Quaternion(quat)
         self = cls()
-        self.x = -quat.z
+        self.x = quat.x
         self.y = quat.y
-        self.z = -quat.x
-        self.w = quat.w
+        self.z = quat.z
+        self.w = -quat.w
         return self
 
     
     def to_collada_matrix(self):
-        quat = mathutils.Quaternion((self.w, -self.z, self.y, -self.x))
+        quat = mathutils.Quaternion((-self.w, self.x, self.y, self.z))
         return quat.to_matrix().to_4x4()
     
 
     def to_blender_quaternion(self):
-        return mathutils.Quaternion((self.w, -self.x, self.y, -self.z))
+        return mathutils.Quaternion((self.x, self.y, self.z, -self.w))
     
     
 
@@ -175,8 +190,23 @@ class Box6F:
         return Box6F(*min, *max)
     
 
+    def center(self):
+        return Vec3F((self.min.x + self.max.x)/2,(self.min.y + self.max.y)/2,(self.min.z + self.max.z)/2)
+    
+
+    def range(self):
+        return Vec3F(abs(self.min.x - self.max.x),abs(self.min.y - self.max.y),abs(self.min.z - self.max.z))
+    
+
     def __str__(self):
         return f"<{self.min}, {self.max}>"
+    
+
+    @property
+    def tuple6(self):
+        return (self.min.x, self.min.y, self.min.z, self.max.x, self.max.y, self.max.z)
+        
+
 
 
 

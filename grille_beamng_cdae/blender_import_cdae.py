@@ -11,6 +11,7 @@ from bpy.props import StringProperty, BoolProperty
 
 from .cdae_v31 import CdaeV31
 from .cdae_parser import CdaeParser
+from .debug import CdaeJsonDebugger
 
 # pyright: reportInvalidTypeForm=false
 
@@ -35,6 +36,10 @@ class ImportCdae(Operator, ImportHelper):
         parser.validate = self.validate_meshes
         parser.debug = self.debug_info
         parser.parse(cdae)
+
+        if self.debug_info:
+            CdaeJsonDebugger.store(cdae)
+
 
         return {'FINISHED'}
     

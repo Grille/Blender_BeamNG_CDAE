@@ -13,7 +13,7 @@ from .msgpack_writer import MsgpackWriter
 from .numerics import *
 
 
-class CdaeDtsSerializer:
+class CdaeDtsBuffers:
         
     def __init__(self):
         self.guard_index = 0
@@ -153,7 +153,6 @@ class CdaeDtsSerializer:
         #iflMaterials
         self.write_guard()
 
-        #TODO Subshapes
         self.b32.write(cdae.subShapeFirstNode.data)
         self.b32.write(cdae.subShapeFirstObject.data)
         self.b32.write(bytearray(cdae.subShapeFirstNode.element_count*4)) #subShapeFirstDecal
@@ -197,13 +196,18 @@ class CdaeDtsSerializer:
         self.write_f32(0) #alphaOut
 
 
-    def write_to_stream(self, cdae: CdaeV31, f: BufferedWriter):
+
+class CdaeDtsSerializer:
+
+    @staticmethod
+    def write_to_stream(cdae: CdaeV31, f: BufferedWriter):
 
         def write_s8(value: int): f.write(struct.pack("<b", value))
         def write_s16(value: int): f.write(struct.pack("<h", value))
         def write_s32(value: int): f.write(struct.pack("<i", value))
         def write_f32(value: float): f.write(struct.pack("<f", value))
-        
+
+        self = CdaeDtsBuffers()
         self.write_data_to_buffers(cdae)
         buffer32 = self.b32.getvalue()
         buffer16 = self.b16.getvalue()
@@ -231,7 +235,8 @@ class CdaeDtsSerializer:
             f.write(bytearray(7*4))
 
 
-    def write_to_file(self, cdae: CdaeV31, filepath: str):
+    @staticmethod
+    def write_to_file(cdae: CdaeV31, filepath: str):
 
         with open(filepath, 'wb') as f:
-            self.write_to_stream(cdae, f)
+            CdaeDtsSerializer.write_to_stream(cdae, f)

@@ -221,8 +221,7 @@ class ExportBase(Operator, ExportHelper):
         builder.mesh_builder.use_uv_hint = self.geo_uv_mode == UvMode.STRING
         builder.mesh_builder.uv0_hint = self.geo_uv0
         builder.mesh_builder.uv1_hint = self.geo_uv1
-        builder.mesh_builder.compute_tangents = self.file_format == FileFormat.CDAE
-        builder.mesh_builder.compute_encoded_normals = self.file_format == FileFormat.CDAE
+        #builder.mesh_builder.compute_tangents = self.file_format == FileFormat.CDAE
         builder.readonly = self.file_readonly
         builder.tree.build_mode = build_mode
         sampler = builder.sampler
@@ -251,7 +250,7 @@ class ExportBase(Operator, ExportHelper):
             case FileFormat.CDAE:
                 CdaeBinarySerializer.write_to_file(builder.cdae, filepath, self.compression_enabled)
             case FileFormat.DTS:
-                CdaeDtsSerializer().write_to_file(builder.cdae, filepath)
+                CdaeDtsSerializer.write_to_file(builder.cdae, filepath)
         log("write file")
 
         if self.asset_file_enabled:

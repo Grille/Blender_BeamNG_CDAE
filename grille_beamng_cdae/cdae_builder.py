@@ -234,7 +234,7 @@ class CdaeMeshBuilder:
         offset = 0
         for mat_index in material_ranges:
             count = len(material_ranges[mat_index])
-            draw_regions.append((offset * 3, count * 3, mat_index))
+            draw_regions.append((offset * 3, count * 3, mat_index | CdaeV31.Mesh.DrawRegion.InfoMask.INDEXED))
             offset += count
 
         DrawRegion = np.dtype([
@@ -281,6 +281,8 @@ class CdaeMeshBuilder:
             mins = npmesh.positions.min(axis=0).astype(float)
             maxs = npmesh.positions.max(axis=0).astype(float)
             mesh_out.bounds = Box6F(*mins, *maxs)
+            mesh_out.center = mesh_out.bounds.center()
+            mesh_out.radius = math.sqrt(mesh_out.bounds.range().max_unit()*2)
 
         return mesh_out
 
@@ -488,11 +490,17 @@ class CdeaBuilder:
 
         states = [CdaeV31.ObjectState() for _ in flat_tree.objects]
         self.cdae.pack_states(states)
-
-        # Convert flat_nodes and flat_objects into PackedVectors
         self.cdae.pack_tree(flat_tree)
         self.cdae.pack_subshapes(shapes)
         self.cdae.pack_details(details)
         self.cdae.meshes = flat_meshes
+
+        if len(flat_meshes) > 0:
+            self.cdae.bounds = flat_meshes[0].bounds
+            for i in range(1, len(flat_meshes)):
+                self.cdae.bounds = self.cdae.bounds.extended(flat_meshes[i].bounds)
+        self.cdae.center = self.cdae.bounds.center()
+        self.cdae.radius = math.sqrt(self.cdae.bounds.range().max_unit()*2)
+        self.cdae.tube_radius = self.cdae.radius
 
         self.materials = self.material_indexer.materials

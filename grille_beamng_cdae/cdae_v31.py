@@ -11,12 +11,6 @@ from .msgpack_writer import MsgpackWriter
 from .numerics import *
 
 
-TYPE_MASK = 0xC0000000
-INDEXED = 0x20000000
-NO_MATERIAL = 0x10000000
-MATERIAL_MASK = 0x0FFFFFFF
-
-
 class CdaeV31:
 
     @dataclass
@@ -254,6 +248,13 @@ class CdaeV31:
         @dataclass
         class DrawRegion:
 
+            class InfoMask(int, Enum):
+                TYPE_MASK = 0xC0000000
+                INDEXED = 0x20000000
+                NO_MATERIAL = 0x10000000
+                MATERIAL_MASK = 0x0FFFFFFF
+
+
             class DrawType(int, Enum):
                 Triangles = 0x00000000
                 Strip = 0x40000000
@@ -274,18 +275,18 @@ class CdaeV31:
 
             @property
             def material(self) -> int:
-                return self.raw_info & MATERIAL_MASK
+                return self.raw_info & CdaeV31.Mesh.DrawRegion.InfoMask.MATERIAL_MASK
             
             @material.setter
             def material(self, value: int):
-                self.raw_info = (self.raw_info & ~MATERIAL_MASK) | (value & MATERIAL_MASK)
+                self.raw_info = (self.raw_info & ~CdaeV31.Mesh.DrawRegion.InfoMask.MATERIAL_MASK) | (value & CdaeV31.Mesh.DrawRegion.InfoMask.MATERIAL_MASK)
 
             
             @property
             def info(self):
-                draw_type = CdaeV31.Mesh.DrawRegion.DrawType(self.raw_info & TYPE_MASK)
-                is_indexed = bool(self.raw_info & INDEXED)
-                has_no_mat = bool(self.raw_info & NO_MATERIAL)
+                draw_type = CdaeV31.Mesh.DrawRegion.DrawType(self.raw_info & CdaeV31.Mesh.DrawRegion.InfoMask.TYPE_MASK)
+                is_indexed = bool(self.raw_info & CdaeV31.Mesh.DrawRegion.InfoMask.INDEXED)
+                has_no_mat = bool(self.raw_info & CdaeV31.Mesh.DrawRegion.InfoMask.NO_MATERIAL)
                 return CdaeV31.Mesh.DrawRegion.DrawInfo(draw_type, is_indexed, has_no_mat)
 
 
@@ -386,7 +387,6 @@ class CdaeV31:
 
 
     def __init__(self):
-
         self.smallest_visible_size: float = 2.0
         self.smallest_visible_dl: int = 0
         self.radius: float = 5.0

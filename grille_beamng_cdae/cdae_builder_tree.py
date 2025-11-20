@@ -175,6 +175,15 @@ class CdaeTree:
         self._mesh_index_counter = 0
 
 
+    def get_detail(self, name: str = "detail2"):
+        detail = self.details.get(name, None)
+        if detail is None:
+            detail = CdaeTree.Detail()
+            detail.template.size = 2
+            self.details[name] = detail
+        return detail
+
+
     def get_shape(self, name: str = "_default_") -> SubShape:
         shape = self.shapes.get(name, None)
         if shape is None:
@@ -198,7 +207,9 @@ class CdaeTree:
         if not ObjectProperties.has_mesh(obj):
             return
 
+        detail = self.get_detail()
         shape = self.get_shape()
+        detail.shape = shape
         node = shape.get_child_node(self._get_obj_name(obj))
         node.bpy_sample_obj = obj
         node.get_object().set_mesh(0, obj)
