@@ -17,6 +17,7 @@ ensure_package("numpy")
 
 import bpy
 
+from .blender_msgbox import MessageBox
 from .blender_object_properties import ObjectProperties
 from .blender_object_panel import ObjectPanel
 from .blender_material_properties import MaterialProperties
@@ -28,6 +29,7 @@ from .blender_op_presets import OpPresetsUtils
 
 
 def register():
+    bpy.utils.register_class(MessageBox)
 
     ObjectProperties.register()
     bpy.utils.register_class(ObjectPanel)
@@ -44,6 +46,8 @@ def register():
 
 
 def unregister():
+    bpy.utils.unregister_class(MessageBox)
+
     ObjectProperties.unregister()
     bpy.utils.unregister_class(ObjectPanel)
 

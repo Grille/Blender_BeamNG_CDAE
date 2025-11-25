@@ -122,3 +122,8 @@ class Operation(str, Enum):
 class ColorSpace(str, Enum):
     SRGB = "sRGB"
     NON_COLOR = "Non-Color"
+
+
+class OperatorResult(str, Enum):
+    FINISHED = "FINISHED"
+    CANCELLED = "CANCELLED"

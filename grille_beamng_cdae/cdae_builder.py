@@ -99,6 +99,11 @@ class CdaeMeshBuilder:
         self.compute_encoded_normals: bool = False
 
 
+    @staticmethod
+    def get_radius(bounds: Box6F):
+        return math.sqrt(bounds.range().max_unit()*2)
+
+
     def get_vtx_indices(self):
         loop_vertex_indices = np.empty(len(self.mesh.loops), dtype=np.int32)
         self.mesh.loops.foreach_get("vertex_index", loop_vertex_indices)
@@ -282,7 +287,7 @@ class CdaeMeshBuilder:
             maxs = npmesh.positions.max(axis=0).astype(float)
             mesh_out.bounds = Box6F(*mins, *maxs)
             mesh_out.center = mesh_out.bounds.center()
-            mesh_out.radius = math.sqrt(mesh_out.bounds.range().max_unit()*2)
+            mesh_out.radius = CdaeMeshBuilder.get_radius(mesh_out.bounds)
 
         return mesh_out
 
@@ -462,7 +467,6 @@ class CdeaBuilder:
             cdae.sequences.append(seq)
             seq.nameIndex = self.cdae.get_name_index("ambiant")
 
-            print(f"ANIM {len(self.sampler.keyframes)}")
             kf_loc = []
             kf_rot = []
             kf_scl = []
@@ -500,7 +504,7 @@ class CdeaBuilder:
             for i in range(1, len(flat_meshes)):
                 self.cdae.bounds = self.cdae.bounds.extended(flat_meshes[i].bounds)
         self.cdae.center = self.cdae.bounds.center()
-        self.cdae.radius = math.sqrt(self.cdae.bounds.range().max_unit()*2)
+        self.cdae.radius = CdaeMeshBuilder.get_radius(self.cdae.bounds)
         self.cdae.tube_radius = self.cdae.radius
 
         self.materials = self.material_indexer.materials

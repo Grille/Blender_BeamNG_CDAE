@@ -28,3 +28,7 @@ class ObjectCollector:
 
     def collect_selected(self):
         self.add_objects(bpy.context.selected_objects)
+
+
+    def is_empty(self):
+        return len(self.objects) == 0

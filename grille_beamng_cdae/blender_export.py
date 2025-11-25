@@ -9,6 +9,7 @@ from bpy.props import BoolProperty, IntProperty, FloatProperty, EnumProperty, St
 from bpy_extras.io_utils import ExportHelper
 from enum import Enum
 
+from .blender_msgbox import MessageBox
 from .blender_object_collector import ObjectCollector
 from .beamng_asset import DaeAsset
 from .cdae_builder_tree import CdaeTreeBuildMode
@@ -21,6 +22,7 @@ from .blender_op_presets import OpPresetsUtils
 from . import cdae_serializer_text as CdaeTextSerializer
 from . import cdae_serializer_binary as CdaeBinarySerializer
 from .cdae_serializer_dts import CdaeDtsSerializer
+from .blender_enums import *
 
 # pyright: reportInvalidTypeForm=false
 
@@ -64,7 +66,7 @@ class ExportBase(Operator, ExportHelper):
     filename_ext = ""
     initialized = False
 
-    selection_only: BoolProperty(name="Selection Only", default=True, description="Use selected Objects.")
+    selection_only: BoolProperty(name="Selection Only", default=False, description="Use selected Objects.")
     include_children: BoolProperty(name="Include Children", default=False, description="Include all Children of selected Objects.")
     include_hidden: BoolProperty(name="Include Hidden", default=False, description="Include Objects that are hidden in Viewport.")
 
@@ -197,6 +199,8 @@ class ExportBase(Operator, ExportHelper):
         
         now = time.time()
 
+        print(MessageBox.show_dialog())
+
         def log(name: str):
             nonlocal now
             delta = time.time()-now
@@ -259,7 +263,7 @@ class ExportBase(Operator, ExportHelper):
         self.export_materials(dirpath, builder.materials)
         log("misc")
 
-        return {'FINISHED'}
+        return {OperatorResult.FINISHED}
     
 
     def check(self, context):

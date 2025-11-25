@@ -205,6 +205,7 @@ class CdaeDtsSerializer:
         def write_s8(value: int): f.write(struct.pack("<b", value))
         def write_s16(value: int): f.write(struct.pack("<h", value))
         def write_s32(value: int): f.write(struct.pack("<i", value))
+        def write_u32(value: int): f.write(struct.pack("<I", value))
         def write_f32(value: float): f.write(struct.pack("<f", value))
 
         self = CdaeDtsBuffers()
@@ -215,7 +216,6 @@ class CdaeDtsSerializer:
 
         write_s16(26)
         write_s16(0)
-
         write_s32(len(buffer32)+len(buffer16)+len(buffer8))
         write_s32(len(buffer32))
         write_s32(len(buffer32)+len(buffer16))
@@ -224,7 +224,9 @@ class CdaeDtsSerializer:
         f.write(buffer8)
         write_s32(len(cdae.sequences))
         for seq in cdae.sequences:
-            pass
+            write_s32(seq.nameIndex)
+            write_u32(seq.flags)
+            #TODO:
         write_s8(1) #matStreamType binary
         write_s32(len(cdae.materials))
         for mat in cdae.materials:
