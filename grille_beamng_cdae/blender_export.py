@@ -17,11 +17,11 @@ from .cdae_builder import CdeaBuilder
 from .cdae_v31 import CdaeV31
 from .material_libary import MaterialLibary
 from .material_builder import MaterialBuilder
-from .local_storage import LocalStorage
+from .utils_local_storage import LocalStorage
 from .blender_op_presets import OpPresetsUtils
-from . import cdae_serializer_text as CdaeTextSerializer
-from . import cdae_serializer_binary as CdaeBinarySerializer
-from .cdae_serializer_dts import CdaeDtsSerializer
+from .io_dae_writer import DaeWriter
+from .io_cdae_writer import CdaeWriter
+from .io_dts_writer import DtsWriter
 from .blender_enums import *
 
 # pyright: reportInvalidTypeForm=false
@@ -180,12 +180,6 @@ class ExportBase(Operator, ExportHelper):
     filter_glob: StringProperty(default="*.dae;*.cdae;*.json", options={'HIDDEN'})
 
 
-    def execute_write_geometry(self, cdae: CdaeV31, filepath: str):
-
-        CdaeTextSerializer.write_to_file(cdae, filepath)
-        print(f"Write dae: {filepath}")
-
-
     def invoke(self, context, event):
         print("_______________invoke")
         if not ExportBase.initialized:
@@ -248,13 +242,13 @@ class ExportBase(Operator, ExportHelper):
 
         match self.file_format:
             case FileFormat.DAE:
-                CdaeTextSerializer.limit_precision_enabled = self.limit_precision_enabled
-                CdaeTextSerializer.limit_precision_dp = self.limit_precision_dp
-                CdaeTextSerializer.write_to_file(builder.cdae, filepath)
+                DaeWriter.limit_precision_enabled = self.limit_precision_enabled
+                DaeWriter.limit_precision_dp = self.limit_precision_dp
+                DaeWriter.write_to_file(builder.cdae, filepath)
             case FileFormat.CDAE:
-                CdaeBinarySerializer.write_to_file(builder.cdae, filepath, self.compression_enabled)
+                CdaeWriter.write_to_file(builder.cdae, filepath, self.compression_enabled)
             case FileFormat.DTS:
-                CdaeDtsSerializer.write_to_file(builder.cdae, filepath)
+                DtsWriter.write_to_file(builder.cdae, filepath)
         log("write file")
 
         if self.asset_file_enabled:

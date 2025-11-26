@@ -1,6 +1,6 @@
 import bpy
 from .blender_enums import *
-from .node_walker import NodeWalker
+from .blender_node_walker import NodeWalker
 from .blender_enums import *
 
 

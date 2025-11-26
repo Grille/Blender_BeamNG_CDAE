@@ -9,7 +9,7 @@ from numpy.typing import NDArray
 
 from .cdae_v31 import CdaeV31
 from .numerics import *
-from .debug import Stopwatch
+from .utils_debug import Stopwatch
 
 
 @dataclass(frozen=True)
@@ -24,16 +24,12 @@ A_TIME = Accessor(1, [("TIME", "float")])
 A_TRANSFORM = Accessor(16, [("TRANSFORM", "float4x4")])
 
 
-limit_precision_enabled = False
-limit_precision_dp = 4
-
-
 def format_id(id: str):
     return id.replace(".", "_DOT_")
 
 
 def format_float(value: float) -> str:
-    return str(round(value, limit_precision_dp)) if limit_precision_enabled else str(value)
+    return str(round(value, DaeWriter.limit_precision_dp)) if DaeWriter.limit_precision_enabled else str(value)
 
 
 def format_float_list(values: list[float]) -> str:
@@ -289,24 +285,30 @@ def write_to_tree(cdae: CdaeV31, dae: ET.Element):
 
             
             
+class DaeWriter:
+
+    limit_precision_enabled: bool = False
+    limit_precision_dp: int = 4
 
 
-def write_to_stream(cdae: CdaeV31, f: TextIOWrapper):
-    sw = Stopwatch()
-    dae = ET.Element("COLLADA")
-    dae.set("version", "1.4.1")
-    dae.set("xmlns", "http://www.collada.org/2005/11/COLLADASchema")
-    write_to_tree(cdae, dae)
-    sw.log("xml_build")
-    tree = ET.ElementTree(dae)
-    ET.indent(tree, space="  ", level=0)  # Only available in Python 3.9+
-    sw.log("xml_indent")
-    tree.write(f, encoding="unicode", xml_declaration=True)
-    sw.log("xml_write")
-    sw.print()
+    @staticmethod
+    def write_to_stream(cdae: CdaeV31, f: TextIOWrapper):
+        sw = Stopwatch()
+        dae = ET.Element("COLLADA")
+        dae.set("version", "1.4.1")
+        dae.set("xmlns", "http://www.collada.org/2005/11/COLLADASchema")
+        write_to_tree(cdae, dae)
+        sw.log("xml_build")
+        tree = ET.ElementTree(dae)
+        ET.indent(tree, space="  ", level=0)  # Only available in Python 3.9+
+        sw.log("xml_indent")
+        tree.write(f, encoding="unicode", xml_declaration=True)
+        sw.log("xml_write")
+        sw.print()
 
 
-def write_to_file(cdae: CdaeV31, filepath: str):
+    staticmethod
+    def write_to_file(cdae: CdaeV31, filepath: str):
 
-    with open(filepath, 'wt') as f:
-        write_to_stream(cdae, f)
+        with open(filepath, 'wt') as f:
+            DaeWriter.write_to_stream(cdae, f)

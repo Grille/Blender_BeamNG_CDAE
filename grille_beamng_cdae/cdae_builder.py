@@ -13,7 +13,7 @@ from .cdae_v31 import *
 from .blender_object_properties import ObjectProperties, ObjectRole
 from .cdae_builder_tree import CdaeTree
 from .torque3d import Torque3D
-from .debug import Stopwatch
+from .utils_debug import Stopwatch
 
 
 class CdaeMaterialIndexer:

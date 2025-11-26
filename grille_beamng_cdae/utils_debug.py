@@ -1,7 +1,7 @@
 import time
 
 from .cdae_v31 import *
-from .local_storage import LocalStorage
+from .utils_local_storage import LocalStorage
 
 class Stopwatch:
 

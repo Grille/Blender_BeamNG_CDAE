@@ -9,7 +9,7 @@ bl_info = {
 }
 
 
-from .ensure_package import ensure_package
+from .utils_ensure_package import ensure_package
 ensure_package("msgpack")
 ensure_package("zstandard")
 ensure_package("numpy")
@@ -22,7 +22,7 @@ from .blender_object_properties import ObjectProperties
 from .blender_object_panel import ObjectPanel
 from .blender_material_properties import MaterialProperties
 from .blender_material_panel import MaterialPanel
-from .blender_import_cdae import ImportCdae
+from .blender_import import ImportCdae
 from .blender_export import ExportRegistry
 from .blender_shader_nodes import ShaderNodeRegistry
 from .blender_op_presets import OpPresetsUtils

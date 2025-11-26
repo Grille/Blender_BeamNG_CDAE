@@ -8,8 +8,8 @@ from io import BufferedReader, BufferedWriter, BytesIO
 
 from .cdae_v31 import CdaeV31
 from .packed_vector import PackedVector
-from .msgpack_reader import MsgpackReader
-from .msgpack_writer import MsgpackWriter
+from .io_msgpack_reader import MsgpackReader
+from .io_msgpack_writer import MsgpackWriter
 from .numerics import *
 
 
@@ -197,7 +197,7 @@ class CdaeDtsBuffers:
 
 
 
-class CdaeDtsSerializer:
+class DtsWriter:
 
     @staticmethod
     def write_to_stream(cdae: CdaeV31, f: BufferedWriter):
@@ -241,4 +241,4 @@ class CdaeDtsSerializer:
     def write_to_file(cdae: CdaeV31, filepath: str):
 
         with open(filepath, 'wb') as f:
-            CdaeDtsSerializer.write_to_stream(cdae, f)
+            DtsWriter.write_to_stream(cdae, f)

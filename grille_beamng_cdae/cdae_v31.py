@@ -2,12 +2,9 @@ import struct
 import numpy as np
 
 from dataclasses import dataclass, asdict
-from enum import Enum
-from io import BufferedReader, BufferedWriter
+from enum import Enum, IntFlag
 
 from .packed_vector import PackedVector
-from .msgpack_reader import MsgpackReader
-from .msgpack_writer import MsgpackWriter
 from .numerics import *
 
 
@@ -255,10 +252,12 @@ class CdaeV31:
                 MATERIAL_MASK = 0x0FFFFFFF
 
 
+
             class DrawType(int, Enum):
                 Triangles = 0x00000000
                 Strip = 0x40000000
                 Fan = 0x80000000
+
 
 
             @dataclass
@@ -305,6 +304,14 @@ class CdaeV31:
 
 
 
+        class Flags(IntFlag):
+            BILLBOARD = 1 << 31,
+            HAS_DETAIL_TEXTURE = 1 << 30,
+            BILLBOARD_Z_AXIS = 1 << 29,
+            USE_ENCODED_NORMALS = 1 << 28,
+
+
+
         def __init__(self):
 
             self.type = CdaeV31.MeshType.NULL
@@ -328,7 +335,7 @@ class CdaeV31:
             self.tangents = create_empty(16) #vtx vec4
 
             self.vertsPerFrame: int = 0
-            self.flags: int = 0
+            self.flags: CdaeV31.Mesh.Flags = 0
 
 
         def unpack_regions(self):
@@ -376,9 +383,23 @@ class CdaeV31:
 
     class Material:
 
+        class Flags(IntFlag):
+            S_WRAP = 1 << 0          
+            T_WRAP = 1 << 1      
+            TRANSLUCENT = 1 << 2 
+            ADDITIVE = 1 << 3  
+            SUBTRACTIVE = 1 << 4 
+            SELF_ILLUMINATING = 1 << 5 
+            NEVER_ENV_MAP = 1 << 6   
+            NO_MIP_MAP = 1 << 7    
+            MIP_MAP_ZERO_BORDER = 1 << 8 
+            AUXILIARY_MAP = 1 << 0   
+
+
+
         def __init__(self):
             self.name: str = ""
-            self.flags: int = 3
+            self.flags: CdaeV31.Material.Flags = 3
             self.reflect: int = 0
             self.bump: int = 0
             self.detail: int = 0

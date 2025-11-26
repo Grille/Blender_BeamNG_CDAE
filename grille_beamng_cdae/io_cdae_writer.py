@@ -1,0 +1,170 @@
+import struct
+import numpy as np
+import zstandard as zstd
+
+from dataclasses import dataclass
+from enum import Enum
+from io import BufferedReader, BufferedWriter
+
+from .cdae_v31 import CdaeV31
+from .packed_vector import PackedVector
+from .io_msgpack_reader import MsgpackReader
+from .io_msgpack_writer import MsgpackWriter
+from .numerics import *
+
+
+def get_body_bytes(cdae: CdaeV31) -> bytes:
+
+    body = MsgpackWriter()
+
+    def write_vector(pvec: PackedVector):
+        body.write_int32(pvec.element_count)
+        body.write_int32(pvec.element_size)
+        body.write_bytes(pvec.data)
+
+    body.write_float(cdae.smallest_visible_size)
+    body.write_int32(cdae.smallest_visible_dl)
+    body.write_float(cdae.radius)
+    body.write_float(cdae.tube_radius)
+    body.write_vec3f(cdae.center)
+    body.write_box6f(cdae.bounds)
+
+
+    write_vector(cdae.nodes)
+    write_vector(cdae.objects)
+
+    write_vector(cdae.subShapeFirstNode)
+    write_vector(cdae.subShapeFirstObject)
+    write_vector(cdae.subShapeNumNodes)
+    write_vector(cdae.subShapeNumObjects)
+
+    write_vector(cdae.defaultRotations)
+    write_vector(cdae.defaultTranslations)
+    write_vector(cdae.nodeRotations)
+    write_vector(cdae.nodeTranslations)
+
+    write_vector(cdae.nodeUniformScales)
+    write_vector(cdae.nodeAlignedScales)
+    write_vector(cdae.nodeArbitraryScaleFactors)
+    write_vector(cdae.nodeArbitraryScaleRots)
+
+    write_vector(cdae.groundTranslations)
+    write_vector(cdae.groundRotations)
+    write_vector(cdae.objectStates)
+
+    write_vector(cdae.triggers)
+    write_vector(cdae.details)
+
+
+    body.write_int32(len(cdae.names))
+    for name in cdae.names:
+        body.write_str(name)
+
+
+    body.write_int32(len(cdae.meshes))
+    for mesh in cdae.meshes:
+
+        body.write_int32(mesh.type.value)
+
+        if mesh.type == CdaeV31.MeshType.NULL:
+            continue
+
+        body.write_int32(mesh.numFrames)
+        body.write_int32(mesh.numMatFrames)
+        body.write_int32(mesh.parentMesh)
+        body.write_box6f(mesh.bounds)
+        body.write_vec3f(mesh.center)
+        body.write_float(mesh.radius)
+
+        write_vector(mesh.verts)
+        write_vector(mesh.tverts0)
+        write_vector(mesh.tverts1)
+        write_vector(mesh.colors)
+        write_vector(mesh.norms)
+        write_vector(mesh.encoded_norms)
+        write_vector(mesh.draw_regions)
+        write_vector(mesh.indices)
+        write_vector(mesh.tangents)
+
+        body.write_int32(mesh.vertsPerFrame)
+        body.write_int32(mesh.flags)
+
+
+    body.write_int32(len(cdae.sequences))
+    for seq in cdae.sequences:
+        body.write_int32(seq.nameIndex)
+        body.write_int32(seq.flags)
+        body.write_int32(seq.numKeyframes)
+        body.write_float(seq.duration)
+        body.write_int32(seq.priority)
+        body.write_int32(seq.firstGroundFrame)
+        body.write_int32(seq.numGroundFrames)
+        body.write_int32(seq.baseRotation)
+        body.write_int32(seq.baseTranslation)
+        body.write_int32(seq.baseScale)
+        body.write_int32(seq.baseObjectState)
+        body.write_int32(seq.baseDecalState)
+        body.write_int32(seq.firstTrigger)
+        body.write_int32(seq.numTriggers)
+        body.write_float(seq.toolBegin)
+
+        body.write_integerset(seq.rotationMatters)
+        body.write_integerset(seq.translationMatters)
+        body.write_integerset(seq.scaleMatters)
+        body.write_integerset(seq.visMatters)
+        body.write_integerset(seq.frameMatters)
+        body.write_integerset(seq.matFrameMatters)
+
+
+    body.write_int32(len(cdae.materials))
+    for mat in cdae.materials:
+        body.write_str(mat.name)
+        body.write_int32(mat.flags)
+        body.write_int32(mat.reflect)
+        body.write_int32(mat.bump)
+        body.write_int32(mat.detail)
+        body.write_float(mat.detailScale)
+        body.write_float(mat.reflectionAmount)
+
+    return body.to_bytes()
+
+
+def get_object_names(cdae: CdaeV31) -> list[str]:
+    list = []
+    for obj in cdae.unpack_objects():
+        list.append(cdae.names[obj.nameIndex])
+    return list
+
+
+class CdaeWriter:
+
+    @staticmethod
+    def write_to_stream(cdae: CdaeV31, f: BufferedWriter, compress: bool = False):
+
+        body_bytes = get_body_bytes(cdae)
+
+        if compress:
+            z = zstd.ZstdCompressor()
+            body_bytes = z.compress(body_bytes)
+
+        head = MsgpackWriter()
+        head_dict = {
+            "info": "Welcome! This is a binary file :D Please read the docs at https://go.beamng.com/shapeMessagepackFileformat",
+            "compression": compress,
+            "bodysize": len(body_bytes),
+            "objectNames": get_object_names(cdae),
+        }
+        head.write_dict(head_dict)
+        head_bytes = head.to_bytes()
+
+        f.write(struct.pack("<HH", 31, 0))
+        f.write(struct.pack("<I", len(head_bytes)))
+        f.write(head_bytes)
+        f.write(body_bytes)
+
+
+    @staticmethod
+    def write_to_file(cdae: CdaeV31, filepath: str, compress: bool = False):
+
+        with open(filepath, 'wb') as f:
+            CdaeWriter.write_to_stream(cdae, f, compress)

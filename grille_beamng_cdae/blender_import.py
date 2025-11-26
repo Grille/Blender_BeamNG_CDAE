@@ -3,15 +3,14 @@ import bpy
 import struct
 import numpy as np
 
-from . import cdae_serializer_binary as CdaeBinarySerializer
 from io import BufferedReader
 from bpy.types import Operator
 from bpy_extras.io_utils import ImportHelper
 from bpy.props import StringProperty, BoolProperty
 
-from .cdae_v31 import CdaeV31
+from .io_cdae_reader import CdaeReader
 from .cdae_parser import CdaeParser
-from .debug import CdaeJsonDebugger
+from .utils_debug import CdaeJsonDebugger
 
 # pyright: reportInvalidTypeForm=false
 
@@ -29,7 +28,7 @@ class ImportCdae(Operator, ImportHelper):
 
 
     def execute(self, context):
-        cdae = CdaeBinarySerializer.read_from_file(self.filepath)
+        cdae = CdaeReader.read_from_file(self.filepath)
         cdae.print_debug()
         
         parser = CdaeParser()

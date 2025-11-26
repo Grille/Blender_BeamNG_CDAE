@@ -4,7 +4,7 @@ import os
 from typing import TypeVar, Generic, Optional
 from dataclasses import dataclass
 
-from .node_walker import NodeWalker
+from .blender_node_walker import NodeWalker
 from .numerics import *
 from .blender_shader_nodes import *
 from .material import Material

@@ -4,7 +4,7 @@ import bpy
 from bpy.types import Operator
 from bpy.props import BoolProperty, IntProperty, FloatProperty, EnumProperty, StringProperty
 
-from .local_storage import LocalStorage
+from .utils_local_storage import LocalStorage
 
 # pyright: reportInvalidTypeForm=false
 
