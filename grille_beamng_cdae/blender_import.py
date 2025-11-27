@@ -3,17 +3,22 @@ import bpy
 import struct
 import numpy as np
 
+from enum import Enum
 from io import BufferedReader
 from bpy.types import Operator
 from bpy_extras.io_utils import ImportHelper
-from bpy.props import StringProperty, BoolProperty
+from bpy.props import StringProperty, BoolProperty, EnumProperty
 
 from .io_cdae_reader import CdaeReader
 from .cdae_parser import CdaeParser
 from .utils_debug import CdaeJsonDebugger
 
 # pyright: reportInvalidTypeForm=false
-
+class FileFormat(str, Enum):
+    NONE = "NONE"
+    DAE = ".dae"
+    CDAE = ".cdae"
+    DTS = ".dts"
 
 
 class ImportCdae(Operator, ImportHelper):
@@ -22,7 +27,8 @@ class ImportCdae(Operator, ImportHelper):
     bl_label = "Import BeamNG"
     filename_ext = ".cdae"
 
-    filter_glob: StringProperty(default="*.cdae", options={'HIDDEN'})
+    filter_glob: StringProperty(default="*.dae;*.cdae;*.json", options={'HIDDEN'})
+
     validate_meshes: BoolProperty(name="Validate Meshes", default=True)
     debug_info: BoolProperty(name="Debug Info", default=False)
 

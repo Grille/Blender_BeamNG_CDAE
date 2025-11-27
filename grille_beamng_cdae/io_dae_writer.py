@@ -7,21 +7,10 @@ from enum import Enum
 from io import BufferedReader, TextIOWrapper
 from numpy.typing import NDArray
 
+from .io_dae import Accessors as A, Accessor, DaeTag
 from .cdae_v31 import CdaeV31
 from .numerics import *
 from .utils_debug import Stopwatch
-
-
-@dataclass(frozen=True)
-class Accessor:
-    stride: int
-    params: list[tuple[str, str]]
-
-A_VEC2 = Accessor(2, [("X", "float"), ("Y", "float")])
-A_VEC3 = Accessor(3, A_VEC2.params + [("Z", "float")])
-A_VEC4 = Accessor(4, A_VEC3.params + [("W", "float")])
-A_TIME = Accessor(1, [("TIME", "float")])
-A_TRANSFORM = Accessor(16, [("TRANSFORM", "float4x4")])
 
 
 def format_id(id: str):
@@ -57,7 +46,7 @@ def make_id(name, suffix):
 def write_float_array(xml: ET.Element, flat_array: NDArray[np.float32], array_id: str):
 
     array_length = len(flat_array)
-    xml_float_array = ET.SubElement(xml, "float_array", {
+    xml_float_array = ET.SubElement(xml, DaeTag.float_array, {
         "id": array_id,
         "count": str(array_length)
     })
@@ -66,17 +55,17 @@ def write_float_array(xml: ET.Element, flat_array: NDArray[np.float32], array_id
 
 def write_accessor(xml: ET.Element, source_id: str, count: int, accessor: Accessor):
 
-    xml_technique = ET.SubElement(xml, "technique_common")
-    ET.SubElement(xml_technique, "accessor", {
+    xml_technique = ET.SubElement(xml, DaeTag.technique_common)
+    ET.SubElement(xml_technique, DaeTag.accessor, {
         "source": f"#{source_id}",
         "count": str(count),
         "stride": str(accessor.stride)
-    }).extend([ET.Element("param", {"name": acc[0], "type": acc[1]}) for acc in accessor.params])
+    }).extend([ET.Element(DaeTag.param, {"name": acc.name, "type": acc.type}) for acc in accessor.params])
 
 
 def write_src_float(xml: ET.Element, flat_array: NDArray[np.float32], name: str, accessor: Accessor):
 
-    xml_source = ET.SubElement(xml, "source", {"id": name})
+    xml_source = ET.SubElement(xml, DaeTag.source, {"id": name})
     array_id = f"{name}_array"
     write_float_array(xml_source, flat_array, array_id)
     write_accessor(xml_source, array_id, len(flat_array) // accessor.stride, accessor)
@@ -85,8 +74,8 @@ def write_src_float(xml: ET.Element, flat_array: NDArray[np.float32], name: str,
 def write_geometry(mesh: CdaeV31.Mesh, lib_geometries: ET.Element, mesh_index: int, materials: list[CdaeV31.Material], mesh_mat_names: list[CdaeV31.Material]):
 
     geom_id = f"mesh_{mesh_index}"
-    geom = ET.SubElement(lib_geometries, "geometry", {"id": geom_id, "name": geom_id})
-    mesh_elem = ET.SubElement(geom, "mesh")
+    geom = ET.SubElement(lib_geometries, DaeTag.geometry, {"id": geom_id, "name": geom_id})
+    mesh_elem = ET.SubElement(geom, DaeTag.mesh)
 
     def try_write_src(vector: NDArray[np.float32], name: str, accessor: Accessor) -> str:
         if vector.size == 0: return None
@@ -98,18 +87,18 @@ def write_geometry(mesh: CdaeV31.Mesh, lib_geometries: ET.Element, mesh_index: i
         if vector.size == 0: return None
         uv = vector.reshape(-1, 2).copy()   # copy -> writable, keeps both columns
         uv[:, 1] = 1.0 - uv[:, 1]           # invert V
-        return try_write_src(uv.ravel(), name, A_VEC2)
+        return try_write_src(uv.ravel(), name, A.VEC2)
 
-    positions_id = try_write_src(mesh.verts.to_numpy_array(np.float32), "position", A_VEC3)
-    normals_id = try_write_src(mesh.norms.to_numpy_array(np.float32), "normals", A_VEC3)
+    positions_id = try_write_src(mesh.verts.to_numpy_array(np.float32), "position", A.VEC3)
+    normals_id = try_write_src(mesh.norms.to_numpy_array(np.float32), "normals", A.VEC3)
     uv0s_id = try_write_src_uv(mesh.tverts0.to_numpy_array(np.float32), "uv0s")
     uv1s_id = try_write_src_uv(mesh.tverts1.to_numpy_array(np.float32), "uv1s")
-    color_id = try_write_src(mesh.get_vec4f_colors(), "colors", A_VEC4)
+    color_id = try_write_src(mesh.get_vec4f_colors(), "colors", A.VEC4)
 
     # Vertices
     vert_id = make_id(geom_id, "vertices")
-    vertices = ET.SubElement(mesh_elem, "vertices", {"id": vert_id})
-    ET.SubElement(vertices, "input", {"semantic": "POSITION", "source": f"#{positions_id}"})
+    vertices = ET.SubElement(mesh_elem, DaeTag.vertices, {"id": vert_id})
+    ET.SubElement(vertices, DaeTag.input, {"semantic": "POSITION", "source": f"#{positions_id}"})
 
     # Triangles by draw region
     indices = mesh.indices.to_numpy_array(np.uint32)
@@ -119,21 +108,21 @@ def write_geometry(mesh: CdaeV31.Mesh, lib_geometries: ET.Element, mesh_index: i
         mat_index = reg.material
         mat_name = f"mat_{mat_index}" if mat_index < len(materials) else "mat_0"
         mesh_mat_names.append(mat_name)
-        tris = ET.SubElement(mesh_elem, "triangles", {
+        tris = ET.SubElement(mesh_elem, DaeTag.triangles, {
             "count": str(reg.elements_count // 3),
             "material": mat_name
         })
 
-        ET.SubElement(tris, "input", {"semantic": "VERTEX", "source": f"#{vert_id}", "offset": "0"})
-        ET.SubElement(tris, "input", {"semantic": "NORMAL", "source": f"#{normals_id}", "offset": "0"})
+        ET.SubElement(tris, DaeTag.input, {"semantic": "VERTEX", "source": f"#{vert_id}", "offset": "0"})
+        ET.SubElement(tris, DaeTag.input, {"semantic": "NORMAL", "source": f"#{normals_id}", "offset": "0"})
         if uv0s_id is not None:
-            ET.SubElement(tris, "input", {"semantic": "TEXCOORD", "source": f"#{uv0s_id}", "offset": "0", "set": "0"})
+            ET.SubElement(tris, DaeTag.input, {"semantic": "TEXCOORD", "source": f"#{uv0s_id}", "offset": "0", "set": "0"})
         if uv1s_id is not None:
-            ET.SubElement(tris, "input", {"semantic": "TEXCOORD", "source": f"#{uv1s_id}", "offset": "0", "set": "1"})
+            ET.SubElement(tris, DaeTag.input, {"semantic": "TEXCOORD", "source": f"#{uv1s_id}", "offset": "0", "set": "1"})
         if color_id is not None:
-            ET.SubElement(tris, "input", {"semantic": "COLOR", "source": f"#{color_id}", "offset": "0"})
+            ET.SubElement(tris, DaeTag.input, {"semantic": "COLOR", "source": f"#{color_id}", "offset": "0"})
 
-        ET.SubElement(tris, "p").text = " ".join(str(indices[i]) for i in range(reg.elements_start, reg.elements_start + reg.elements_count))
+        ET.SubElement(tris, DaeTag.p).text = " ".join(str(indices[i]) for i in range(reg.elements_start, reg.elements_start + reg.elements_count))
 
 
 def collapse_animation(times: list[float], transforms: list[float]) -> tuple[list[float], list[float]]:
@@ -150,21 +139,21 @@ def collapse_animation(times: list[float], transforms: list[float]) -> tuple[lis
 
 
 def write_animation(xml: ET.Element, target_id: str, times: list[float], transforms: list[float]):
-    xml_anim = ET.SubElement(xml, "animation")
+    xml_anim = ET.SubElement(xml, DaeTag.animation)
 
     ctimes, ctransforms = collapse_animation(times, transforms)
 
     src_input_id = f"{target_id}-anim-input"
-    write_src_float(xml_anim, ctimes, src_input_id, A_TIME)
+    write_src_float(xml_anim, ctimes, src_input_id, A.TIME)
     src_output_id = f"{target_id}-anim-output"
-    write_src_float(xml_anim, ctransforms, src_output_id, A_TRANSFORM)
+    write_src_float(xml_anim, ctransforms, src_output_id, A.TRANSFORM)
 
     sampler_id = f"{target_id}-sampler"
-    xml_sampler = ET.SubElement(xml_anim, "sampler", {"id": sampler_id})
-    ET.SubElement(xml_sampler,"input", {"semantic":"INPUT", "source":f"#{src_input_id}"})
-    ET.SubElement(xml_sampler,"input", {"semantic":"OUTPUT", "source":f"#{src_output_id}"})
+    xml_sampler = ET.SubElement(xml_anim, DaeTag.sampler, {"id": sampler_id})
+    ET.SubElement(xml_sampler, DaeTag.input, {"semantic":"INPUT", "source":f"#{src_input_id}"})
+    ET.SubElement(xml_sampler, DaeTag.input, {"semantic":"OUTPUT", "source":f"#{src_output_id}"})
 
-    ET.SubElement(xml_anim, "channel", {"source":f"#{sampler_id}", "target":f"{target_id}/transform"})
+    ET.SubElement(xml_anim, DaeTag.channel, {"source":f"#{sampler_id}", "target":f"{target_id}/transform"})
 
 
 def write_to_tree(cdae: CdaeV31, dae: ET.Element):
@@ -177,23 +166,23 @@ def write_to_tree(cdae: CdaeV31, dae: ET.Element):
     ET.SubElement(asset, "unit", {"name": "meter", "meter": "1"})
     ET.SubElement(asset, "up_axis").text = "Z_UP"
 
-    lib_geometries = ET.SubElement(collada, "library_geometries")
-    lib_materials = ET.SubElement(collada, "library_materials")
-    lib_effects = ET.SubElement(collada, "library_effects")
-    lib_visual_scenes = ET.SubElement(collada, "library_visual_scenes")
-    scene = ET.SubElement(collada, "scene")
-    ET.SubElement(scene, "instance_visual_scene", {"url": "#Scene"})
+    lib_geometries = ET.SubElement(collada, DaeTag.library_geometries)
+    lib_materials = ET.SubElement(collada, DaeTag.library_materials)
+    lib_effects = ET.SubElement(collada, DaeTag.library_effects)
+    lib_visual_scenes = ET.SubElement(collada, DaeTag.library_visual_scenes)
+    scene = ET.SubElement(collada, DaeTag.scene)
+    ET.SubElement(scene, DaeTag.instance_visual_scene, {"url": "#Scene"})
 
-    visual_scene = ET.SubElement(lib_visual_scenes, "visual_scene", {"id": "Scene", "name": "Scene"})
+    visual_scene = ET.SubElement(lib_visual_scenes, DaeTag.visual_scene, {"id": "Scene", "name": "Scene"})
 
     # Materials (names only)
     for i, mat in enumerate(cdae.materials):
         mat_id = f"mat_{i}"
         effect_id = f"{mat_id}_fx"
 
-        xml_mat = ET.SubElement(lib_materials, "material", {"id": mat_id, "name": mat.name})
-        ET.SubElement(xml_mat, "instance_effect", {"url": f"#{effect_id}"})
-        ET.SubElement(lib_effects, "effect", {"id": effect_id})
+        xml_mat = ET.SubElement(lib_materials, DaeTag.material, {"id": mat_id, "name": mat.name})
+        ET.SubElement(xml_mat, DaeTag.instance_effect, {"url": f"#{effect_id}"})
+        ET.SubElement(lib_effects, DaeTag.effect, {"id": effect_id})
 
     # Geometries
     mesh_mat_names: list[list[str]] = []
@@ -210,7 +199,7 @@ def write_to_tree(cdae: CdaeV31, dae: ET.Element):
     # Build tree: recursively walk nodes and objects
     def process_node(node_index: int, node: CdaeV31.Node, parent_xml_node):
         node_name = cdae.names[node.nameIndex]
-        xml_node = ET.SubElement(parent_xml_node, "node", {"id": node_name, "name": node_name, "type": "NODE"})
+        xml_node = ET.SubElement(parent_xml_node, DaeTag.node, {"id": node_name, "name": node_name, "type": "NODE"})
 
         matrix = get_matrix(default_rotation[node_index], default_translations[node_index])
         ET.SubElement(xml_node, "matrix", {"sid": "transform"}).text = format_float_list(matrix)
@@ -219,7 +208,7 @@ def write_to_tree(cdae: CdaeV31, dae: ET.Element):
  
             obj_name = cdae.names[obj.nameIndex]
             if obj_name != node_name:
-                xml_obj_node = ET.SubElement(xml_node, "node", {"id": obj_name, "name": obj_name, "type": "NODE"})
+                xml_obj_node = ET.SubElement(xml_node, DaeTag.node, {"id": obj_name, "name": obj_name, "type": "NODE"})
             else:
                 xml_obj_node = xml_node
 
@@ -227,12 +216,12 @@ def write_to_tree(cdae: CdaeV31, dae: ET.Element):
                 geom_url = f"#mesh_{mesh_index}"
                 mat_names = mesh_mat_names[mesh_index]
 
-                inst_geom = ET.SubElement(xml_obj_node, "instance_geometry", {"url": geom_url})
-                bind_mat = ET.SubElement(inst_geom, "bind_material")
-                tech_common = ET.SubElement(bind_mat, "technique_common")
+                inst_geom = ET.SubElement(xml_obj_node, DaeTag.instance_geometry, {"url": geom_url})
+                bind_mat = ET.SubElement(inst_geom, DaeTag.bind_material)
+                tech_common = ET.SubElement(bind_mat, DaeTag.technique_common)
 
                 for mat_name in mat_names:
-                    ET.SubElement(tech_common, "instance_material", {
+                    ET.SubElement(tech_common, DaeTag.instance_material, {
                         "symbol": mat_name,
                         "target": f"#{mat_name}"
                     })
@@ -249,7 +238,7 @@ def write_to_tree(cdae: CdaeV31, dae: ET.Element):
     if len(cdae.sequences) > 0:
 
         seq = cdae.sequences[0]
-        lib_animations = ET.SubElement(collada, "library_animations")
+        lib_animations = ET.SubElement(collada, DaeTag.library_animations)
 
         num_keyframes = seq.numKeyframes
         node_translations = cdae.nodeTranslations.unpack_list(Vec3F)

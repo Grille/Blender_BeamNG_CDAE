@@ -1,7 +1,6 @@
 import os
 import sys
 import subprocess
-import ensurepip
 
 addon_dir = os.path.dirname(__file__)
 modules_dir = os.path.join(addon_dir, "modules")
@@ -14,10 +13,13 @@ def ensure_package(package_name, import_name=None):
     try:
         __import__(import_name)
     except ImportError:
-        ensurepip.bootstrap()
-        subprocess.check_call([
-            sys.executable, "-m", "pip", "install", package_name, "--target", modules_dir
-        ])
-        import importlib
-        importlib.invalidate_caches()
-        __import__(import_name)
+        python_exe = sys.executable
+        try:
+            print(f"Install {package_name} in {modules_dir}")
+            subprocess.check_call([
+                python_exe, "-m", "pip", "install",
+                package_name, "--target", modules_dir
+            ])
+            print("Installed:", package_name)
+        except Exception as e:
+            print("Failed to install", package_name, e)
