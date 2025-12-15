@@ -13,7 +13,7 @@ from .blender_msgbox import MessageBox
 from .blender_object_collector import ObjectCollector
 from .beamng_asset import DaeAsset
 from .cdae_builder_tree import CdaeTreeBuildMode
-from .cdae_builder import CdeaBuilder
+from .cdae_builder import CdeaBuilder, MeshDataEvalMode
 from .cdae_v31 import CdaeV31
 from .material_libary import MaterialLibary
 from .material_builder import MaterialBuilder
@@ -120,6 +120,17 @@ class ExportBase(Operator, ExportHelper):
         name="UV1",
         default="1",
     )
+    geo_eval: EnumProperty(
+        name="Modifiers",
+        items=[
+            (MeshDataEvalMode.RawData, "None", ""),
+            (MeshDataEvalMode.ModViewport, "Viewport", ""),
+            (MeshDataEvalMode.ModRender, "Render", ""),
+            (MeshDataEvalMode.ModAll, "All", ""),
+            (MeshDataEvalMode.Depsgraph, "Depsgraph", "More efficient alternative to Viewport."),
+        ],
+        default=MeshDataEvalMode.Depsgraph,
+    )
 
     save_textures: EnumProperty(
         name="Write Mode",
@@ -193,8 +204,6 @@ class ExportBase(Operator, ExportHelper):
         
         now = time.time()
 
-        print(MessageBox.show_dialog())
-
         def log(name: str):
             nonlocal now
             delta = time.time()-now
@@ -216,6 +225,7 @@ class ExportBase(Operator, ExportHelper):
         log("collect")
 
         builder = CdeaBuilder()
+        builder.mesh_builder.eval_mode = self.geo_eval
         builder.mesh_builder.use_uv_hint = self.geo_uv_mode == UvMode.STRING
         builder.mesh_builder.uv0_hint = self.geo_uv0
         builder.mesh_builder.uv1_hint = self.geo_uv1
@@ -401,6 +411,7 @@ class ExportBase(Operator, ExportHelper):
             box.prop(self, "use_transforms")
             box.label(text="Geometry", icon='MESH_DATA')
             #box.prop(self, "apply_scale")
+            box.prop(self, "geo_eval")
             box.prop(self, "geo_uv_mode")
             if self.geo_uv_mode == UvMode.STRING:
                 box.prop(self, "geo_uv0")

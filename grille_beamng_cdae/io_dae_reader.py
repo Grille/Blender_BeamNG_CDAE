@@ -13,18 +13,18 @@ from .cdae_v31 import CdaeV31
 from .numerics import *
 
 
-def parse_array(xml: ET.Element) -> NDArray:
-    return np.fromstring(xml.text, dtype=np.float32, sep=" ")
+def parse_array(xml: ET.Element, dtype=np.float32) -> NDArray:
+    return np.fromstring(xml.text, dtype=dtype, sep=" ")
 
 
 def parse_input(xml: ET.Element) -> Geometry.Triangles.Input:
-    pass
+    return Geometry.Triangles.Input(Semantic(xml.get("semantic")), xml.get("source"), xml.get("offset", 0), xml.get("set", 0))
 
 
 def parse_triangle(xml: ET.Element) -> Geometry.Triangles:
     result = Geometry.Triangles()
 
-    result.indices = parse_array(xml.find(DaeTag.p))
+    result.indices = parse_array(xml.find(DaeTag.p), np.int32)
     inputlist = xml.findall(DaeTag.param)
     for input in inputlist:
         result.inputs.append(parse_input(input))
@@ -82,8 +82,20 @@ def parse_collada(xml: ET.Element) -> Collada:
     return dae
 
 
-def dae_to_cdae(dae: Collada):
+def convert_geometry(geo: Geometry) -> CdaeV31.Mesh:
+    mesh = CdaeV31.Mesh()
+
+    return mesh
+
+
+def convert(dae: Collada):
     cdae = CdaeV31()
+
+    for geo in dae.geometries:
+        cdae.meshes.append(convert_geometry(geo))
+
+    cdae.unpack_tree()
+
     return cdae
 
 
@@ -94,7 +106,7 @@ class DaeReader:
     def read_from_stream(stream: BufferedReader):
         tree = ET.parse(stream)
         dae = parse_collada(tree.find(DaeTag.COLLADA))
-        return dae_to_cdae(dae)
+        return convert(dae)
 
 
     @staticmethod

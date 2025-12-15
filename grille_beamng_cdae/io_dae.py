@@ -43,6 +43,8 @@ class DaeTag(str, Enum):
     animation = "animation"
     sampler = "sampler"
     channel = "channel"
+    def __str__(self):
+        return self.value
 
 
 
@@ -118,7 +120,7 @@ class Accessor:
     
     @staticmethod
     def create_float(key: str):
-        return Accessor.create(0, key, "float")
+        return Accessor.create(1, key, "float")
 
 
 

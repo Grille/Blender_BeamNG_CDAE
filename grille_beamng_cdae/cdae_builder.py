@@ -32,6 +32,13 @@ class CdaeMaterialIndexer:
         return self.material_to_index[bmat]
     
     
+class MeshDataEvalMode(str, Enum):
+    RawData = "RawData"
+    ModViewport = "Viewport"
+    ModRender = "Render"
+    ModAll = "All"
+    Depsgraph = "depsgraph"
+
 
 class CdaeMeshBuilder:
 
@@ -97,6 +104,8 @@ class CdaeMeshBuilder:
         self.uv1_hint: str = None
         self.compute_tangents: bool = False
         self.compute_encoded_normals: bool = False
+        self.eval_mode = MeshDataEvalMode.Depsgraph
+        self.depsgraph: bpy.types.Depsgraph = None
 
 
     @staticmethod
@@ -289,21 +298,56 @@ class CdaeMeshBuilder:
             mesh_out.center = mesh_out.bounds.center()
             mesh_out.radius = CdaeMeshBuilder.get_radius(mesh_out.bounds)
 
-        return mesh_out
+        return mesh_out 
 
 
-    def build_from_object(self, obj: bpy.types.Object | None, depsgraph) -> CdaeV31.Mesh:
+    def build_from_object(self, obj: bpy.types.Object | None) -> CdaeV31.Mesh:
         
         if obj is None or not ObjectProperties.has_mesh(obj):
             null = CdaeV31.Mesh()
             return null
         
-        eval_obj: bpy.types.Object = obj.evaluated_get(depsgraph)
-        mesh = eval_obj.to_mesh()
+        print(self.eval_mode)
+        use_depsgraph = self.eval_mode == MeshDataEvalMode.Depsgraph
+
+        if use_depsgraph:
+            eval_obj: bpy.types.Object = obj.evaluated_get(self.depsgraph)
+            mesh = eval_obj.to_mesh()
+
+        else:
+            temp_obj: bpy.types.Object = obj.copy()
+            mesh = temp_obj.data = obj.data.copy()
+            bpy.context.collection.objects.link(temp_obj)
+
+            active = bpy.context.view_layer.objects.active
+            bpy.context.view_layer.objects.active = temp_obj
+            
+            match self.eval_mode:
+                case MeshDataEvalMode.RawData:
+                    modifiers = []
+                case MeshDataEvalMode.ModViewport:
+                    modifiers = [mod for mod in temp_obj.modifiers if mod.show_viewport]
+                case MeshDataEvalMode.ModRender:
+                    modifiers = [mod for mod in temp_obj.modifiers if mod.show_render]
+                case MeshDataEvalMode.ModAll:
+                    modifiers = temp_obj.modifiers
+                case _:
+                    raise Exception(self.eval_mode)
+
+            for mod in modifiers:
+                bpy.ops.object.modifier_apply(modifier=mod.name)
+
+            bpy.data.objects.remove(temp_obj, do_unlink=True)
+            bpy.context.view_layer.objects.active = active
+
         try:
             return self.build_from_mesh(mesh)
+        
         finally:
-            eval_obj.to_mesh_clear()
+            if use_depsgraph:
+                eval_obj.to_mesh_clear()
+            else:
+                bpy.data.meshes.remove(mesh)
 
 
 
@@ -404,7 +448,7 @@ class CdeaBuilder:
         defaultRotations = []
         defaultTranslations = []
 
-        depsgraph = bpy.context.evaluated_depsgraph_get()
+        self.mesh_builder.depsgraph = bpy.context.evaluated_depsgraph_get()
 
         def add_node(node: CdaeTree.Node, parent_index: int = -1) -> int:
             
@@ -427,7 +471,7 @@ class CdeaBuilder:
                 flat_obj.startMeshIndex = len(flat_meshes)
    
                 for mesh in obj.meshes:
-                    flat_meshes.append(self.mesh_builder.build_from_object(mesh.bpy_mesh_obj, depsgraph))
+                    flat_meshes.append(self.mesh_builder.build_from_object(mesh.bpy_mesh_obj))
 
             for child in node.nodes:
                 add_node(child, node_index)
