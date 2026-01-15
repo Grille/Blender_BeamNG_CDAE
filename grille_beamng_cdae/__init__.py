@@ -12,8 +12,6 @@ bl_info = {
 from .utils_ensure_package import ensure_package
 ensure_package("msgpack")
 ensure_package("zstandard")
-ensure_package("numpy")
-
 
 import bpy
 

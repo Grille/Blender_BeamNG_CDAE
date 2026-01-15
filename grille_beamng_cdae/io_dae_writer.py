@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from enum import Enum
 from io import BufferedReader, TextIOWrapper
 from numpy.typing import NDArray
+from datetime import datetime, timezone
 
 from .io_dae import Accessors as A, Accessor, DaeTag
 from .cdae_v31 import CdaeV31
@@ -159,10 +160,12 @@ def write_animation(xml: ET.Element, target_id: str, times: list[float], transfo
 def write_to_tree(cdae: CdaeV31, dae: ET.Element):
     collada = dae
 
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
     asset = ET.SubElement(collada, "asset")
-    ET.SubElement(asset, "contributor")
-    ET.SubElement(asset, "created").text = "2025-07-08T00:00:00"
-    ET.SubElement(asset, "modified").text = "2025-07-08T00:00:00"
+    contributor = ET.SubElement(asset, "contributor")
+    ET.SubElement(contributor, "authoring_tool").text = "Grille/Blender_BeamNG_CDAE"
+    ET.SubElement(asset, "created").text = timestamp
+    ET.SubElement(asset, "modified").text = timestamp
     ET.SubElement(asset, "unit", {"name": "meter", "meter": "1"})
     ET.SubElement(asset, "up_axis").text = "Z_UP"
 

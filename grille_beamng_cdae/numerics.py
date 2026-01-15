@@ -150,16 +150,19 @@ class Quat4F(Vec4F):
     def from_collada_matrix(cls, quat: mathutils.Quaternion | tuple):
         if isinstance(quat, tuple): quat = mathutils.Quaternion(quat)
         self = cls()
-        self.x = quat.x
-        self.y = quat.y
-        self.z = quat.z
-        self.w = -quat.w
+        self.x = quat.y
+        self.y = quat.z
+        self.z = quat.w
+        self.w = -quat.x
         return self
     
     
+    def to_collada_quaternion(self):
+        return mathutils.Quaternion((-self.w, self.x, self.y, self.z))
+    
+    
     def to_collada_matrix(self):
-        quat = mathutils.Quaternion((-self.w, self.x, self.y, self.z))
-        return quat.to_matrix().to_4x4()
+        return self.to_collada_quaternion().to_matrix().to_4x4()
     
 
     def to_blender_quaternion(self):

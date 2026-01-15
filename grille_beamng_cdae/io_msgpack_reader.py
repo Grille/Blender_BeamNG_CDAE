@@ -15,7 +15,7 @@ class MsgpackReader:
 
     @staticmethod
     def from_bytes(data: bytes) -> 'MsgpackReader':
-        unpacker = msgpack.Unpacker()
+        unpacker = msgpack.Unpacker(max_buffer_size=0)
         unpacker.feed(data)
         return MsgpackReader(unpacker)
         

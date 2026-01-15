@@ -90,7 +90,7 @@ class ExportBase(Operator, ExportHelper):
     limit_precision_dp: IntProperty(name="Decimal Places", default=4, min=0)
     asset_file_enabled: BoolProperty(name="Write '-.asset.json'", default=True)
 
-    use_transforms: BoolProperty(name="Use Transforms", default=True)
+    use_transforms: BoolProperty(name="Use Transforms", default=True, description="Translation, Rotation")
     compression_enabled: BoolProperty(name="Compression", default=True)
     build_mode: EnumProperty(
         name="Build Mode",
@@ -103,7 +103,7 @@ class ExportBase(Operator, ExportHelper):
         default=CdaeTreeBuildMode.BLENDER_HIERARCHY,
     )
 
-    apply_scale: BoolProperty(name="Apply Scale", default=True)
+    geo_apply_scale: BoolProperty(name="Apply Scale", default=True)
     geo_uv_mode: EnumProperty(
         name="UV Mode",
         items=[
@@ -229,6 +229,7 @@ class ExportBase(Operator, ExportHelper):
         builder.mesh_builder.use_uv_hint = self.geo_uv_mode == UvMode.STRING
         builder.mesh_builder.uv0_hint = self.geo_uv0
         builder.mesh_builder.uv1_hint = self.geo_uv1
+        builder.mesh_builder.apply_scale = self.geo_apply_scale
         #builder.mesh_builder.compute_tangents = self.file_format == FileFormat.CDAE
         builder.readonly = self.file_readonly
         builder.tree.build_mode = build_mode
@@ -410,7 +411,7 @@ class ExportBase(Operator, ExportHelper):
             box.prop(self, "build_mode")
             box.prop(self, "use_transforms")
             box.label(text="Geometry", icon='MESH_DATA')
-            #box.prop(self, "apply_scale")
+            box.prop(self, "geo_apply_scale")
             box.prop(self, "geo_eval")
             box.prop(self, "geo_uv_mode")
             if self.geo_uv_mode == UvMode.STRING:

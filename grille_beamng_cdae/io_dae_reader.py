@@ -82,6 +82,13 @@ def parse_collada(xml: ET.Element) -> Collada:
     return dae
 
 
+def convert_material(daemat: Material) -> CdaeV31.Material:
+    mat = CdaeV31.Material()
+    mat.name = daemat.name
+
+    return mat
+
+
 def convert_geometry(geo: Geometry) -> CdaeV31.Mesh:
     mesh = CdaeV31.Mesh()
 
@@ -90,6 +97,9 @@ def convert_geometry(geo: Geometry) -> CdaeV31.Mesh:
 
 def convert(dae: Collada):
     cdae = CdaeV31()
+
+    for mat in dae.materials:
+        cdae.materials.append(convert_material(mat))
 
     for geo in dae.geometries:
         cdae.meshes.append(convert_geometry(geo))

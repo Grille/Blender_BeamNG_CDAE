@@ -97,6 +97,7 @@ class CdaeMeshBuilder:
 
     def __init__(self, material_indexer: CdaeMaterialIndexer):
         self.mesh: bpy.types.Mesh = None
+        self.apply_scale: bool = True
         self.scale = Vec3F(1,1,1)
         self.material_indexer = material_indexer
         self.use_uv_hint: bool = False
@@ -434,7 +435,6 @@ class CdeaBuilder:
         self.mesh_builder = CdaeMeshBuilder(self.material_indexer)
         self.sampler = CdaeKeyframeSampler()
         self.materials: list[bpy.types.Material] = []
-        self.apply_scale: bool = True
         self.readonly: bool = False
 
 
@@ -448,7 +448,8 @@ class CdeaBuilder:
         defaultRotations = []
         defaultTranslations = []
 
-        self.mesh_builder.depsgraph = bpy.context.evaluated_depsgraph_get()
+        if self.mesh_builder.eval_mode == MeshDataEvalMode.Depsgraph:
+            self.mesh_builder.depsgraph = bpy.context.evaluated_depsgraph_get()
 
         def add_node(node: CdaeTree.Node, parent_index: int = -1) -> int:
             
@@ -456,7 +457,9 @@ class CdeaBuilder:
             trans = node_samples.transforms
             defaultRotations.append(trans.rotation)
             defaultTranslations.append(trans.translation)
-            scale = trans.scale if self.apply_scale else Vec3F(1,1,1)
+
+            if self.mesh_builder.apply_scale:
+                self.mesh_builder.scale = trans.scale
 
             (node_index, flat_node) = flat_tree.create_node()
             flat_tree.link_node(parent_index, node_index)

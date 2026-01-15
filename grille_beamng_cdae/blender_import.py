@@ -9,6 +9,7 @@ from bpy.types import Operator
 from bpy_extras.io_utils import ImportHelper
 from bpy.props import StringProperty, BoolProperty, EnumProperty
 
+from .io_dae_reader import DaeReader
 from .io_cdae_reader import CdaeReader
 from .cdae_parser import CdaeParser
 from .utils_debug import CdaeJsonDebugger
@@ -34,7 +35,18 @@ class ImportCdae(Operator, ImportHelper):
 
 
     def execute(self, context):
-        cdae = CdaeReader.read_from_file(self.filepath)
+        filepath: str = self.filepath
+        filename, extension = os.path.splitext(filepath)
+        format = FileFormat(extension.lower())
+
+        match format:
+            case FileFormat.DAE:
+                cdae = DaeReader.read_from_file(filepath)
+            case FileFormat.CDAE:
+                cdae = CdaeReader.read_from_file(filepath)
+            case _:
+                raise Exception()
+
         cdae.print_debug()
         
         parser = CdaeParser()
