@@ -1,0 +1,14 @@
+schema_version = "0.9.0"
+
+id = "grille_beamng_cdae"
+version = "0.9.0"
+name = "BeamNG CDAE"
+tagline = "Import/export tools for BeamNG.drive & Collada"
+maintainer = "Paul Hirch"
+type = "add-on"
+
+blender_version_min = "4.5.0"
+
+license = ["MIT"]
+
+website = "https://github.com/Grille/Blender_BeamNG_CDAE"
