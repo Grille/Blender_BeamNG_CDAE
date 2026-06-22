@@ -127,3 +127,15 @@ class ColorSpace(str, Enum):
 class OperatorResult(str, Enum):
     FINISHED = "FINISHED"
     CANCELLED = "CANCELLED"
+
+
+class GroupColorTag(str, Enum):
+    NONE = "NONE"
+    COLOR = "COLOR"
+    CONVERTER = "CONVERTER"
+    INPUT = "INPUT"
+    OUTPUT = "OUTPUT"
+    SCRIPT = "SCRIPT"
+    SHADER = "SHADER"
+    TEXTURE = "TEXTURE"
+    VECTOR = "VECTOR"

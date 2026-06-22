@@ -39,6 +39,7 @@ class BaseShaderNode(bpy.types.ShaderNodeCustomGroup):
     bl_label = "BNG Node"
     bl_icon = 'NONE'
     tree_type = NodeName.ShaderNodeTree
+    color_tag: GroupColorTag = GroupColorTag.NONE
 
 
     @property
@@ -136,7 +137,7 @@ class BaseShaderNode(bpy.types.ShaderNodeCustomGroup):
         
         ngb = NodeGroupBuilder(idname)
         cls.create_node_group(ngb)
-        ngb.ng.color_tag = "SHADER"
+        ngb.ng.color_tag = cls.color_tag
         return ngb.ng
     
 
@@ -307,6 +308,7 @@ class BeamFactorColor(BaseShaderNode):
     bl_idname = f"{SHADER_NODE_PREFIX}FactorColor"
     bl_label = "BNG Factor (Color)"
     bl_nclass = "OP_COLOR"
+    color_tag = GroupColorTag.COLOR
 
 
     @staticmethod
@@ -345,6 +347,7 @@ class BeamFactorFloat(BaseShaderNode):
     bl_idname = f"{SHADER_NODE_PREFIX}FactorFloat"
     bl_label = "BNG Factor"
     bl_nclass = "CONVERTER"
+    color_tag = GroupColorTag.CONVERTER
 
 
     @staticmethod
@@ -370,6 +373,7 @@ class BeamDetailUVScale(BaseShaderNode):
     bl_idname = f"{SHADER_NODE_PREFIX}DetailUVSCale"
     bl_label = "BNG Detail UV Scale"
     bl_nclass = "OP_VECTOR"
+    color_tag = GroupColorTag.VECTOR
 
 
     @staticmethod
@@ -399,6 +403,7 @@ class BeamDetailColor(BaseShaderNode):
     bl_idname = f"{SHADER_NODE_PREFIX}DetailColor"
     bl_label = "BNG Detail Color"
     bl_nclass = "OP_COLOR"
+    color_tag = GroupColorTag.COLOR
 
 
     def update(self):
@@ -474,6 +479,7 @@ class BeamDetailNormal(BaseShaderNode):
     bl_idname = f"{SHADER_NODE_PREFIX}DetailNormal"
     bl_label = "BNG Detail Normal"
     bl_nclass = "OP_VECTOR"
+    color_tag = GroupColorTag.VECTOR
 
 
     @staticmethod
@@ -501,6 +507,7 @@ class BeamBSDFCollision(BaseShaderNode):
     bl_icon = 'MOD_PHYSICS'
     bl_nclass = "SHADER"
     bl_width_default = 200
+    color_tag = GroupColorTag.SHADER
 
     @staticmethod
     def create_node_group(ngb: NodeGroupBuilder):
@@ -530,6 +537,7 @@ class BeamBDSF10Basic(BaseShaderNode):
     bl_icon = 'SHADERFX'
     bl_nclass = "SHADER"
     bl_width_default = 240
+    color_tag = GroupColorTag.SHADER
 
 
     def post_init(self):
@@ -589,6 +597,7 @@ class BeamBSDF15(BaseShaderNode):
     bl_icon = 'SHADERFX'
     bl_nclass = "SHADER"
     bl_width_default = 240
+    color_tag = GroupColorTag.SHADER
 
 
     def update(self):
@@ -649,6 +658,7 @@ class BeamStageMix(BaseShaderNode):
     bl_idname = f"{SHADER_NODE_PREFIX}StageMix"
     bl_label = "BNG Stage Mix 1.5"
     bl_nclass = "SHADER"
+    color_tag = GroupColorTag.SHADER
     #bl_icon = 'SHADERFX'
 
 
@@ -702,6 +712,7 @@ class BeamMaterial(BaseShaderNode):
     bl_icon = "MATERIAL"
     bl_nclass = "SHADER"
     bl_width_default = 200
+    color_tag = GroupColorTag.SHADER
 
 
     class Sockets(str, Enum):
