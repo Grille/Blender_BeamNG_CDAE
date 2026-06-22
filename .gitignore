@@ -1,6 +1,7 @@
 /grille_beamng_cdae.zip
-/grille_beamng_cdae/grille_beamng_cdae.zip
-/grille_beamng_cdae/modules
-/grille_beamng_cdae/config
+/modules
+/config
+/bpy
+/.vscode
 
 __pycache__/

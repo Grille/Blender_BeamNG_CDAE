@@ -1,18 +1,3 @@
-bl_info = {
-    "name": "BeamNG CDAE",
-    "author": "Paul Hirch",
-    "version": (0, 9),
-    "blender": (4, 5, 0),
-    "location": "File > Import/Export",
-    "category": "Import-Export",
-    "description": "Import and Export BeamNG model format (.cdae)",
-}
-
-
-from .utils_ensure_package import ensure_package
-ensure_package("msgpack")
-ensure_package("zstandard")
-
 import bpy
 
 from .blender_msgbox import MessageBox

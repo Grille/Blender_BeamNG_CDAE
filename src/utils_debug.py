@@ -20,8 +20,6 @@ class Stopwatch:
         for name, delta in self.items:
             print(f"{name}: {delta}")
 
-
-
 class CdaeJsonDebugger:
 
     @staticmethod 

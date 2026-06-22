@@ -142,8 +142,7 @@ class MaterialNodeWalker(NodeWalker):
         except Exception as e:
             print(e)
 
-        finally:
-            return socket
+        return socket
         
 
     def try_get_version_hint(self) -> float:

@@ -2,11 +2,12 @@ import os
 import sys
 import subprocess
 
+
 addon_dir = os.path.dirname(__file__)
 modules_dir = os.path.join(addon_dir, "modules")
 
 if modules_dir not in sys.path:
-    sys.path.append(modules_dir)
+    sys.path.insert(0, modules_dir)
 
 def install_package(package_name):
     python_exe = sys.executable
@@ -26,3 +27,19 @@ def ensure_package(package_name, import_name=None):
         __import__(import_name)
     except ImportError:
         install_package(package_name)
+
+bl_info = {
+    "name": "BeamNG CDAE",
+    "author": "Paul Hirch",
+    "version": (0, 9),
+    "blender": (4, 5, 0),
+    "location": "File > Import/Export",
+    "category": "Import-Export",
+    "description": "Import and Export BeamNG model format (.cdae)",
+}
+
+ensure_package("msgpack")
+ensure_package("zstandard")
+
+from .src import register, unregister
+
