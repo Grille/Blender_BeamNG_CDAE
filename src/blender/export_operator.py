@@ -425,7 +425,7 @@ class ExportBase(Operator, ExportHelper):
 
     @staticmethod
     def menu_func(self, context):
-        self.layout.operator(ExportBase.bl_idname, text="BeamNG (.dae/.cdae/.dts/.json)")
+        self.layout.operator(ExportBase.bl_idname, text="BeamNG (.dae/.cdae)")
 
 
 

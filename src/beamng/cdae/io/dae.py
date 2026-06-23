@@ -1,14 +1,26 @@
+import xml.etree.cElementTree as ET
+
 from numpy.typing import NDArray
 from dataclasses import dataclass
 from enum import Enum
 
 
+VERSION = "1.4.1"
+NAMESPACE = "http://www.collada.org/2005/11/COLLADASchema"
+
+
 class Semantic(str, Enum):
+    POSITION = "POSITION"
     VERTEX = "VERTEX"
     NORMAL = "NORMAL"
     TEXCOORD = "TEXCOORD"
     COLOR = "COLOR"
 
+
+
+class DaeAttributes(str, Enum):
+    VERSION = "version"
+    XMLNS = "xmlns"
 
 
 class DaeTag(str, Enum):
@@ -43,9 +55,10 @@ class DaeTag(str, Enum):
     animation = "animation"
     sampler = "sampler"
     channel = "channel"
+    matrix = "matrix"
     def __str__(self):
         return self.value
-
+    
 
 
 class Geometry:
@@ -61,8 +74,8 @@ class Geometry:
             pass
 
         def __init__(self):
-            self.count: int = 0
-            self.mat: str = None
+            self.triangle_count: int = 0
+            self.materialName: str = None
             self.indices: NDArray = None
             self.inputs: list[Geometry.Triangles.Input] = []
 
@@ -73,13 +86,31 @@ class Geometry:
         self.triangles: list[Geometry.Triangles] = []
 
 
+    def get_array(self, semantic: Semantic, set: int = 0) -> NDArray | None:
+        triangles = self.triangles[0]
+        for input in triangles.inputs:
+            if (input.semantic == semantic and input.set == set):
+                return self.sources[input.source]
+        return None
+
+
+
+
+class GeometryInstance:
+
+    def __init__(self, name: str, materials: dict[str,str]):
+        self.name = name
+        self.materials = materials
+
+
 
 class Node:
 
     def __init__(self):
         self.name: str
+        self.matrix: NDArray
         self.children: list[Node] = []
-        self.geometry: str
+        self.geometry: GeometryInstance | None = None
 
 
 

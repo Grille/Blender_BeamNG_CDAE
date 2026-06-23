@@ -8,7 +8,7 @@ from io import BufferedReader, TextIOWrapper
 from numpy.typing import NDArray
 from datetime import datetime, timezone
 
-from .dae import Accessors as A, Accessor, DaeTag
+from .dae import *
 from ..v31 import CdaeV31
 from ...numerics import *
 from ....debug_utils import Stopwatch
@@ -88,18 +88,18 @@ def write_geometry(mesh: CdaeV31.Mesh, lib_geometries: ET.Element, mesh_index: i
         if vector.size == 0: return None
         uv = vector.reshape(-1, 2).copy()   # copy -> writable, keeps both columns
         uv[:, 1] = 1.0 - uv[:, 1]           # invert V
-        return try_write_src(uv.ravel(), name, A.VEC2)
+        return try_write_src(uv.ravel(), name, Accessors.VEC2)
 
-    positions_id = try_write_src(mesh.verts.to_numpy_array(np.float32), "position", A.VEC3)
-    normals_id = try_write_src(mesh.norms.to_numpy_array(np.float32), "normals", A.VEC3)
+    positions_id = try_write_src(mesh.verts.to_numpy_array(np.float32), "position", Accessors.VEC3)
+    normals_id = try_write_src(mesh.norms.to_numpy_array(np.float32), "normals", Accessors.VEC3)
     uv0s_id = try_write_src_uv(mesh.tverts0.to_numpy_array(np.float32), "uv0s")
     uv1s_id = try_write_src_uv(mesh.tverts1.to_numpy_array(np.float32), "uv1s")
-    color_id = try_write_src(mesh.get_vec4f_colors(), "colors", A.VEC4)
+    color_id = try_write_src(mesh.get_vec4f_colors(), "colors", Accessors.VEC4)
 
     # Vertices
     vert_id = make_id(geom_id, "vertices")
     vertices = ET.SubElement(mesh_elem, DaeTag.vertices, {"id": vert_id})
-    ET.SubElement(vertices, DaeTag.input, {"semantic": "POSITION", "source": f"#{positions_id}"})
+    ET.SubElement(vertices, DaeTag.input, {"semantic": Semantic.POSITION, "source": f"#{positions_id}"})
 
     # Triangles by draw region
     indices = mesh.indices.to_numpy_array(np.uint32)
@@ -114,14 +114,14 @@ def write_geometry(mesh: CdaeV31.Mesh, lib_geometries: ET.Element, mesh_index: i
             "material": mat_name
         })
 
-        ET.SubElement(tris, DaeTag.input, {"semantic": "VERTEX", "source": f"#{vert_id}", "offset": "0"})
-        ET.SubElement(tris, DaeTag.input, {"semantic": "NORMAL", "source": f"#{normals_id}", "offset": "0"})
+        ET.SubElement(tris, DaeTag.input, {"semantic": Semantic.VERTEX, "source": f"#{vert_id}", "offset": "0"})
+        ET.SubElement(tris, DaeTag.input, {"semantic": Semantic.NORMAL, "source": f"#{normals_id}", "offset": "0"})
         if uv0s_id is not None:
-            ET.SubElement(tris, DaeTag.input, {"semantic": "TEXCOORD", "source": f"#{uv0s_id}", "offset": "0", "set": "0"})
+            ET.SubElement(tris, DaeTag.input, {"semantic": Semantic.TEXCOORD, "source": f"#{uv0s_id}", "offset": "0", "set": "0"})
         if uv1s_id is not None:
-            ET.SubElement(tris, DaeTag.input, {"semantic": "TEXCOORD", "source": f"#{uv1s_id}", "offset": "0", "set": "1"})
+            ET.SubElement(tris, DaeTag.input, {"semantic": Semantic.TEXCOORD, "source": f"#{uv1s_id}", "offset": "0", "set": "1"})
         if color_id is not None:
-            ET.SubElement(tris, DaeTag.input, {"semantic": "COLOR", "source": f"#{color_id}", "offset": "0"})
+            ET.SubElement(tris, DaeTag.input, {"semantic": Semantic.COLOR, "source": f"#{color_id}", "offset": "0"})
 
         ET.SubElement(tris, DaeTag.p).text = " ".join(str(indices[i]) for i in range(reg.elements_start, reg.elements_start + reg.elements_count))
 
@@ -145,9 +145,9 @@ def write_animation(xml: ET.Element, target_id: str, times: list[float], transfo
     ctimes, ctransforms = collapse_animation(times, transforms)
 
     src_input_id = f"{target_id}-anim-input"
-    write_src_float(xml_anim, ctimes, src_input_id, A.TIME)
+    write_src_float(xml_anim, ctimes, src_input_id, Accessors.TIME)
     src_output_id = f"{target_id}-anim-output"
-    write_src_float(xml_anim, ctransforms, src_output_id, A.TRANSFORM)
+    write_src_float(xml_anim, ctransforms, src_output_id, Accessors.TRANSFORM)
 
     sampler_id = f"{target_id}-sampler"
     xml_sampler = ET.SubElement(xml_anim, DaeTag.sampler, {"id": sampler_id})
@@ -287,8 +287,8 @@ class DaeWriter:
     def write_to_stream(cdae: CdaeV31, f: TextIOWrapper):
         sw = Stopwatch()
         dae = ET.Element("COLLADA")
-        dae.set("version", "1.4.1")
-        dae.set("xmlns", "http://www.collada.org/2005/11/COLLADASchema")
+        dae.set(DaeAttributes.VERSION, VERSION)
+        dae.set(DaeAttributes.XMLNS, NAMESPACE)
         write_to_tree(cdae, dae)
         sw.log("xml_build")
         tree = ET.ElementTree(dae)

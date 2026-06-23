@@ -455,6 +455,13 @@ class CdaeV31:
                 return idx
         self.names.append(name)
         return len(self.names) - 1
+    
+
+    def get_material_index(self, name: str) -> int:
+        for idx, mat in enumerate(self.materials):
+            if mat.name == name:
+                return idx
+        return 0
 
 
     def unpack_nodes(self):
