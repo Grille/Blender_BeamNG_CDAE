@@ -40,5 +40,5 @@ bl_info = {
 ensure_package("msgpack")
 ensure_package("zstandard")
 
-from .src import register, unregister
+from .src.blender import register, unregister
 

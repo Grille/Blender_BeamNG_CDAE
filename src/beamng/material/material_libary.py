@@ -1,0 +1,56 @@
+
+import os
+import json
+import bpy
+
+from enum import Enum
+
+from ...blender.material_properties import MaterialProperties
+from .material import Material
+
+
+
+class MaterialLibary:
+
+    def __init__(self):
+        self.materials: dict[str, Material] = {}
+        self.new_materials: list[Material] = []
+
+
+    def try_load(self, filepath: str):
+        try:
+            self.load(filepath)
+            return True
+        except:
+            return False
+
+
+    def load(self, filepath: str):
+        with open(filepath, 'r') as f:
+            data = json.load(f)
+
+        if (not isinstance(data, dict)):
+            raise Exception(f"Unexpected json data type.")
+        
+        rawdict: dict[str, dict[str, any]] = data
+
+        for key, value in rawdict.items():
+            self.materials[key] = Material(value)
+
+
+    def save(self, filepath: str):
+        rawdict = {}
+        for key, material in self.materials.items():
+            rawdict[key] = material.dict
+        
+        with open(filepath, 'w') as f:
+            json.dump(rawdict, f, indent=4)
+
+
+    def bmat_exists(self, bmat: bpy.types.Material):
+        return bmat.name in self.materials
+    
+
+    def set_material(self, mat: Material):
+        self.materials[mat.name] = mat
+        self.new_materials.append(mat)
