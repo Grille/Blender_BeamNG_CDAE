@@ -9,7 +9,13 @@ VERSION = "1.4.1"
 NAMESPACE = "http://www.collada.org/2005/11/COLLADASchema"
 
 
-class Semantic(str, Enum):
+class StrEnum(str, Enum):
+    def __str__(self):
+        return self.value
+
+
+
+class Semantic(StrEnum):
     POSITION = "POSITION"
     VERTEX = "VERTEX"
     NORMAL = "NORMAL"
@@ -18,12 +24,13 @@ class Semantic(str, Enum):
 
 
 
-class DaeAttributes(str, Enum):
+class DaeAttributes(StrEnum):
     VERSION = "version"
     XMLNS = "xmlns"
 
 
-class DaeTag(str, Enum):
+
+class DaeTag(StrEnum):
     COLLADA = "COLLADA"
     library_geometries = "library_geometries"
     geometry = "geometry"
@@ -56,8 +63,6 @@ class DaeTag(str, Enum):
     sampler = "sampler"
     channel = "channel"
     matrix = "matrix"
-    def __str__(self):
-        return self.value
     
 
 
