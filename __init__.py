@@ -30,8 +30,8 @@ def ensure_package(package_name, import_name=None):
 bl_info = {
     "name": "BeamNG CDAE",
     "author": "Paul Hirch",
-    "version": (0, 9),
-    "blender": (5, 1, 2),
+    "version": (0, 10),
+    "blender": (4, 5, 0),
     "location": "File > Import/Export",
     "category": "Import-Export",
     "description": "Import and Export BeamNG model format (.cdae)",
