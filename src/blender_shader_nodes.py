@@ -154,6 +154,8 @@ class BeamImageTex(bpy.types.ShaderNodeCustomGroup):
     bl_icon = 'TEXTURE'
 
     bl_width_default = 240
+    color_tag = GroupColorTag.TEXTURE
+
     _updating = False
 
 

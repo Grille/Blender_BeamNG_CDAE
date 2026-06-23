@@ -11,7 +11,7 @@ from numpy.typing import NDArray
 from .io_dae import *
 from .cdae_v31 import CdaeV31
 from .numerics import *
-
+    
 
 def parse_array(xml: ET.Element, dtype=np.float32) -> NDArray:
     return np.fromstring(xml.text, dtype=dtype, sep=" ")

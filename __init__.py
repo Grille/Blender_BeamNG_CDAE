@@ -2,7 +2,6 @@ import os
 import sys
 import subprocess
 
-
 addon_dir = os.path.dirname(__file__)
 modules_dir = os.path.join(addon_dir, "modules")
 
@@ -32,7 +31,7 @@ bl_info = {
     "name": "BeamNG CDAE",
     "author": "Paul Hirch",
     "version": (0, 9),
-    "blender": (4, 5, 0),
+    "blender": (5, 1, 2),
     "location": "File > Import/Export",
     "category": "Import-Export",
     "description": "Import and Export BeamNG model format (.cdae)",
