@@ -72,10 +72,10 @@ def write_src_float(xml: ET.Element, flat_array: NDArray[np.float32], name: str,
     write_accessor(xml_source, array_id, len(flat_array) // accessor.stride, accessor)
 
 
-def write_geometry(mesh: CdaeV31.Mesh, lib_geometries: ET.Element, mesh_index: int, materials: list[CdaeV31.Material], mesh_mat_names: list[CdaeV31.Material]):
+def write_geometry(mesh: CdaeV31.Mesh, lib_geometries: ET.Element, mesh_index: int, materials: list[CdaeV31.Material], mesh_mat_names: list[CdaeV31.Material], mesh_name: str):
 
     geom_id = f"mesh_{mesh_index}"
-    geom = ET.SubElement(lib_geometries, DaeTag.geometry, {"id": geom_id, "name": geom_id})
+    geom = ET.SubElement(lib_geometries, DaeTag.geometry, {"id": geom_id, "name": mesh_name})
     mesh_elem = ET.SubElement(geom, DaeTag.mesh)
 
     def try_write_src(vector: NDArray[np.float32], name: str, accessor: Accessor) -> str:
@@ -187,15 +187,17 @@ def write_to_tree(cdae: CdaeV31, dae: ET.Element):
         ET.SubElement(xml_mat, DaeTag.instance_effect, {"url": f"#{effect_id}"})
         ET.SubElement(lib_effects, DaeTag.effect, {"id": effect_id})
 
+
+    cdae_tree = cdae.unpack_tree()
+
     # Geometries
     mesh_mat_names: list[list[str]] = []
     for mesh_index, mesh in enumerate(cdae.meshes):
+        mesh_name = cdae_tree.get_mesh_name(mesh_index)
         mesh_mat_names_2 = []
-        write_geometry(mesh, lib_geometries, mesh_index, cdae.materials, mesh_mat_names_2)
+        write_geometry(mesh, lib_geometries, mesh_index, cdae.materials, mesh_mat_names_2, mesh_name)
         mesh_mat_names.append(mesh_mat_names_2)
 
-
-    cdae_tree = cdae.unpack_tree()
     default_translations = cdae.defaultTranslations.unpack_list(Vec3F)
     default_rotation = cdae.defaultRotations.unpack_list(Quat4I16)
 

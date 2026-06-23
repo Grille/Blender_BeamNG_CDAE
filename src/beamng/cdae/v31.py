@@ -147,6 +147,15 @@ class CdaeV31:
             CdaeV31.Tree._set_last_sibling(self.objects, first, obj_index)
 
 
+        def get_mesh_name(self, mesh_index: int):
+            for obj in self.objects:
+                start = obj.startMeshIndex
+                end = start + obj.numMeshes
+                if mesh_index >= start and mesh_index < end:
+                    return self.cdae.names[obj.nameIndex]
+            return "null"
+
+
 
     @dataclass
     class ObjectState:
