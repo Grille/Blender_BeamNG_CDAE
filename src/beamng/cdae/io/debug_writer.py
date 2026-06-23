@@ -3,18 +3,30 @@ import json
 from io import TextIOWrapper
 from dataclasses import *
 
+from typing import Any
+from ..packed_vector import PackedVector
 from ..v31 import CdaeV31
 
 
 class DebugWriter:
+    
+    @staticmethod
+    def vec_to_dbg(vector: PackedVector):
+        return vector.element_count
 
     @staticmethod 
     def to_dict(cdae: CdaeV31):
 
+        def add_debug_fields(json: dict[str, Any]):
+            nameIndex = json.get("nameIndex", None)
+            if nameIndex is not None:
+                 json["__NAME"] = cdae.names[nameIndex]
+            return json
+        
         def get_dict_list(items):
             dict_list = []
             for item in items:
-                dict_list.append(asdict(item))
+                dict_list.append(add_debug_fields(asdict(item)))
             return dict_list
         
         json_mesh_list = []
@@ -33,15 +45,15 @@ class DebugWriter:
                     "flags": mesh.flags,
                 },
                 "vector_elements": {
-                    "verts": mesh.verts.element_count,
-                    "tverts0": mesh.tverts0.element_count,
-                    "tverts1": mesh.tverts1.element_count,
-                    "colors": mesh.colors.element_count,
-                    "norms": mesh.norms.element_count,
-                    "encoded_norms": mesh.encoded_norms.element_count,
-                    "draw_regions": mesh.draw_regions.element_count,
-                    "indices": mesh.indices.element_count,
-                    "tangents": mesh.tangents.element_count,
+                    "verts": DebugWriter.vec_to_dbg(mesh.verts),
+                    "tverts0": DebugWriter.vec_to_dbg(mesh.tverts0),
+                    "tverts1": DebugWriter.vec_to_dbg(mesh.tverts1),
+                    "colors": DebugWriter.vec_to_dbg(mesh.colors),
+                    "norms": DebugWriter.vec_to_dbg(mesh.norms),
+                    "encoded_norms": DebugWriter.vec_to_dbg(mesh.encoded_norms),
+                    "draw_regions": DebugWriter.vec_to_dbg(mesh.draw_regions),
+                    "indices": DebugWriter.vec_to_dbg(mesh.indices),
+                    "tangents": DebugWriter.vec_to_dbg(mesh.tangents),
                 }
             })
 
@@ -54,50 +66,50 @@ class DebugWriter:
 
         json_seq_list = []
         for seq in cdae.sequences:
-            json_seq_list.append({
-            "nameIndex": seq.nameIndex,
-            "flags": seq.flags,
-            "numKeyframes": seq.numKeyframes,
-            "duration": seq.duration,
-            "priority": seq.priority,
-            "firstGroundFrame": seq.firstGroundFrame,
-            "numGroundFrames": seq.numGroundFrames,
-            "baseRotation": seq.baseRotation,
-            "baseTranslation": seq.baseTranslation,
-            "baseScale": seq.baseScale,
-            "baseObjectState": seq.baseObjectState,
-            "baseDecalState": seq.baseDecalState,
-            "firstTrigger": seq.firstTrigger,
-            "numTriggers": seq.numTriggers,
-            "toolBegin": seq.toolBegin,
-            "rotationMatters": seq.rotationMatters,
-            "translationMatters": seq.translationMatters,
-            "scaleMatters": seq.scaleMatters,
-            "visMatters": seq.visMatters,
-            "frameMatters": seq.frameMatters,
-            "matFrameMatters": seq.matFrameMatters,
-            })
+            json_seq_list.append(add_debug_fields({
+                "nameIndex": seq.nameIndex,
+                "flags": seq.flags,
+                "numKeyframes": seq.numKeyframes,
+                "duration": seq.duration,
+                "priority": seq.priority,
+                "firstGroundFrame": seq.firstGroundFrame,
+                "numGroundFrames": seq.numGroundFrames,
+                "baseRotation": seq.baseRotation,
+                "baseTranslation": seq.baseTranslation,
+                "baseScale": seq.baseScale,
+                "baseObjectState": seq.baseObjectState,
+                "baseDecalState": seq.baseDecalState,
+                "firstTrigger": seq.firstTrigger,
+                "numTriggers": seq.numTriggers,
+                "toolBegin": seq.toolBegin,
+                "rotationMatters": seq.rotationMatters,
+                "translationMatters": seq.translationMatters,
+                "scaleMatters": seq.scaleMatters,
+                "visMatters": seq.visMatters,
+                "frameMatters": seq.frameMatters,
+                "matFrameMatters": seq.matFrameMatters,
+            }))
 
         json = {
             "info": {
                 "smallest_visible_size": cdae.smallest_visible_size,
-                "smallest_visible_dl":cdae.smallest_visible_dl,
+                "smallest_visible_dl": cdae.smallest_visible_dl,
                 "radius": cdae.radius,
                 "tube_radius": cdae.tube_radius,
                 "center": cdae.center.tuple3,
                 "bounds": cdae.bounds.tuple6,
             },
             "vector_elements": {
-                "defaultRotations": cdae.defaultRotations.element_count,
-                "defaultTranslations": cdae.defaultTranslations.element_count,
-                "nodeRotations": cdae.nodeRotations.element_count,
-                "nodeTranslations": cdae.nodeTranslations.element_count,
-                "nodeUniformScales": cdae.nodeUniformScales.element_count,
-                "nodeAlignedScales": cdae.nodeAlignedScales.element_count,
-                "nodeArbitraryScaleFactors": cdae.nodeArbitraryScaleFactors.element_count,
-                "nodeArbitraryScaleRots": cdae.nodeArbitraryScaleRots.element_count,
-                "groundTranslations": cdae.groundTranslations.element_count,
-                "groundRotations": cdae.groundRotations.element_count,
+                "defaultRotations": DebugWriter.vec_to_dbg(cdae.defaultRotations),
+                "defaultTranslations": DebugWriter.vec_to_dbg(cdae.defaultTranslations),
+                "nodeRotations": DebugWriter.vec_to_dbg(cdae.nodeRotations),
+                "nodeTranslations": DebugWriter.vec_to_dbg(cdae.nodeTranslations),
+                "nodeUniformScales": DebugWriter.vec_to_dbg(cdae.nodeUniformScales),
+                "nodeAlignedScales": DebugWriter.vec_to_dbg(cdae.nodeAlignedScales),
+                "nodeArbitraryScaleFactors": DebugWriter.vec_to_dbg(cdae.nodeArbitraryScaleFactors),
+                "nodeArbitraryScaleRots": DebugWriter.vec_to_dbg(cdae.nodeArbitraryScaleRots),
+                "groundTranslations": DebugWriter.vec_to_dbg(cdae.groundTranslations),
+                "groundRotations": DebugWriter.vec_to_dbg(cdae.groundRotations),
             },
             "names": cdae.names,
             "nodes": get_dict_list(cdae.unpack_nodes()),

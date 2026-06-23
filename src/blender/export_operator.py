@@ -36,6 +36,7 @@ class FileFormat(str, Enum):
     DAE = ".dae"
     CDAE = ".cdae"
     DTS = ".dts"
+    DEBUG = ".json"
 
 
 class UvMode(str, Enum):
@@ -79,6 +80,7 @@ class ExportBase(Operator, ExportHelper):
             (FileFormat.DAE, "Collada (.dae)", "Human-readable XML-based 3D format."),
             (FileFormat.CDAE, "Cached v31 (.cdae)", "Optimized binary version of Collada for faster loading and reduced file size."),
             (FileFormat.DTS, "Torque3D v26 (.dts)", ""),
+            (FileFormat.DEBUG, "Debug (.json)", "")
         ],
         default=FileFormat.DAE,
     )
@@ -260,6 +262,8 @@ class ExportBase(Operator, ExportHelper):
                 CdaeWriter.write_to_file(builder.cdae, filepath, self.compression_enabled)
             case FileFormat.DTS:
                 DtsWriter.write_to_file(builder.cdae, filepath)
+            case FileFormat.DEBUG:
+                DebugWriter.write_to_file(builder.cdae, filepath)
         log("write file")
 
         self.export_materials(dirpath, builder.materials)
