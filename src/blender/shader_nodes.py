@@ -4,6 +4,7 @@ from enum import Enum
 from .material_properties import *
 from .enums import *
 from .shader_nodes_utils import *
+from .shader_node_builder import NodeGroupBuilder
 
 # pyright: reportInvalidTypeForm=false
 
@@ -137,8 +138,8 @@ class BaseShaderNode(bpy.types.ShaderNodeCustomGroup):
         
         ngb = NodeGroupBuilder(idname)
         cls.create_node_group(ngb)
-        ngb.ng.color_tag = cls.color_tag
-        return ngb.ng
+        ngb.tree.color_tag = cls.color_tag
+        return ngb.tree
     
 
     @staticmethod

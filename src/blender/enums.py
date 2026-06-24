@@ -1,7 +1,8 @@
-from enum import Enum
+from ..enums import *
 
 
-class NodeName(str, Enum):
+
+class NodeName(StrEnum):
     ShaderNodeTree = "ShaderNodeTree"
     Group = "ShaderNodeGroup"
     GroupInput = "NodeGroupInput"
@@ -32,7 +33,7 @@ class NodeName(str, Enum):
 
 
 
-class SocketName(str, Enum):
+class SocketName(StrEnum):
     Color = "Color"
     ColorHDR = "Color HDR"
     BaseColor = "Base Color"
@@ -74,7 +75,7 @@ class SocketName(str, Enum):
 
 
 
-class SocketIndex(int, Enum):
+class SocketIndex(IntEnum):
     MixFactor = 0
     MixFloatIn0 = 1
     MixFloatIn1 = 2
@@ -85,13 +86,13 @@ class SocketIndex(int, Enum):
 
 
 
-class PrincipledSocketIndex(int, Enum):
+class PrincipledSocketIndex(IntEnum):
     Emission_Color = 17
     Emission_Strength = 18
 
 
 
-class SocketType(str, Enum):
+class SocketType(StrEnum):
     INPUT = "INPUT"
     OUTPUT = "OUTPUT"
     Bool = "Bool"
@@ -102,7 +103,7 @@ class SocketType(str, Enum):
 
 
 
-class Operation(str, Enum):
+class Operation(StrEnum):
     SUBTRACT = 'SUBTRACT'
     MULTIPLY = 'MULTIPLY'
     ADD = 'ADD'
@@ -119,17 +120,17 @@ class Operation(str, Enum):
 
 
 
-class ColorSpace(str, Enum):
+class ColorSpace(StrEnum):
     SRGB = "sRGB"
     NON_COLOR = "Non-Color"
 
 
-class OperatorResult(str, Enum):
+class OperatorResult(StrEnum):
     FINISHED = "FINISHED"
     CANCELLED = "CANCELLED"
 
 
-class GroupColorTag(str, Enum):
+class GroupColorTag(StrEnum):
     NONE = "NONE"
     COLOR = "COLOR"
     CONVERTER = "CONVERTER"

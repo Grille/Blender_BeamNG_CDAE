@@ -19,7 +19,7 @@ class SocketParserSettings:
 
 class MaterialBuilder:
 
-    def __init__(self, default_version = 1.5):
+    def __init__(self, default_version = MaterialVersion.V1_5):
         self.material = Material()
         self.default_version = default_version
         self.uv1_hint = "1"
@@ -108,7 +108,7 @@ class MaterialBuilder:
         mat = self.material
 
         if ctx.is_collider():
-            mat.version = 1.0
+            mat.version = MaterialVersion.V1
             mat.stages[0].color.factor = [1,0,1,0]
             mat.alpha_test = True
             mat.alpha_ref = 255
@@ -138,7 +138,7 @@ class MaterialBuilder:
             ctx.follow(SocketName.Surface)
             self.parse_node_tree(ctx)
 
-        if mat.version == 0.0:
+        if mat.version == MaterialVersion.NONE:
             mat.version = self.default_version
 
         return mat

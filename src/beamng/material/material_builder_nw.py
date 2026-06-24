@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from ...blender.node_walker import NodeWalker
 from ..numerics import *
 from ...blender.shader_nodes import *
-from .material import Material
+from .material import Material, MaterialVersion
 
 
 class MaterialNodeWalker(NodeWalker):
@@ -145,18 +145,18 @@ class MaterialNodeWalker(NodeWalker):
         return socket
         
 
-    def try_get_version_hint(self) -> float:
+    def try_get_version_hint(self) -> MaterialVersion:
 
         if self.is_node_idname(BeamBDSF10Basic):
-            return 1.0
+            return MaterialVersion.V1
         
         elif self.is_node_idname(BeamBSDF15):
-            return 1.5
+            return MaterialVersion.V1_5
         
         elif self.is_node_idname(BeamStageMix):
-            return 1.5
+            return MaterialVersion.V1_5
         
-        return 0.0
+        return MaterialVersion.NONE
     
 
     def try_get_reflect_hint(self) -> bool:

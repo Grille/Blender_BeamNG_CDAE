@@ -5,6 +5,7 @@ from .object_properties import ObjectProperties
 from .object_panel import ObjectPanel
 from .material_properties import MaterialProperties
 from .material_panel import MaterialPanel
+from .material_operators import MaterialOperators
 from .import_operator import ImportCdae
 from .export_operator import ExportRegistry
 from .shader_nodes import ShaderNodeRegistry
@@ -17,6 +18,7 @@ def register():
     ObjectProperties.register()
     bpy.utils.register_class(ObjectPanel)
 
+    MaterialOperators.register()
     MaterialProperties.register()
     bpy.utils.register_class(MaterialPanel)
 
@@ -34,6 +36,7 @@ def unregister():
     ObjectProperties.unregister()
     bpy.utils.unregister_class(ObjectPanel)
 
+    MaterialOperators.unregister()
     MaterialProperties.unregister()
     bpy.utils.unregister_class(MaterialPanel)
 

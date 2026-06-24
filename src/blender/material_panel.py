@@ -1,6 +1,7 @@
 import bpy
 
 from .material_properties import *
+from .material_operators import *
 
 # pyright: reportInvalidTypeForm=false
 
@@ -32,3 +33,9 @@ class MaterialPanel(bpy.types.Panel):
         if gts == GROUNDMODEL_CUSTOM:
             layout.prop(mat, MaterialProperties.GROUND_TYPE)
             layout.separator()
+
+        row = layout.row()
+        args = row.operator(OT_CreateBeamNgMaterial.bl_idname, text="Setup V1.0")
+        args.version = 1.0
+        args = row.operator(OT_CreateBeamNgMaterial.bl_idname, text="Setup V1.5")
+        args.version = 1.5

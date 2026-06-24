@@ -97,6 +97,14 @@ class Stage:
             self.dict[dst] = value
 
 
+
+class MaterialVersion(FloatEnum):
+    NONE = 0.0
+    V1 = 1.0
+    V1_5 = 1.5
+
+
+
 class Material:
 
     STAGES_KEY = "Stages"
@@ -106,7 +114,7 @@ class Material:
     ground_type: str = DictProperty("groundType")
     map_to: str = DictProperty("mapTo")
 
-    version: float = DictProperty("version")
+    version: MaterialVersion = DictProperty("version")
     active_layers: int = DictProperty("activeLayers")
     
     alpha_test: bool = DictProperty("alphaTest")

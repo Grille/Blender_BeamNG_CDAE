@@ -2,16 +2,11 @@ import xml.etree.cElementTree as ET
 
 from numpy.typing import NDArray
 from dataclasses import dataclass
-from enum import Enum
+from ....enums import StrEnum
 
 
 VERSION = "1.4.1"
 NAMESPACE = "http://www.collada.org/2005/11/COLLADASchema"
-
-
-class StrEnum(str, Enum):
-    def __str__(self):
-        return self.value
 
 
 
