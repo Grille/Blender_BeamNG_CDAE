@@ -10,6 +10,7 @@ from .import_operator import ImportCdae
 from .export_operator import ExportRegistry
 from .shader_nodes import ShaderNodeRegistry
 from .presets_operators import OpPresetsUtils
+from .utils_sidepanel import UtilsSidepanel
 
 
 def register():
@@ -29,6 +30,8 @@ def register():
     ExportRegistry.register()
     ShaderNodeRegistry.register()
 
+    UtilsSidepanel.register()
+
 
 def unregister():
     bpy.utils.unregister_class(MessageBox)
@@ -46,3 +49,5 @@ def unregister():
     OpPresetsUtils.unregister()
     ExportRegistry.unregister()
     ShaderNodeRegistry.unregister()
+
+    UtilsSidepanel.unregister()

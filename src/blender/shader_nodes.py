@@ -740,7 +740,7 @@ class BeamMaterial(BaseShaderNode):
         ngb.create_float_input(SocketName.Alpha, True)
 
         ngb.create_bool_input(LS.CLIP)
-        ngb.create_float_input(LS.CLIP_T, default_value = 0)
+        ngb.create_float_input(LS.CLIP_T, default_value = 0.5)
         ngb.create_bool_input(LS.BLEND)
         ngb.create_bool_input(LS.DOUBLE_SIDED)
         ngb.create_bool_input(LS.INVERT_BACKFACE_NORMALS, default_value=True)

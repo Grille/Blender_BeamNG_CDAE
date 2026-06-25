@@ -4,7 +4,6 @@ import bpy
 from bpy.types import Operator
 from bpy.props import BoolProperty, IntProperty, FloatProperty, EnumProperty, StringProperty
 
-from ..beamng.material.material_builder import MaterialBuilder
 from ..beamng.material.material_parser import MaterialParser
 
 # pyright: reportInvalidTypeForm=false
@@ -17,13 +16,9 @@ class OT_CreateBeamNgMaterial(Operator):
     version: bpy.props.FloatProperty(name="version", default=1.0)
 
     def execute(self, context):
-        bmat = context.material
-        version: float = self.version
-
-        builder = MaterialBuilder(version)
-        mat = builder.build_from_bmat(bmat)
-        parser = MaterialParser(version)
-        parser.parse_to_bmat(mat, bmat)
+        parser = MaterialParser(self.version)
+        parser.force_alpha_clip = True
+        parser.convert_bmat(context.material)
 
         return {'FINISHED'}
 
