@@ -149,7 +149,7 @@ class CdaeWriter:
 
         head = MsgpackWriter()
         head_dict = {
-            "info": "Welcome! This is a binary file :D Please read the docs at https://go.beamng.com/shapeMessagepackFileformat",
+            "info": "\r\n\r\n\r\nWelcome! This is a binary file :D\r\nPlease read the docs at https://go.beamng.com/shapeMessagepackFileformat\r\n\r\n\r\n",
             "compression": compress,
             "bodysize": len(body_bytes),
             "objectNames": get_object_names(cdae),
