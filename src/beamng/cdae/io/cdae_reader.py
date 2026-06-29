@@ -79,7 +79,6 @@ def read_v31_from_stream(f: BufferedReader) -> CdaeV31:
 
 
     names_count = body.read_int32()
-    print(names_count)
     for _ in range(names_count):
         name = body.read_str()
         cdae.names.append(name)
@@ -87,7 +86,6 @@ def read_v31_from_stream(f: BufferedReader) -> CdaeV31:
 
     meshes_count = body.read_int32()
     for i in range(meshes_count):
-        print(i)
         mesh = CdaeV31.Mesh()
         cdae.meshes.append(mesh)
 

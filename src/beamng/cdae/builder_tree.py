@@ -284,7 +284,6 @@ class CdaeTree:
         
         shape = self.get_shape()
         def add(tnode: TempTreeNode, path: str):
-            print(f"get {path}")
             node = shape.get_node_by_path(path)
             if ObjectProperties.has_mesh(tnode.obj):
                 node.bpy_sample_obj = tnode.obj

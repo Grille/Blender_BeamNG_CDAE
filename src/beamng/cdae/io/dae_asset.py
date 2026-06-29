@@ -61,7 +61,6 @@ class DaeAsset:
     def get_bb_autobillboard(cdae: CdaeV31):
 
         for detail in cdae.unpack_details():
-            print(f"Found {cdae.names[detail.nameIndex]}")
             if cdae.names[detail.nameIndex] == "bb_autobillboard":
                 return detail
     

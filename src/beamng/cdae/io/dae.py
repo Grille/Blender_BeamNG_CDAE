@@ -1,4 +1,5 @@
 import xml.etree.cElementTree as ET
+import numpy as np
 
 from numpy.typing import NDArray
 from dataclasses import dataclass
@@ -20,13 +21,19 @@ class Semantic(StrEnum):
 
 
 class DaeAttributes(StrEnum):
+    NAME = "name"
     VERSION = "version"
     XMLNS = "xmlns"
+    MATERIAL = "material"
+    COUNT = "count"
+    METER = "meter"
 
 
 
 class DaeTag(StrEnum):
     COLLADA = "COLLADA"
+    asset = "asset"
+    unit = "unit"
     library_geometries = "library_geometries"
     geometry = "geometry"
     mesh = "mesh"
@@ -63,6 +70,18 @@ class DaeTag(StrEnum):
 
 class Geometry:
 
+    @dataclass
+    class Source:
+        array: NDArray
+        element_count: int
+        stride: int
+
+
+        def shaped(self) -> NDArray[np.float32]:
+            return self.array.reshape((self.element_count, self.stride))
+
+
+
     class Triangles:
 
         @dataclass
@@ -71,28 +90,53 @@ class Geometry:
             source: str
             offset: int = 0
             set: int = 0
-            pass
 
-        def __init__(self):
+
+
+        @property
+        def stride(self):
+            return max(input.offset for input in self.inputs) + 1
+
+
+        def __init__(self, owner: 'Geometry'):
+            self.owner = owner
             self.triangle_count: int = 0
-            self.materialName: str = None
-            self.indices: NDArray = None
-            self.inputs: list[Geometry.Triangles.Input] = []
+            self.material_name: str = None
+            self.indices: NDArray[np.int32] = None
+            self.inputs: list['Geometry.Triangles.Input'] = []
 
 
+        def get_input(self, semantic: Semantic, set: int = 0) -> Input | None:
+            for input in self.inputs:
+                if (input.semantic == semantic and input.set == set):
+                    return input
+            return None
+        
+
+        def get_indexed_array(self, semantic: Semantic, set: int = 0) -> NDArray[np.float32] | None:
+
+            input = self.get_input(semantic, set)
+            if input is None:
+                return None
+            
+            source = self.owner.sources.get(input.source)
+            if source is None:
+                return None
+
+            data = source.shaped()
+
+            if semantic == Semantic.TEXCOORD:
+                data = data[:, :2]
+
+            # extract this attribute's index stream
+            idx = self.indices[input.offset::self.stride]
+
+            return data[idx]
+        
 
     def __init__(self):
-        self.sources: dict[str, NDArray] = {}
-        self.triangles: list[Geometry.Triangles] = []
-
-
-    def get_array(self, semantic: Semantic, set: int = 0) -> NDArray | None:
-        triangles = self.triangles[0]
-        for input in triangles.inputs:
-            if (input.semantic == semantic and input.set == set):
-                return self.sources[input.source]
-        return None
-
+        self.sources: dict[str, 'Geometry.Source'] = {}
+        self.triangles: list['Geometry.Triangles'] = []
 
 
 
@@ -124,6 +168,7 @@ class Material:
 class Collada:
 
     def __init__(self):
+        self.unit_meter: float = 1.0
         self.geometries: list[Geometry] = []
         self.materials: list[Material] = []
         self.nodes: list[Node] = []

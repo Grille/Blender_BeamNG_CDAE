@@ -192,10 +192,8 @@ class ExportBase(Operator, ExportHelper):
 
 
     def invoke(self, context, event):
-        print("_______________invoke")
         if not ExportBase.initialized:
             OpPresetsUtils.apply_default(self)
-            print("___apply")
             ExportBase.initialized = True
         return super().invoke(context, event)
 

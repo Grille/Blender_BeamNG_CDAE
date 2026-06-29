@@ -30,9 +30,11 @@ def parse_input(xml: ET.Element) -> Geometry.Triangles.Input:
     return Geometry.Triangles.Input(Semantic(xml.get("semantic")), xml.get("source")[1:], int(xml.get("offset", 0)), int(xml.get("set", 0)))
 
 
-def parse_triangle(xml: ET.Element) -> Geometry.Triangles:
-    result = Geometry.Triangles()
+def parse_triangle(xml: ET.Element, parent: Geometry) -> Geometry.Triangles:
+    result = Geometry.Triangles(parent)
 
+    result.material_name = xml.get(DaeAttributes.MATERIAL)
+    result.triangle_count = int(xml.get(DaeAttributes.COUNT))
     result.indices = parse_array(xml.find(DaeTag.p), np.int32)
     inputlist = xml.findall(DaeTag.input)
     for input in inputlist:
@@ -47,8 +49,12 @@ def parse_geometry(xml: ET.Element) -> Geometry:
 
     srclist = mesh.findall(DaeTag.source)
     for src in srclist:
+        key = src.get("id")
         array = parse_array(src.find(DaeTag.float_array))
-        result.sources[src.get("id")] = array
+        accessor = src.find(DaeTag.technique_common).find(DaeTag.accessor)
+        count = int(accessor.get("count"))
+        stride = int(accessor.get("stride"))
+        result.sources[key] = Geometry.Source(array, count, stride)
 
     vertices = mesh.find(DaeTag.vertices)
     verticesKey = vertices.get("id")
@@ -57,11 +63,11 @@ def parse_geometry(xml: ET.Element) -> Geometry:
 
     trilist0 = mesh.findall(DaeTag.triangles)
     for tri in trilist0:
-        result.triangles.append(parse_triangle(tri))
+        result.triangles.append(parse_triangle(tri, result))
 
     trilist1 = mesh.findall(DaeTag.polylist)
     for tri in trilist1:
-        result.triangles.append(parse_triangle(tri))
+        result.triangles.append(parse_triangle(tri, result))
 
     return result
 
@@ -85,6 +91,8 @@ def parse_node(xml: ET.Element) -> Node:
 
 def parse_collada(xml: ET.Element) -> Collada:
     dae = Collada()
+
+    dae.unit_meter = float(xml.find(DaeTag.asset).find(DaeTag.unit).get(DaeAttributes.METER))
     
     matlib = xml.find(DaeTag.library_materials)
     matlist = matlib.findall(DaeTag.material)
@@ -112,38 +120,69 @@ def convert_material(daemat: Material) -> CdaeV31.Material:
     return mat
 
 
-def convert_geometry(geo: Geometry, cdae: CdaeV31) -> CdaeV31.Mesh:
+def convert_geometry(geo: Geometry, cdae: CdaeV31, scale: float) -> CdaeV31.Mesh:
 
     mesh = CdaeV31.Mesh()
     mesh.type = CdaeV31.MeshType.STANDARD
 
-    def try_set_numpy_array(vector: PackedVector, semantic: Semantic, set: int = 0):
-        array = geo.get_array(semantic, set)
-        if array is not None:
-            vector.set_numpy_array(array)
-
-    try_set_numpy_array(mesh.verts, Semantic.VERTEX)
-    try_set_numpy_array(mesh.tverts0, Semantic.TEXCOORD, 0)
-    try_set_numpy_array(mesh.tverts1, Semantic.TEXCOORD, 1)
-    try_set_numpy_array(mesh.norms, Semantic.NORMAL)
-    try_set_numpy_array(mesh.colors, Semantic.COLOR)
-
-    indices: list[int] = []
     regions: list[CdaeV31.Mesh.DrawRegion] = []
 
-    start = 0
+    vtx_offset = 0
     for item in geo.triangles:
-        material = cdae.get_material_index(item.materialName)
-        count = len(item.indices)
-        indices.extend(item.indices)
-        regions.append(CdaeV31.Mesh.DrawRegion(start, count, material))
-        start = count
+        material = cdae.get_material_index(item.material_name, True)
+        vtx_count = item.triangle_count * 3
+        region = CdaeV31.Mesh.DrawRegion(vtx_offset, vtx_count, material)
+        regions.append(region)
+        vtx_offset += vtx_count
 
-    mesh.indices.set_numpy_array(np.array(indices, np.int32))
+
+    
+    # array mesh
+    dst_verts = np.zeros((vtx_offset, 3), np.float32)
+    dst_norms = np.zeros((vtx_offset, 3), np.float32)
+    dst_tverts0 = np.zeros((vtx_offset, 2), np.float32)
+    dst_tverts1 = np.zeros((vtx_offset, 2), np.float32)
+    dst_colors = np.ones((vtx_offset, 4), np.float32)
+    dst_indices = np.arange(vtx_offset, dtype=np.int32)
+
+    vtx_offset = 0
+    for item in geo.triangles:
+        src_verts = item.get_indexed_array(Semantic.VERTEX)
+        src_norms = item.get_indexed_array(Semantic.NORMAL)
+        src_tverts0 = item.get_indexed_array(Semantic.TEXCOORD, 0)
+        src_tverts1 = item.get_indexed_array(Semantic.TEXCOORD, 1)
+        src_colors = item.get_indexed_array(Semantic.COLOR)
+
+        next_vtx_offset = vtx_offset + item.triangle_count * 3
+
+        dst_verts[vtx_offset:next_vtx_offset] = src_verts
+
+        if src_norms is not None:
+            dst_norms[vtx_offset:next_vtx_offset] = src_norms
+
+        if src_tverts0 is not None:
+            dst_tverts0[vtx_offset:next_vtx_offset] = src_tverts0
+
+        if src_tverts1 is not None:
+            dst_tverts1[vtx_offset:next_vtx_offset] = src_tverts1
+
+        if src_colors is not None:
+            dst_colors[vtx_offset:next_vtx_offset] = src_colors
+
+        vtx_offset = next_vtx_offset
+
+    dst_verts[:, 0:2] *= -1
+    dst_norms[:, 2] *= -1
+
+    mesh.verts.set_numpy_array(dst_verts * scale)
+    mesh.norms.set_numpy_array(dst_norms)
+    mesh.tverts0.set_numpy_array(dst_tverts0)
+    mesh.tverts1.set_numpy_array(dst_tverts1)
+    mesh.colors.set_numpy_array(dst_colors)
+    mesh.indices.set_numpy_array(dst_indices)
     mesh.draw_regions.pack_list(regions)
 
     return mesh
-    
 
 
 def convert(dae: Collada):
@@ -153,7 +192,7 @@ def convert(dae: Collada):
         cdae.materials.append(convert_material(mat))
 
     for geo in dae.geometries:
-        cdae.meshes.append(convert_geometry(geo, cdae))
+        cdae.meshes.append(convert_geometry(geo, cdae, dae.unit_meter))
 
     tree = cdae.unpack_tree()
 

@@ -276,8 +276,8 @@ class CdaeV31:
                 has_no_mat: bool
 
 
-            elements_start: int = 0
-            elements_count: int = 0
+            index_start: int = 0
+            index_count: int = 0
             raw_info: int = 0
             
 
@@ -296,20 +296,30 @@ class CdaeV31:
                 is_indexed = bool(self.raw_info & CdaeV31.Mesh.DrawRegion.InfoMask.INDEXED)
                 has_no_mat = bool(self.raw_info & CdaeV31.Mesh.DrawRegion.InfoMask.NO_MATERIAL)
                 return CdaeV31.Mesh.DrawRegion.DrawInfo(draw_type, is_indexed, has_no_mat)
+            
+
+            @property
+            def triangle_start(self):
+                return self.index_start // 3
 
 
-            def get_polygon_range(self) -> range:
-                start = self.elements_start // 3
-                count = self.elements_count // 3
+            @property
+            def triangle_count(self):
+                return self.index_count // 3
+
+
+            def get_triangle_range(self) -> range:
+                start = self.triangle_start
+                count = self.triangle_count
                 stop = start + count
                 return range(start, stop)
 
 
             def unpack(self, data: bytes):
-                self.elements_start, self.elements_count, self.raw_info = struct.unpack("<iii", data)
+                self.index_start, self.index_count, self.raw_info = struct.unpack("<iii", data)
 
             def pack(self):
-                return struct.pack("<iii", self.elements_start, self.elements_count, self.raw_info)
+                return struct.pack("<iii", self.index_start, self.index_count, self.raw_info)
 
 
 
@@ -406,8 +416,8 @@ class CdaeV31:
 
 
 
-        def __init__(self):
-            self.name: str = ""
+        def __init__(self, name: str =""):
+            self.name: str = name
             self.flags: CdaeV31.Material.Flags = 3
             self.reflect: int = 0
             self.bump: int = 0
@@ -466,10 +476,13 @@ class CdaeV31:
         return len(self.names) - 1
     
 
-    def get_material_index(self, name: str) -> int:
+    def get_material_index(self, name: str, create: bool = False) -> int:
         for idx, mat in enumerate(self.materials):
             if mat.name == name:
                 return idx
+        if create:
+            self.materials.append(CdaeV31.Material(name))
+            return len(self.materials) - 1
         return 0
 
 

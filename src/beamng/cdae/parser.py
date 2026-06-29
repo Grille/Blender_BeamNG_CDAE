@@ -123,7 +123,7 @@ class CdaeParser:
         region_materials = []
 
         for region in info.unpack_regions():
-            tris = all_indices[region.get_polygon_range()]
+            tris = all_indices[region.get_triangle_range()]
 
             # Filter out triangles where any two vertices share the same position
             p0 = positions[tris[:, 0]]
@@ -153,6 +153,9 @@ class CdaeParser:
         vert_positions, vert_indices = np.unique(loop_positions, axis=0, return_inverse=True)
         vert_count = vert_positions.shape[0]
 
+        vert_indices = vert_indices.reshape(-1, 3)[:, [2, 1, 0]]
+        vert_positions[:, 0:2] *= -1
+
         loop_start = np.arange(face_count, dtype=np.int32) * 3
         loop_total = np.full(face_count, 3, dtype=np.int32)
 
@@ -161,7 +164,7 @@ class CdaeParser:
         mesh.polygons.add(face_count)
 
         mesh.vertices.foreach_set("co", vert_positions.ravel())
-        mesh.loops.foreach_set("vertex_index", vert_indices)
+        mesh.loops.foreach_set("vertex_index", vert_indices.ravel())
         mesh.polygons.foreach_set("loop_start", loop_start)
         mesh.polygons.foreach_set("loop_total", loop_total)
         mesh.update(calc_edges=True)
@@ -184,7 +187,8 @@ class CdaeParser:
             layer.data.foreach_set("color", loop_colors.ravel())
 
         if info.norms.element_count:
-            loop_normals = -info.norms.to_numpy_array(np.float32).reshape(-1, 3)[indices]
+            loop_normals = info.norms.to_numpy_array(np.float32).reshape(-1, 3)[indices]
+            loop_normals[:, 0:2] *= -1
             mesh.normals_split_custom_set(loop_normals)
 
         if self.validate:

@@ -110,7 +110,7 @@ def write_geometry(mesh: CdaeV31.Mesh, lib_geometries: ET.Element, mesh_index: i
         mat_name = f"mat_{mat_index}" if mat_index < len(materials) else "mat_0"
         mesh_mat_names.append(mat_name)
         tris = ET.SubElement(mesh_elem, DaeTag.triangles, {
-            "count": str(reg.elements_count // 3),
+            "count": str(reg.index_count // 3),
             "material": mat_name
         })
 
@@ -123,7 +123,7 @@ def write_geometry(mesh: CdaeV31.Mesh, lib_geometries: ET.Element, mesh_index: i
         if color_id is not None:
             ET.SubElement(tris, DaeTag.input, {"semantic": Semantic.COLOR, "source": f"#{color_id}", "offset": "0"})
 
-        ET.SubElement(tris, DaeTag.p).text = " ".join(str(indices[i]) for i in range(reg.elements_start, reg.elements_start + reg.elements_count))
+        ET.SubElement(tris, DaeTag.p).text = " ".join(str(indices[i]) for i in range(reg.index_start, reg.index_start + reg.index_count))
 
 
 def collapse_animation(times: list[float], transforms: list[float]) -> tuple[list[float], list[float]]:
@@ -298,7 +298,6 @@ class DaeWriter:
         sw.log("xml_indent")
         tree.write(f, encoding="unicode", xml_declaration=True)
         sw.log("xml_write")
-        sw.print()
 
 
     @staticmethod
