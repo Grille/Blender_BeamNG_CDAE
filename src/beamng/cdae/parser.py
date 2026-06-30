@@ -1,6 +1,7 @@
 import bpy
 import numpy as np
 
+from numpy.typing import NDArray 
 from dataclasses import dataclass
 
 from ..numerics import *
@@ -171,23 +172,26 @@ class CdaeParser:
 
         mesh.polygons.foreach_set("material_index", np.array(mat_indices, dtype=np.int32))
 
+        def shape_loop_data(array: NDArray[np.float32], vec_size: int):
+            return array.reshape(-1, vec_size)[indices].reshape(-1, 3, vec_size)[:, [2, 1, 0], :].reshape(-1, vec_size)
+
         if info.tverts0.element_count:
-            loop_tverts = info.tverts0.to_numpy_array(np.float32).reshape(-1, 2)[indices]
             layer = mesh.uv_layers.new(name="UV0")
+            loop_tverts = shape_loop_data(info.tverts0.to_numpy_array(np.float32), 2)
             layer.data.foreach_set("uv", loop_tverts.ravel())
 
         if info.tverts1.element_count:
-            loop_tverts = info.tverts1.to_numpy_array(np.float32).reshape(-1, 2)[indices]
             layer = mesh.uv_layers.new(name="UV1")
+            loop_tverts = shape_loop_data(info.tverts0.to_numpy_array(np.float32), 2)
             layer.data.foreach_set("uv", loop_tverts.ravel())
 
         if info.colors.element_count:
-            loop_colors = info.colors.to_numpy_array(np.ubyte).reshape(-1, 4)[indices].astype(np.float32) / 255
-            layer = mesh.color_attributes.new(name="Color", domain='CORNER', type='FLOAT_COLOR')
+            layer: bpy.types.MeshLoopColorLayer = mesh.color_attributes.new(name="Color", domain='CORNER', type='FLOAT_COLOR')
+            loop_colors = shape_loop_data(info.tverts0.to_numpy_array(np.ubyte).astype(np.float32) / 255, 4)
             layer.data.foreach_set("color", loop_colors.ravel())
 
         if info.norms.element_count:
-            loop_normals = info.norms.to_numpy_array(np.float32).reshape(-1, 3)[indices]
+            loop_normals = shape_loop_data(info.norms.to_numpy_array(np.float32), 3)
             loop_normals[:, 0:2] *= -1
             mesh.normals_split_custom_set(loop_normals)
 

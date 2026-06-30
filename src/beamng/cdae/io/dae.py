@@ -26,6 +26,7 @@ class DaeAttributes(StrEnum):
     XMLNS = "xmlns"
     MATERIAL = "material"
     COUNT = "count"
+    STRIDE = "stride"
     METER = "meter"
 
 
@@ -47,6 +48,7 @@ class DaeTag(StrEnum):
     triangles = "triangles"
     polylist = "polylist"
     p = "p"
+    vcount = "vcount"
     library_materials = "library_materials"
     material = "material"
     instance_effect = "instance_effect"

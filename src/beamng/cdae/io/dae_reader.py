@@ -22,23 +22,63 @@ def _strip_namespaces(elem: ET.Element):
         _strip_namespaces(child)
 
 
-def parse_array(xml: ET.Element, dtype=np.float32) -> NDArray:
-    return np.fromstring(xml.text, dtype=dtype, sep=" ")
+def parse_array_text(text: str | None, dtype=np.float32) -> NDArray:
+    if text is None:
+        array = np.empty(0, dtype=dtype)
+    else:
+        array = np.fromstring(text, dtype=dtype, sep=" ")
+    return array
+
+
+def parse_float_array(xml: ET.Element) -> NDArray[np.float32]:
+    #count = int(xml.get(DaeAttributes.COUNT))
+    array = parse_array_text(xml.text)
+    return array
 
 
 def parse_input(xml: ET.Element) -> Geometry.Triangles.Input:
     return Geometry.Triangles.Input(Semantic(xml.get("semantic")), xml.get("source")[1:], int(xml.get("offset", 0)), int(xml.get("set", 0)))
 
 
-def parse_triangle(xml: ET.Element, parent: Geometry) -> Geometry.Triangles:
+def parse_triangles(xml: ET.Element, parent: Geometry) -> Geometry.Triangles:
     result = Geometry.Triangles(parent)
 
     result.material_name = xml.get(DaeAttributes.MATERIAL)
     result.triangle_count = int(xml.get(DaeAttributes.COUNT))
-    result.indices = parse_array(xml.find(DaeTag.p), np.int32)
+
+    result.indices = parse_array_text(xml.find(DaeTag.p).text, np.int32)
+
     inputlist = xml.findall(DaeTag.input)
     for input in inputlist:
         result.inputs.append(parse_input(input))
+
+    return result
+
+
+def parse_polylist(xml: ET.Element, parent: Geometry)-> Geometry.Triangles:
+    result = parse_triangles(xml, parent)
+
+    vcount = parse_array_text(xml.find(DaeTag.vcount).text, np.int32)
+    triangle_indices: list[int] = []
+    stride = result.stride
+
+    def copy(index: int):
+        sidx = index * stride
+        for i in range(0, stride):
+            triangle_indices.append(result.indices[sidx + i])
+
+    triangle_count = 0
+    cursor = 0
+    for n in vcount:
+        for i in range(1, n - 1):
+            triangle_count += 1
+            copy(cursor)
+            copy(cursor + i)
+            copy(cursor + i + 1)
+        cursor += n
+
+    result.indices = np.array(triangle_indices, dtype=np.int32)
+    result.triangle_count = triangle_count
 
     return result
 
@@ -50,10 +90,10 @@ def parse_geometry(xml: ET.Element) -> Geometry:
     srclist = mesh.findall(DaeTag.source)
     for src in srclist:
         key = src.get("id")
-        array = parse_array(src.find(DaeTag.float_array))
+        array = parse_float_array(src.find(DaeTag.float_array))
         accessor = src.find(DaeTag.technique_common).find(DaeTag.accessor)
-        count = int(accessor.get("count"))
-        stride = int(accessor.get("stride"))
+        count = int(accessor.get(DaeAttributes.COUNT))
+        stride = int(accessor.get(DaeAttributes.STRIDE))
         result.sources[key] = Geometry.Source(array, count, stride)
 
     vertices = mesh.find(DaeTag.vertices)
@@ -63,11 +103,11 @@ def parse_geometry(xml: ET.Element) -> Geometry:
 
     trilist0 = mesh.findall(DaeTag.triangles)
     for tri in trilist0:
-        result.triangles.append(parse_triangle(tri, result))
+        result.triangles.append(parse_triangles(tri, result))
 
     trilist1 = mesh.findall(DaeTag.polylist)
     for tri in trilist1:
-        result.triangles.append(parse_triangle(tri, result))
+        result.triangles.append(parse_polylist(tri, result))
 
     return result
 
@@ -131,11 +171,14 @@ def convert_geometry(geo: Geometry, cdae: CdaeV31, scale: float) -> CdaeV31.Mesh
     for item in geo.triangles:
         material = cdae.get_material_index(item.material_name, True)
         vtx_count = item.triangle_count * 3
+        print(item.triangle_count)
         region = CdaeV31.Mesh.DrawRegion(vtx_offset, vtx_count, material)
         regions.append(region)
         vtx_offset += vtx_count
 
-
+    if vtx_offset == 0:
+        mesh.type = CdaeV31.MeshType.NULL
+        return mesh
     
     # array mesh
     dst_verts = np.zeros((vtx_offset, 3), np.float32)
