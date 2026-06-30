@@ -13,6 +13,8 @@ from ..beamng.cdae.io import *
 from ..beamng.cdae.parser import CdaeParser
 from .local_storage import LocalStorage
 
+from .presets_operators import OpPresetsUtils
+
 
 # pyright: reportInvalidTypeForm=false
 class FileFormat(str, Enum):
@@ -32,6 +34,15 @@ class ImportCdae(Operator, ImportHelper):
 
     validate_meshes: BoolProperty(name="Validate Meshes", default=True)
     debug_info: BoolProperty(name="Debug Info", default=False)
+
+    temp_presets_initalized: BoolProperty(default=False)
+    temp_presets_file: StringProperty(default="import")
+    temp_presets_selection: StringProperty()
+
+
+    def invoke(self, context, event):
+        OpPresetsUtils.setup(self)
+        return super().invoke(context, event)
 
 
     def execute(self, context):
@@ -62,7 +73,7 @@ class ImportCdae(Operator, ImportHelper):
     
 
     @staticmethod
-    def menu_func(self, context):
+    def menu_func(self: 'ImportCdae', context: bpy.types.Context):
         self.layout.operator(ImportCdae.bl_idname, text="BeamNG (.dae/.cdae)")
 
 
@@ -71,6 +82,8 @@ class ImportCdae(Operator, ImportHelper):
         layout = self.layout
         layout.use_property_split = True
         layout.use_property_decorate = False
+
+        OpPresetsUtils.draw(self, context)
 
         layout.prop(self, "validate_meshes")
         layout.prop(self, "debug_info")

@@ -3,6 +3,7 @@ import bpy
 
 from bpy.types import Operator
 from bpy.props import BoolProperty, IntProperty, FloatProperty, EnumProperty, StringProperty
+from typing import Protocol
 
 from .local_storage import LocalStorage
 
@@ -20,7 +21,7 @@ class OT_SavePreset(Operator):
     )
 
     def invoke(self, context, event):
-        active_op = context.active_operator
+        active_op = OpPresetsUtils.get_operator(context)
         self.preset_name = active_op.temp_presets_selection
         return context.window_manager.invoke_props_dialog(self)
 
@@ -31,7 +32,7 @@ class OT_SavePreset(Operator):
 
 
     def execute(self, context):
-        active_op = context.active_operator
+        active_op = OpPresetsUtils.get_operator(context)
         presets = LocalStorage.get_presets(active_op.temp_presets_file)
         presets.store_annotations(self.preset_name, active_op)
         LocalStorage.set_presets(active_op.temp_presets_file, presets)
@@ -47,7 +48,7 @@ class OT_LoadPreset(Operator):
     bl_description = "Load selected preset"
 
     def execute(self, context):
-        active_op = context.active_operator
+        active_op = OpPresetsUtils.get_operator(context)
         presets = LocalStorage.get_presets(active_op.temp_presets_file)
         presets.apply_annotations(active_op.temp_presets_selection, active_op)
         return {'FINISHED'}
@@ -60,10 +61,11 @@ class OT_RemovePreset(Operator):
     bl_description = "Delete the selected preset"
 
     def execute(self, context):
-        active_op = context.active_operator
+        active_op = OpPresetsUtils.get_operator(context)
         presets = LocalStorage.get_presets(active_op.temp_presets_file)
         presets.presets.pop(active_op.temp_presets_selection, None)
-        active_op.temp_presets_selection = ""
+        presets.setup_default(active_op)
+        active_op.temp_presets_selection = presets.default_key
         LocalStorage.set_presets(active_op.temp_presets_file, presets)
         return {'FINISHED'}
     
@@ -75,7 +77,7 @@ class OT_SetDefaultPreset(Operator):
     bl_description = "Set the selected preset as default"
 
     def execute(self, context):
-        active_op = context.active_operator
+        active_op = OpPresetsUtils.get_operator(context)
         presets = LocalStorage.get_presets(active_op.temp_presets_file)
         presets.default_key = active_op.temp_presets_selection
         LocalStorage.set_presets(active_op.temp_presets_file, presets)
@@ -91,7 +93,7 @@ class OT_SelectPreset(bpy.types.Operator):
 
 
     def execute(self, context):
-        active_op = context.active_operator
+        active_op = OpPresetsUtils.get_operator(context)
         active_op.temp_presets_selection = self.preset_name
         presets = LocalStorage.get_presets(active_op.temp_presets_file)
         presets.apply_annotations(active_op.temp_presets_selection, active_op)
@@ -108,32 +110,50 @@ class MT_PresetsMenu(bpy.types.Menu):
 
     def draw(self, context):
         layout = self.layout
-        active_op = context.active_operator
+        active_op = OpPresetsUtils.get_operator(context)
         presets = LocalStorage.get_presets(active_op.temp_presets_file)
         for name in presets.presets:
             icon = "SOLO_ON" if name == presets.default_key else "NONE"
-            op = layout.operator("grille.presets_select", text=name, icon=icon)
+            op: OT_SelectPreset = layout.operator(OT_SelectPreset.bl_idname, text=name, icon=icon)
             op.preset_name = name
+
+
+
+class POperator(Protocol):
+    layout: bpy.types.UILayout
+    temp_presets_initalized: bool
+    temp_presets_file: str
+    temp_presets_selection: str
 
 
 
 class OpPresetsUtils:
 
     @staticmethod
-    def draw(self, layout):
-        row = layout.row(align=True)
+    def draw(self: POperator, context: bpy.types.Context):
+        active_op = OpPresetsUtils.get_operator(context)
+        presets = LocalStorage.get_presets(active_op.temp_presets_file)
+    
+        row = self.layout.row(align=True)
         row.menu("GRILLE_MT_presets_menu", text=self.temp_presets_selection)
         row.operator("grille.presets_save", text="", icon='FILE_TICK')
-        #row.operator("grille.presets_load", text="", icon='FILEBROWSER')
-        row.operator("grille.presets_remove", text="", icon='TRASH')
-        row.operator("grille.presets_set_default", text="", icon='SOLO_ON')
+        sub = row.row(align=True)
+        sub.enabled = len(presets.presets) > 1
+        sub.operator("grille.presets_remove", text="", icon='TRASH')
+        sub.operator("grille.presets_set_default", text="", icon='SOLO_ON')
 
 
     @staticmethod
-    def apply_default(self: Operator):
-        presets = LocalStorage.get_presets(self.temp_presets_file)
-        self.temp_presets_selection = presets.default_key
-        presets.apply_annotations(self.temp_presets_selection, self)
+    def setup(self: POperator):
+        if not self.temp_presets_initalized:
+            presets = LocalStorage.setup_presets(self.temp_presets_file, self)
+            self.temp_presets_selection = presets.default_key
+            self.temp_presets_initalized = True
+
+
+    @staticmethod
+    def get_operator(context: bpy.types.Context) -> POperator:
+        return context.active_operator
 
 
     @staticmethod

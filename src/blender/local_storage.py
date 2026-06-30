@@ -4,6 +4,8 @@ import json
 
 from typing import Any
 
+DEFAULT = "default"
+PRESETS = "presets"
 CONFIG_DIR_PATH = "addons/grille_beamng_cdae/config"
 
 
@@ -34,6 +36,20 @@ class Presets:
             except Exception as e:
                 print(e)
 
+
+    def setup_default(self, obj: bpy.types.Struct) -> bool:
+
+        if (len(self.presets) > 0):
+            if self.default_key not in self.presets:
+                self.default_key = next(iter(self.presets))
+            self.apply_annotations(self.default_key, obj)
+            return False
+
+        self.store_annotations(DEFAULT, obj)
+        self.default_key = DEFAULT
+
+        return True
+        
 
 
 class LocalStorage:
@@ -80,14 +96,22 @@ class LocalStorage:
     @staticmethod
     def get_presets(key: str):
         data = LocalStorage.get(key)
-        return Presets(data.get("default", ""), data.get("presets", {}))
+        return Presets(data.get(DEFAULT, ""), data.get(PRESETS, {}))
     
 
     @staticmethod
     def set_presets(key: str, presets: Presets):
         data = {
-            "default": presets.default_key,
-            "presets": presets.presets,
+            DEFAULT: presets.default_key,
+            PRESETS: presets.presets,
         }
         LocalStorage.set(key, data)
+
+
+    @staticmethod
+    def setup_presets(key: str, obj: bpy.types.Struct):
+            presets = LocalStorage.get_presets(key)
+            if presets.setup_default(obj):
+                LocalStorage.set_presets(key, presets)
+            return presets
 

@@ -69,6 +69,7 @@ class ExportBase(Operator, ExportHelper):
     include_children: BoolProperty(name="Include Children", default=False, description="Include all Children of selected Objects.")
     include_hidden: BoolProperty(name="Include Hidden", default=False, description="Include Objects that are hidden in Viewport.")
 
+    temp_presets_initalized: BoolProperty(default=False)
     temp_presets_file: StringProperty(default="export")
     temp_presets_selection: StringProperty()
 
@@ -192,9 +193,7 @@ class ExportBase(Operator, ExportHelper):
 
 
     def invoke(self, context, event):
-        if not ExportBase.initialized:
-            OpPresetsUtils.apply_default(self)
-            ExportBase.initialized = True
+        OpPresetsUtils.setup(self)
         return super().invoke(context, event)
 
 
@@ -349,7 +348,7 @@ class ExportBase(Operator, ExportHelper):
         layout.use_property_split = True
         layout.use_property_decorate = False
 
-        OpPresetsUtils.draw(self, layout)
+        OpPresetsUtils.draw(self, context)
 
         format = self.file_format
         write_file = format != FileFormat.NONE
@@ -422,7 +421,7 @@ class ExportBase(Operator, ExportHelper):
 
 
     @staticmethod
-    def menu_func(self, context):
+    def menu_func(self: 'ExportBase', context: bpy.types.Context):
         self.layout.operator(ExportBase.bl_idname, text="BeamNG (.dae/.cdae)")
 
 
