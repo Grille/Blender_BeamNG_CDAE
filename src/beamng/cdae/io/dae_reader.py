@@ -214,8 +214,9 @@ def convert_geometry(geo: Geometry, cdae: CdaeV31, scale: float) -> CdaeV31.Mesh
 
         vtx_offset = next_vtx_offset
 
+    dst_indices = dst_indices.reshape(-1, 3)[:, [2, 1, 0]]
     dst_verts[:, 0:2] *= -1
-    dst_norms[:, 2] *= -1
+    dst_norms[:, 0:2] *= -1
 
     mesh.verts.set_numpy_array(dst_verts * scale)
     mesh.norms.set_numpy_array(dst_norms)

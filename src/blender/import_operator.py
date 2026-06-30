@@ -63,7 +63,7 @@ class ImportCdae(Operator, ImportHelper):
 
     @staticmethod
     def menu_func(self, context):
-        self.layout.operator(ImportCdae.bl_idname, text="BeamNG (.cdae)")
+        self.layout.operator(ImportCdae.bl_idname, text="BeamNG (.dae/.cdae)")
 
 
     def draw(self, context):
