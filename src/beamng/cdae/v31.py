@@ -3,6 +3,7 @@ import numpy as np
 
 from dataclasses import dataclass, asdict
 from enum import Enum, IntFlag
+from numpy.typing import NDArray
 
 from .packed_vector import PackedVector
 from ..numerics import *
@@ -365,6 +366,10 @@ class CdaeV31:
             byte_array = self.colors.to_numpy_array(np.ubyte)
             float_array = byte_array.astype(np.float32) / 255.0
             return float_array
+        
+
+        def set_vec4_colors(self, colors: NDArray[np.float32]):
+            self.colors.set_numpy_array((colors * 255.0).astype(np.ubyte))
         
 
         def data_equals(self, other: 'CdaeV31.Mesh') -> bool:

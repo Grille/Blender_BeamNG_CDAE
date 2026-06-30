@@ -188,6 +188,10 @@ def convert_geometry(geo: Geometry, cdae: CdaeV31, scale: float) -> CdaeV31.Mesh
     dst_colors = np.ones((vtx_offset, 4), np.float32)
     dst_indices = np.arange(vtx_offset, dtype=np.int32)
 
+    tverts0_enabled = False
+    tverts1_enabled = False
+    colors_enabled = False
+
     vtx_offset = 0
     for item in geo.triangles:
         src_verts = item.get_indexed_array(Semantic.VERTEX)
@@ -205,12 +209,15 @@ def convert_geometry(geo: Geometry, cdae: CdaeV31, scale: float) -> CdaeV31.Mesh
 
         if src_tverts0 is not None:
             dst_tverts0[vtx_offset:next_vtx_offset] = src_tverts0
+            tverts0_enabled = True
 
         if src_tverts1 is not None:
             dst_tverts1[vtx_offset:next_vtx_offset] = src_tverts1
+            tverts1_enabled = True
 
         if src_colors is not None:
             dst_colors[vtx_offset:next_vtx_offset] = src_colors
+            colors_enabled = True
 
         vtx_offset = next_vtx_offset
 
@@ -220,11 +227,15 @@ def convert_geometry(geo: Geometry, cdae: CdaeV31, scale: float) -> CdaeV31.Mesh
 
     mesh.verts.set_numpy_array(dst_verts * scale)
     mesh.norms.set_numpy_array(dst_norms)
-    mesh.tverts0.set_numpy_array(dst_tverts0)
-    mesh.tverts1.set_numpy_array(dst_tverts1)
-    mesh.colors.set_numpy_array(dst_colors)
     mesh.indices.set_numpy_array(dst_indices)
     mesh.draw_regions.pack_list(regions)
+
+    if tverts0_enabled:
+        mesh.tverts0.set_numpy_array(dst_tverts0)
+    if tverts1_enabled:
+        mesh.tverts1.set_numpy_array(dst_tverts1)
+    if colors_enabled:
+        mesh.set_vec4_colors(dst_colors)
 
     return mesh
 
