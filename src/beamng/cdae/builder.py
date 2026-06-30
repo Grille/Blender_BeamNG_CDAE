@@ -279,6 +279,9 @@ class CdaeMeshBuilder:
 
         if npmesh.uvs0 is not None:
             mesh_out.tverts0.set_numpy_array(npmesh.uvs0)
+        else:
+            # generate default UV so the object is visible in BeamNG (default UV values is [0.0, 1.0] as BeamNG does for a .dae without UV)
+            mesh_out.tverts0.set_numpy_array(np.tile(np.array([0.0, 1.0], dtype=np.float32), (len(npmesh.positions), 1)))
 
         if npmesh.uvs1 is not None:
             mesh_out.tverts1.set_numpy_array(npmesh.uvs1)
