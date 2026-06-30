@@ -187,7 +187,7 @@ class CdaeParser:
 
         if info.colors.element_count:
             layer: bpy.types.MeshLoopColorLayer = mesh.color_attributes.new(name="Color", domain='CORNER', type='FLOAT_COLOR')
-            loop_colors = shape_loop_data(info.tverts0.to_numpy_array(np.ubyte).astype(np.float32) / 255, 4)
+            loop_colors = shape_loop_data(info.colors.to_numpy_array(np.ubyte).astype(np.float32) / 255, 4)
             layer.data.foreach_set("color", loop_colors.ravel())
 
         if info.norms.element_count:
