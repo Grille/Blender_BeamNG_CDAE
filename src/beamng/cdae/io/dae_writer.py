@@ -72,7 +72,7 @@ def write_src_float(xml: ET.Element, flat_array: NDArray[np.float32], name: str,
     write_accessor(xml_source, array_id, len(flat_array) // accessor.stride, accessor)
 
 
-def write_geometry(mesh: CdaeV31.Mesh, lib_geometries: ET.Element, mesh_index: int, materials: list[CdaeV31.Material], mesh_mat_names: list[CdaeV31.Material], mesh_name: str):
+def write_geometry(mesh: CdaeV31.Mesh, lib_geometries: ET.Element, mesh_index: int, materials: list[CdaeV31.Material], mesh_mat_names: list[str], mesh_name: str):
 
     geom_id = f"mesh_{mesh_index}"
     geom = ET.SubElement(lib_geometries, DaeTag.geometry, {"id": geom_id, "name": mesh_name})
@@ -108,7 +108,8 @@ def write_geometry(mesh: CdaeV31.Mesh, lib_geometries: ET.Element, mesh_index: i
     for reg in draw_regions:
         mat_index = reg.material
         mat_name = f"mat_{mat_index}" if mat_index < len(materials) else "mat_0"
-        mesh_mat_names.append(mat_name)
+        if mat_name not in mesh_mat_names:
+            mesh_mat_names.append(mat_name)
         tris = ET.SubElement(mesh_elem, DaeTag.triangles, {
             "count": str(reg.index_count // 3),
             "material": mat_name

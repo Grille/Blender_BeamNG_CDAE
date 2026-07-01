@@ -18,12 +18,10 @@ from ..u8_normal_table import U8NormalTable
 class CdaeMaterialIndexer:
     def __init__(self):
         self.material_to_index = {}
-        self.materials: list[bpy.types.Material] = []
+        self.materials: list[bpy.types.Material | None] = []
 
 
-    def get_index(self, bmat: bpy.types.Material):
-        if bmat is None:
-            return 0
+    def get_index(self, bmat: bpy.types.Material | None):
         if bmat not in self.material_to_index:
             index = len(self.materials)
             self.material_to_index[bmat] = index
@@ -243,12 +241,18 @@ class CdaeMeshBuilder:
             indices_list.extend(matrange)
         npmesh.indices = np.array(indices_list, dtype=np.int32)
 
+        U16_LIMIT = 65535
 
         draw_regions = []
         offset = 0
         for mat_index in material_ranges:
-            count = len(material_ranges[mat_index])
-            draw_regions.append((offset * 3, count * 3, mat_index | CdaeV31.Mesh.DrawRegion.InfoMask.INDEXED))
+            count = len(material_ranges[mat_index]) * 3
+            info = mat_index | CdaeV31.Mesh.DrawRegion.InfoMask.INDEXED
+            while count > U16_LIMIT:
+                draw_regions.append((offset, U16_LIMIT, info))
+                offset += U16_LIMIT
+                count -= U16_LIMIT
+            draw_regions.append((offset, count, info))
             offset += count
 
         DrawRegion = np.dtype([
@@ -528,7 +532,8 @@ class CdeaBuilder:
             self.cdae.nodeRotations.pack_list(kf_rot)
             self.cdae.nodeAlignedScales.pack_list(kf_scl)
 
-
+        
+        self.materials = []
         for mat in self.material_indexer.materials:
             res = CdaeV31.Material()
             self.cdae.materials.append(res)
@@ -536,6 +541,7 @@ class CdeaBuilder:
                 res.name = "undefined"
             else:
                 res.name = mat.name
+                self.materials.append(mat)
 
 
         self.cdae.defaultRotations.pack_list(defaultRotations)
@@ -555,5 +561,3 @@ class CdeaBuilder:
         self.cdae.center = self.cdae.bounds.center()
         self.cdae.radius = CdaeMeshBuilder.get_radius(self.cdae.bounds)
         self.cdae.tube_radius = self.cdae.radius
-
-        self.materials = self.material_indexer.materials
