@@ -33,7 +33,8 @@ class ImportCdae(Operator, ImportHelper):
     filter_glob: StringProperty(default="*.dae;*.cdae;*.json", options={'HIDDEN'})
 
     validate_meshes: BoolProperty(name="Validate Meshes", default=True)
-    debug_info: BoolProperty(name="Debug Info", default=False)
+    debug_dump: BoolProperty(name="Debug Info Enabled", default=False)
+    debug_dump_key: StringProperty(name="Key", default="debug_cdae")
 
     temp_presets_initalized: BoolProperty(default=False)
     temp_presets_file: StringProperty(default="import")
@@ -62,11 +63,11 @@ class ImportCdae(Operator, ImportHelper):
         
         parser = CdaeParser()
         parser.validate = self.validate_meshes
-        parser.debug = self.debug_info
+        parser.debug = self.debug_dump
         parser.parse(cdae)
 
-        if self.debug_info:
-            LocalStorage.set("debug_cdae", DebugWriter.to_dict(cdae))
+        if self.debug_dump:
+            LocalStorage.set(self.debug_dump_key, DebugWriter.to_dict(cdae))
 
 
         return {'FINISHED'}
@@ -86,4 +87,6 @@ class ImportCdae(Operator, ImportHelper):
         OpPresetsUtils.draw(self, context)
 
         layout.prop(self, "validate_meshes")
-        layout.prop(self, "debug_info")
+        layout.prop(self, "debug_dump")
+        if self.debug_dump:
+            layout.prop(self, "debug_dump_key")

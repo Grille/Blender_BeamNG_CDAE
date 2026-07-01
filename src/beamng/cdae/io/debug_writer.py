@@ -12,7 +12,7 @@ class DebugWriter:
     
     @staticmethod
     def vec_to_dbg(vector: PackedVector):
-        return vector.element_count
+        return f"count:{vector.element_count}*size:{vector.element_size}=={len(vector.data)}"
 
     @staticmethod 
     def to_dict(cdae: CdaeV31):

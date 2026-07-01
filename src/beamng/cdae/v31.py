@@ -432,6 +432,7 @@ class CdaeV31:
 
 
     def __init__(self):
+
         self.smallest_visible_size: float = 2.0
         self.smallest_visible_dl: int = 0
         self.radius: float = 5.0
