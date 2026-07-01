@@ -451,9 +451,6 @@ class CdeaBuilder:
         flat_tree = cdae.unpack_tree()
         flat_meshes = cdae.meshes
 
-        defaultRotations = []
-        defaultTranslations = []
-
         if self.mesh_builder.eval_mode == MeshDataEvalMode.Depsgraph:
             self.mesh_builder.depsgraph = bpy.context.evaluated_depsgraph_get()
 
@@ -461,20 +458,14 @@ class CdeaBuilder:
             
             node_samples = self.sampler.sample(node.bpy_sample_obj)
             trans = node_samples.transforms
-            defaultRotations.append(trans.rotation)
-            defaultTranslations.append(trans.translation)
 
             if self.mesh_builder.apply_scale:
                 self.mesh_builder.scale = trans.scale
 
-            (node_index, flat_node) = flat_tree.create_node()
-            flat_tree.link_node(parent_index, node_index)
-            flat_node.nameIndex = cdae.get_name_index(node.name)
+            (node_index, flat_node) = flat_tree.create_node(node.name, parent_index, trans.translation, trans.rotation)
 
             for obj in node.objects:
-                (obj_index, flat_obj) = flat_tree.create_object()
-                flat_tree.link_object(node_index, obj_index)
-                flat_obj.nameIndex = cdae.get_name_index(obj.name)
+                (obj_index, flat_obj) = flat_tree.create_object(obj.name, node_index)
 
                 flat_obj.numMeshes = len(obj.meshes)
                 flat_obj.startMeshIndex = len(flat_meshes)
@@ -520,9 +511,9 @@ class CdeaBuilder:
             cdae.sequences.append(seq)
             seq.nameIndex = self.cdae.get_name_index("ambiant")
 
-            kf_loc = []
-            kf_rot = []
-            kf_scl = []
+            kf_loc: list[Vec3F] = []
+            kf_rot: list[Quat4I16] = []
+            kf_scl: list[Vec3F] = []
             for frame in self.sampler.keyframes:
                 kf_loc.append(frame.translation)
                 kf_rot.append(frame.rotation)
@@ -543,9 +534,6 @@ class CdeaBuilder:
                 res.name = mat.name
                 self.materials.append(mat)
 
-
-        self.cdae.defaultRotations.pack_list(defaultRotations)
-        self.cdae.defaultTranslations.pack_list(defaultTranslations)
 
         states = [CdaeV31.ObjectState() for _ in flat_tree.objects]
         self.cdae.pack_states(states)

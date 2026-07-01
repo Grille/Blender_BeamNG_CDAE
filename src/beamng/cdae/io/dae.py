@@ -1,9 +1,11 @@
+import mathutils
 import xml.etree.cElementTree as ET
 import numpy as np
 
 from numpy.typing import NDArray
 from dataclasses import dataclass
 from ....enums import StrEnum
+from ...numerics import *
 
 
 VERSION = "1.4.1"
@@ -137,6 +139,7 @@ class Geometry:
         
 
     def __init__(self):
+        self.name: str
         self.sources: dict[str, 'Geometry.Source'] = {}
         self.triangles: list['Geometry.Triangles'] = []
 
@@ -144,8 +147,8 @@ class Geometry:
 
 class GeometryInstance:
 
-    def __init__(self, name: str, materials: dict[str,str]):
-        self.name = name
+    def __init__(self, url: str, materials: dict[str,str]):
+        self.url = url
         self.materials = materials
 
 
@@ -154,15 +157,14 @@ class Node:
 
     def __init__(self):
         self.name: str
-        self.matrix: NDArray
-        self.children: list[Node] = []
-        self.geometry: GeometryInstance | None = None
+        self.matrix: DaeMatrix | None
+        self.children: dict[str, Node] = {}
+        self.geometry_instance: GeometryInstance | None = None
 
 
 
 @dataclass
 class Material:
-    id: str
     name: str
 
 
@@ -171,9 +173,9 @@ class Collada:
 
     def __init__(self):
         self.unit_meter: float = 1.0
-        self.geometries: list[Geometry] = []
-        self.materials: list[Material] = []
-        self.nodes: list[Node] = []
+        self.geometries: dict[str, Geometry] = {}
+        self.materials: dict[str, Material] = {}
+        self.nodes: dict[str, Node] = {}
 
 
 
@@ -209,4 +211,28 @@ class Accessors:
     VEC4 = VEC3.extend_by_float("W")
     TIME = Accessor.create_float("TIME")
     TRANSFORM = Accessor.create(16, "TRANSFORM", "float4x4")
+
+
+
+class DaeMatrix:
+
+    def __init__(self, values: NDArray[np.float32]):
+        self.values = values
+
+
+    @staticmethod
+    def from_matrix(matrix: mathutils.Matrix):
+        return DaeMatrix(np.array(matrix, dtype=np.float32).flatten(order='F'))
+    
+
+    def to_matrix(self):
+        return mathutils.Matrix(np.array(self.values, dtype=np.float32).reshape((4, 4), order='F'))
+
+
+    @staticmethod
+    def from_cdae(quat: Quat4F, location: Vec3F):
+        matrix = quat.to_collada_quaternion().to_matrix().to_4x4()
+        matrix.translation = location.tuple3
+        return DaeMatrix.from_matrix(matrix)
+
 

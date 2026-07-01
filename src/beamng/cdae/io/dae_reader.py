@@ -85,6 +85,7 @@ def parse_polylist(xml: ET.Element, parent: Geometry)-> Geometry.Triangles:
 
 def parse_geometry(xml: ET.Element) -> Geometry:
     result = Geometry()
+    result.name = xml.get("name")
     mesh = xml.find(DaeTag.mesh)
 
     srclist = mesh.findall(DaeTag.source)
@@ -114,17 +115,25 @@ def parse_geometry(xml: ET.Element) -> Geometry:
 
 def parse_node(xml: ET.Element) -> Node:
     res = Node()
-    #res.matrix = parse_array(xml.find(DaeTag.matrix))
+    res.name = xml.get("name")
+
     geometry = xml.find(DaeTag.instance_geometry)
     if geometry is not None:
         url = geometry.get("url")[1:]
         materials = geometry.find(DaeTag.bind_material).find(DaeTag.technique_common).findall(DaeTag.instance_material)
         matdict = {mat.get("symbol"): mat.get("target", "")[1:] for mat in materials}
-        res.geometry = GeometryInstance(url, matdict)
+        res.geometry_instance = GeometryInstance(url, matdict)
+
+    matrix = xml.find(DaeTag.matrix)
+    if matrix is not None:
+        res.matrix = DaeMatrix(parse_array_text(matrix.text))
+    else:
+        res.matrix = None
 
     nodelist = xml.findall(DaeTag.node)
     for node in nodelist:
-        res.children.append(parse_node(node))
+        id = node.get("id")
+        res.children[id] = parse_node(node)
 
     return res
 
@@ -137,18 +146,21 @@ def parse_collada(xml: ET.Element) -> Collada:
     matlib = xml.find(DaeTag.library_materials)
     matlist = matlib.findall(DaeTag.material)
     for mat in matlist:
-        dae.materials.append(Material(mat.get("id"), mat.get("name")))
+        id = mat.get("id")
+        dae.materials[id] = Material(mat.get("name"))
 
     geolib = xml.find(DaeTag.library_geometries)
     geolist = geolib.findall(DaeTag.geometry)
     for geo in geolist:
-        dae.geometries.append(parse_geometry(geo))
+        id = geo.get("id")
+        dae.geometries[id] = parse_geometry(geo)
 
     scnlib = xml.find(DaeTag.library_visual_scenes)
     scn = scnlib.find(DaeTag.visual_scene)
     nodelist = scn.findall(DaeTag.node)
     for node in nodelist:
-        dae.nodes.append(parse_node(node))
+        id = node.get("id")
+        dae.nodes[id] = parse_node(node)
     
     return dae
 
@@ -156,11 +168,10 @@ def parse_collada(xml: ET.Element) -> Collada:
 def convert_material(daemat: Material) -> CdaeV31.Material:
     mat = CdaeV31.Material()
     mat.name = daemat.name
-
     return mat
 
 
-def convert_geometry(geo: Geometry, cdae: CdaeV31, scale: float) -> CdaeV31.Mesh:
+def convert_geometry(geo: Geometry, material_dict: dict[str,str], cdae: CdaeV31, scale: float) -> CdaeV31.Mesh:
 
     mesh = CdaeV31.Mesh()
     mesh.type = CdaeV31.MeshType.STANDARD
@@ -169,7 +180,8 @@ def convert_geometry(geo: Geometry, cdae: CdaeV31, scale: float) -> CdaeV31.Mesh
 
     vtx_offset = 0
     for item in geo.triangles:
-        material = cdae.get_material_index(item.material_name, True)
+        print(f"fetch {item.material_name}")
+        material = cdae.get_material_index(material_dict.get(item.material_name, "mat_0"), True)
         vtx_count = item.triangle_count * 3
         print(item.triangle_count)
         region = CdaeV31.Mesh.DrawRegion(vtx_offset, vtx_count, material)
@@ -202,7 +214,7 @@ def convert_geometry(geo: Geometry, cdae: CdaeV31, scale: float) -> CdaeV31.Mesh
 
         next_vtx_offset = vtx_offset + item.triangle_count * 3
 
-        dst_verts[vtx_offset:next_vtx_offset] = src_verts
+        dst_verts[vtx_offset:next_vtx_offset] = src_verts 
 
         if src_norms is not None:
             dst_norms[vtx_offset:next_vtx_offset] = src_norms
@@ -243,13 +255,56 @@ def convert_geometry(geo: Geometry, cdae: CdaeV31, scale: float) -> CdaeV31.Mesh
 def convert(dae: Collada):
     cdae = CdaeV31()
 
-    for mat in dae.materials:
+    material_dict: dict[str, str] = {}
+    for mat_id in dae.materials:
+        mat = dae.materials[mat_id]
         cdae.materials.append(convert_material(mat))
+        material_dict[mat_id] = mat.name
+        print(f"assign {mat_id} {mat.name}")
 
-    for geo in dae.geometries:
-        cdae.meshes.append(convert_geometry(geo, cdae, dae.unit_meter))
+    geometry_idx_dict: dict[str, int] = {}
+    for idx, geo_id in enumerate(dae.geometries):
+        geo = dae.geometries[geo_id]
+        cdae.meshes.append(convert_geometry(geo, material_dict, cdae, dae.unit_meter))
+        geometry_idx_dict[geo_id] = idx
 
-    tree = cdae.unpack_tree()
+
+    flat_tree = cdae.unpack_tree()
+
+    def add_node(node: Node, parent_index: int = -1) -> int:
+
+        if node.matrix is not None:
+            matrix = node.matrix.to_matrix()
+            translation = Vec3F.from_list3(matrix.to_translation())
+            print(translation)
+            rotation = Quat4I16.from_collada_quaternion(matrix.to_quaternion())
+        else:
+            translation = Vec3F()
+            rotation = Quat4I16.create_identity()
+        
+        (node_index, _) = flat_tree.create_node(node.name, parent_index, translation, rotation)
+
+        if node.geometry_instance is not None:
+
+            url = node.geometry_instance.url
+            geometry_name = dae.geometries[url].name
+            mesh_idx = geometry_idx_dict[url]
+
+            (_, flat_obj) = flat_tree.create_object(geometry_name, node_index)
+
+            flat_obj.numMeshes = 1
+            flat_obj.startMeshIndex = mesh_idx
+
+        for child_id in node.children:
+            add_node(node.children[child_id], node_index)
+
+        return node_index
+    
+    for root_node_id in dae.nodes:
+        add_node(dae.nodes[root_node_id])
+
+    cdae.pack_tree(flat_tree)
+    
 
     return cdae
 

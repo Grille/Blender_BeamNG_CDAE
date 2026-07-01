@@ -2,6 +2,7 @@ import struct
 import numpy as np
 
 from dataclasses import dataclass, asdict
+from typing import Protocol
 from enum import Enum, IntFlag
 from numpy.typing import NDArray
 
@@ -52,10 +53,12 @@ class CdaeV31:
 
     class Tree:
 
-        def __init__(self, cdae: 'CdaeV31', nodes: 'list[CdaeV31.Node]', objects: 'list[CdaeV31.Object]'):
+        def __init__(self, cdae: 'CdaeV31', nodes: 'list[CdaeV31.Node]', objects: 'list[CdaeV31.Object]', translations: 'list[Vec3F]', rotations: 'list[Quat4I16]'):
 
             self.cdae = cdae
             self.nodes = nodes
+            self.node_translations = translations
+            self.node_rotations = rotations
             self.objects = objects
 
 
@@ -92,20 +95,45 @@ class CdaeV31:
                 yield (mesh_index, self.cdae.meshes[mesh_index])
 
 
-        def create_node(self):
+        def _setup_object(self, target: 'CdaeV31.Node|CdaeV31.Object', name: str | None):
+            if name is not None: target.nameIndex = self.cdae.get_name_index(name)
+
+
+        def create_node(self, name: str | None = None, parent_node_index: int = -1, translation: Vec3F | None = None, rotations: Quat4I16 | None = None):
             node_index = len(self.nodes)
             node = CdaeV31.Node()
             self.nodes.append(node)
+
+            if name is not None: node.nameIndex = self.cdae.get_name_index(name)
+            if parent_node_index != -1: self.link_node(parent_node_index, node_index)
+            self.node_translations.append(translation if translation is not None else Vec3F())
+            self.node_rotations.append(rotations if rotations is not None else Quat4I16.create_identity())
+
             return (node_index, node)
 
 
-        def create_object(self):
+        def create_object(self, name: str | None = None, parent_node_index: int = -1):
             obj_index = len(self.objects)
             obj = CdaeV31.Object()
             self.objects.append(obj)
+
+            if name is not None: obj.nameIndex = self.cdae.get_name_index(name)
+            if parent_node_index != -1: self.link_object(parent_node_index, obj_index)
+
             return (obj_index, obj)
         
 
+        def _get_item_from_list(self, key: str, target: 'list[CdaeV31.Node|CdaeV31.Object]'):
+            for item in target:
+                if self.cdae.names[item.nameIndex] == key:
+                    return item
+            raise KeyError(key)
+        
+
+        def get_node(self, key: str) -> 'CdaeV31.Node': return self._get_item_from_list(key, self.nodes)
+        def get_object(self, key: str) -> 'CdaeV31.Object': return self._get_item_from_list(key, self.objects)
+
+        
         def _set_last_sibling(list: 'list[CdaeV31.Node|CdaeV31.Object]', current_index: int, value: int):
             next_index = list[current_index].nextSibling
             if next_index == -1:
@@ -501,7 +529,12 @@ class CdaeV31:
     
 
     def unpack_tree(self):
-        return CdaeV31.Tree(self, self.unpack_nodes(), self.unpack_objects())
+        return CdaeV31.Tree(
+            self, self.unpack_nodes(), 
+            self.unpack_objects(), 
+            self.defaultTranslations.unpack_list(Vec3F), 
+            self.defaultRotations.unpack_list(Quat4I16)
+        )
     
 
     def unpack_subshapes(self):
@@ -548,6 +581,8 @@ class CdaeV31:
     def pack_tree(self, tree: 'CdaeV31.Tree'):
         self.pack_nodes(tree.nodes)
         self.pack_objects(tree.objects)
+        self.defaultTranslations.pack_list(tree.node_translations)
+        self.defaultRotations.pack_list(tree.node_rotations)
     
 
     def pack_subshapes(self, subshapes: 'list[CdaeV31.SubShape]'):

@@ -29,6 +29,10 @@ class Vec2F:
         return self.x == value.x and self.y == value.y
     
 
+    def __str__(self):
+        return f"<{self.__class__.__name__} (x={self.x:.2f}, y={self.y:.2f})>"
+    
+
     def __iter__(self):
         yield self.x
         yield self.y
@@ -79,7 +83,7 @@ class Vec3F(Vec2F):
     
 
     def __str__(self):
-        return f"<{self.x:.2f}, {self.y:.2f}, {self.z:.2f}>"
+        return f"<{self.__class__.__name__} (x={self.x:.2f}, y={self.y:.2f}, z={self.z:.2f})>"
     
 
     def __eq__(self, value):
@@ -126,6 +130,10 @@ class Vec4F(Vec3F):
         return [self.x, self.y, self.z, self.w]
     
 
+    def __str__(self):
+        return f"<{self.__class__.__name__} (x={self.x:.2f}, y={self.y:.2f}, z={self.z:.2f}, w={self.w:.2f})>"
+    
+    
     def __eq__(self, value):
         if not isinstance(value, Vec4F):
             return False
@@ -150,10 +158,10 @@ class Quat4F(Vec4F):
     def from_collada_quaternion(cls, quat: mathutils.Quaternion | tuple):
         if isinstance(quat, tuple): quat = mathutils.Quaternion(quat)
         self = cls()
-        self.x = quat.y
-        self.y = quat.z
-        self.z = quat.w
-        self.w = -quat.x
+        self.x = -quat.w
+        self.y = quat.x
+        self.z = quat.y
+        self.w = quat.z
         return self
     
     
@@ -161,12 +169,13 @@ class Quat4F(Vec4F):
         return mathutils.Quaternion((-self.w, self.x, self.y, self.z))
     
     
-    def to_collada_matrix(self):
-        return self.to_collada_quaternion().to_matrix().to_4x4()
-    
-
     def to_blender_quaternion(self):
         return mathutils.Quaternion((self.x, self.y, self.z, -self.w))
+    
+
+    @classmethod
+    def create_identity(cls):
+        return cls(0.0, 0.0, 0.0, -1.0)
     
     
 
@@ -282,7 +291,7 @@ class Transforms:
     def __init__(self, position: Vec3F = None, scale: Vec3F = None, rotation: Quat4I16 = None):
         self.translation = Vec3F(0.0, 0.0, 0.0) if position is None else position
         self.scale = Vec3F(1.0, 1.0, 1.0) if scale is None else scale
-        self.rotation = Quat4I16() if rotation is None else rotation
+        self.rotation = Quat4I16.create_identity() if rotation is None else rotation
 
 
     @classmethod

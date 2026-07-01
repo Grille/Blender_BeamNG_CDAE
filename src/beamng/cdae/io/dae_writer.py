@@ -207,8 +207,8 @@ def write_to_tree(cdae: CdaeV31, dae: ET.Element):
         node_name = cdae.names[node.nameIndex]
         xml_node = ET.SubElement(parent_xml_node, DaeTag.node, {"id": node_name, "name": node_name, "type": "NODE"})
 
-        matrix = get_matrix(default_rotation[node_index], default_translations[node_index])
-        ET.SubElement(xml_node, "matrix", {"sid": "transform"}).text = format_float_list(matrix)
+        matrix = DaeMatrix.from_cdae(default_rotation[node_index], default_translations[node_index])
+        ET.SubElement(xml_node, DaeTag.matrix, {"sid": "transform"}).text = format_float_list(matrix.values)
 
         for obj_index, obj in cdae_tree.enumerate_child_objects(node_index):
  
