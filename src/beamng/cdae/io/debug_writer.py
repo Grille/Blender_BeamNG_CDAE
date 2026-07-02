@@ -1,5 +1,7 @@
 import json
 
+import numpy as np
+
 from io import TextIOWrapper
 from dataclasses import *
 
@@ -31,8 +33,25 @@ class DebugWriter:
         
         json_mesh_list = []
         for mesh in cdae.meshes:
+
+            indices = mesh.indices.to_numpy_array(np.int32)
+            regions = mesh.unpack_regions()
+
+            primitives = []
+            for region in regions:
+
+                region_indices = indices[region.get_indices_range()]
+                index_min = int(region_indices.min())
+                index_max = int(region_indices.max())
+                primitives.append({
+                    "index_start": region.index_start,
+                    "index_count": region.index_count,
+                    "info": region.info_str(),
+                    "__INDEX": f"max:{index_max}-min:{index_min}=={index_max-index_min}"
+                })
+
             json_mesh_list.append({
-                "primitives": get_dict_list(mesh.unpack_regions()),
+                "primitives": primitives,
                 "info": {
                     "type": mesh.type,
                     "numFrames": mesh.numFrames,

@@ -222,14 +222,18 @@ class ExportBase(Operator, ExportHelper):
         log("collect")
 
         builder = CdeaBuilder()
-        builder.mesh_builder.eval_mode = self.geo_eval
-        builder.mesh_builder.use_uv_hint = self.geo_uv_mode == UvMode.STRING
-        builder.mesh_builder.uv0_hint = self.geo_uv0
-        builder.mesh_builder.uv1_hint = self.geo_uv1
-        builder.mesh_builder.apply_scale = self.geo_apply_scale
-        #builder.mesh_builder.compute_tangents = self.file_format == FileFormat.CDAE
         builder.readonly = self.file_readonly
         builder.tree.build_mode = build_mode
+
+        mesh_builder = builder.mesh_builder
+        mesh_builder.split_draw_regions = self.file_format == FileFormat.CDAE
+        mesh_builder.eval_mode = self.geo_eval
+        mesh_builder.use_uv_hint = self.geo_uv_mode == UvMode.STRING
+        mesh_builder.uv0_hint = self.geo_uv0
+        mesh_builder.uv1_hint = self.geo_uv1
+        mesh_builder.apply_scale = self.geo_apply_scale
+        #builder.mesh_builder.compute_tangents = self.file_format == FileFormat.CDAE
+
         sampler = builder.sampler
         sampler.sample_transforms_enabled = self.use_transforms
         sampler.sample_keyframes_enabled = self.write_animations

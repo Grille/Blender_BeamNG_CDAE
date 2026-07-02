@@ -43,14 +43,14 @@ class CdaeMeshBuilder:
 
         def __init__(self):
 
-            self.draw_regions: NDArray = None
-            self.indices: NDArray = None
-            self.positions: NDArray = None
-            self.normals: NDArray = None
-            self.tangents: NDArray = None
-            self.uvs0: NDArray = None
-            self.uvs1: NDArray = None
-            self.colors: NDArray = None
+            self.draw_regions: NDArray[np.int32] = None
+            self.indices: NDArray[np.int32] = None
+            self.positions: NDArray[np.float32] = None
+            self.normals: NDArray[np.float32] = None
+            self.tangents: NDArray[np.float32] = None
+            self.uvs0: NDArray[np.float32] = None
+            self.uvs1: NDArray[np.float32] = None
+            self.colors: NDArray[np.uint8] = None
 
 
         def concatenate(self):
@@ -95,6 +95,7 @@ class CdaeMeshBuilder:
     def __init__(self, material_indexer: CdaeMaterialIndexer):
         self.mesh: bpy.types.Mesh = None
         self.apply_scale: bool = True
+        self.split_draw_regions: bool = False
         self.scale = Vec3F(1,1,1)
         self.material_indexer = material_indexer
         self.use_uv_hint: bool = False
@@ -248,10 +249,11 @@ class CdaeMeshBuilder:
         for mat_index in material_ranges:
             count = len(material_ranges[mat_index]) * 3
             info = mat_index | CdaeV31.Mesh.DrawRegion.InfoMask.INDEXED
-            while count > U16_LIMIT:
-                draw_regions.append((offset, U16_LIMIT, info))
-                offset += U16_LIMIT
-                count -= U16_LIMIT
+            if self.split_draw_regions:
+                while count > U16_LIMIT:
+                    draw_regions.append((offset, U16_LIMIT, info))
+                    offset += U16_LIMIT
+                    count -= U16_LIMIT
             draw_regions.append((offset, count, info))
             offset += count
 

@@ -300,6 +300,7 @@ class CdaeV31:
 
             @dataclass
             class DrawInfo:
+                material: int
                 type: 'CdaeV31.Mesh.DrawRegion.DrawType'
                 is_indexed: bool
                 has_no_mat: bool
@@ -319,12 +320,16 @@ class CdaeV31:
                 self.raw_info = (self.raw_info & ~CdaeV31.Mesh.DrawRegion.InfoMask.MATERIAL_MASK) | (value & CdaeV31.Mesh.DrawRegion.InfoMask.MATERIAL_MASK)
 
             
-            @property
-            def info(self):
+            def info_obj(self):
                 draw_type = CdaeV31.Mesh.DrawRegion.DrawType(self.raw_info & CdaeV31.Mesh.DrawRegion.InfoMask.TYPE_MASK)
                 is_indexed = bool(self.raw_info & CdaeV31.Mesh.DrawRegion.InfoMask.INDEXED)
                 has_no_mat = bool(self.raw_info & CdaeV31.Mesh.DrawRegion.InfoMask.NO_MATERIAL)
-                return CdaeV31.Mesh.DrawRegion.DrawInfo(draw_type, is_indexed, has_no_mat)
+                return CdaeV31.Mesh.DrawRegion.DrawInfo(self.material, draw_type, is_indexed, has_no_mat)
+            
+
+            def info_str(self):
+                info = self.info_obj()
+                return f"{self.raw_info}=>{{material:{info.material} type:{info.type.value} indexed:{info.is_indexed} no_mat:{info.has_no_mat}}}"
             
 
             @property
@@ -340,6 +345,13 @@ class CdaeV31:
             def get_triangle_range(self) -> range:
                 start = self.triangle_start
                 count = self.triangle_count
+                stop = start + count
+                return range(start, stop)
+            
+
+            def get_indices_range(self) -> range:
+                start = self.index_start
+                count = self.index_count
                 stop = start + count
                 return range(start, stop)
 
