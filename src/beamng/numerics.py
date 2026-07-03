@@ -41,6 +41,9 @@ class Vec2F:
 
 class Vec3F(Vec2F):
 
+    ZERO: 'Vec3F'
+    ONE: 'Vec3F'
+
     def __init__(self, x: float = 0.0, y: float = 0.0, z: float = 0.0):
         self.x = float(x)
         self.y = float(y)
@@ -288,9 +291,11 @@ class Color4F(Vec4F):
 
 class Transforms:
 
+    IDENTITY: 'Transforms'
+
     def __init__(self, position: Vec3F = None, scale: Vec3F = None, rotation: Quat4I16 = None):
-        self.translation = Vec3F(0.0, 0.0, 0.0) if position is None else position
-        self.scale = Vec3F(1.0, 1.0, 1.0) if scale is None else scale
+        self.translation = Vec3F.ZERO if position is None else position
+        self.scale = Vec3F.ONE if scale is None else scale
         self.rotation = Quat4I16.create_identity() if rotation is None else rotation
 
 
@@ -306,6 +311,13 @@ class Transforms:
         if not isinstance(value, Transforms):
             return False
         return self.translation == value.translation and self.scale == value.scale and self.rotation == value.rotation
+    
+
+
+Vec3F.ZERO = Vec3F(0.0,0.0,0.0)
+Vec3F.ONE = Vec3F(1.0,1.0,1.0)
+
+Transforms.IDENTITY = Transforms()
 
 
 

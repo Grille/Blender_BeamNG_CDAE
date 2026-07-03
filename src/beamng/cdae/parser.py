@@ -94,14 +94,16 @@ class CdaeParser:
         scene = CdaeParser.Scene()
         scene.build_scene(cdae)
 
-        positions = cdae.defaultTranslations.unpack_list(Vec3F)
+        translations = cdae.defaultTranslations.unpack_list(Vec3F)
         rotations = cdae.defaultRotations.unpack_list(Quat4I16)
+        aligned_scales = cdae.defaultAlignedScales.unpack_list(Vec3F)
 
         for index, node_info in enumerate(scene.nodes):
             obj = node_info.object
-            obj.location = positions[index].tuple3
+            obj.location = translations[index].tuple3
             obj.rotation_mode = 'QUATERNION'
             obj.rotation_quaternion = rotations[index].to_blender_quaternion()
+            if len(aligned_scales) > 0: obj.scale = aligned_scales[index].tuple3
 
         for mesh_info in scene.meshes:
             self.build_mesh(mesh_info.info, mesh_info.mesh)

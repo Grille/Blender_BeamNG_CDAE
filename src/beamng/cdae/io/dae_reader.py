@@ -180,10 +180,8 @@ def convert_geometry(geo: Geometry, material_dict: dict[str,str], cdae: CdaeV31,
 
     vtx_offset = 0
     for item in geo.triangles:
-        print(f"fetch {item.material_name}")
         material = cdae.get_material_index(material_dict.get(item.material_name, "mat_0"), True)
         vtx_count = item.triangle_count * 3
-        print(item.triangle_count)
         region = CdaeV31.Mesh.DrawRegion(vtx_offset, vtx_count, material)
         regions.append(region)
         vtx_offset += vtx_count
@@ -262,6 +260,7 @@ def convert(dae: Collada):
         material_dict[mat_id] = mat.name
         print(f"assign {mat_id} {mat.name}")
 
+
     geometry_idx_dict: dict[str, int] = {}
     for idx, geo_id in enumerate(dae.geometries):
         geo = dae.geometries[geo_id]
@@ -276,13 +275,13 @@ def convert(dae: Collada):
         if node.matrix is not None:
             matrix = node.matrix.to_matrix()
             translation = Vec3F.from_list3(matrix.to_translation())
-            print(translation)
+            scale = Vec3F.from_list3(matrix.to_scale())
             rotation = Quat4I16.from_collada_quaternion(matrix.to_quaternion())
+            transforms = Transforms(translation, scale, rotation)
         else:
-            translation = Vec3F()
-            rotation = Quat4I16.create_identity()
+            transforms = Transforms.IDENTITY
         
-        (node_index, _) = flat_tree.create_node(node.name, parent_index, translation, rotation)
+        (node_index, _) = flat_tree.create_node(node.name, parent_index, transforms)
 
         if node.geometry_instance is not None:
 

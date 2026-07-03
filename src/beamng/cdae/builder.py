@@ -459,12 +459,13 @@ class CdeaBuilder:
         def add_node(node: CdaeTree.Node, parent_index: int = -1) -> int:
             
             node_samples = self.sampler.sample(node.bpy_sample_obj)
-            trans = node_samples.transforms
+            transforms = node_samples.transforms
 
             if self.mesh_builder.apply_scale:
-                self.mesh_builder.scale = trans.scale
+                self.mesh_builder.scale = transforms.scale
+                transforms = Transforms(transforms.translation, Vec3F.ONE, transforms.rotation)
 
-            (node_index, flat_node) = flat_tree.create_node(node.name, parent_index, trans.translation, trans.rotation)
+            (node_index, flat_node) = flat_tree.create_node(node.name, parent_index, transforms)
 
             for obj in node.objects:
                 (obj_index, flat_obj) = flat_tree.create_object(obj.name, node_index)

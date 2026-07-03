@@ -53,12 +53,13 @@ class CdaeV31:
 
     class Tree:
 
-        def __init__(self, cdae: 'CdaeV31', nodes: 'list[CdaeV31.Node]', objects: 'list[CdaeV31.Object]', translations: 'list[Vec3F]', rotations: 'list[Quat4I16]'):
+        def __init__(self, cdae: 'CdaeV31', nodes: 'list[CdaeV31.Node]', objects: 'list[CdaeV31.Object]', translations: 'list[Vec3F]', rotations: 'list[Quat4I16]', aligned_scales: 'list[Vec3F]'):
 
             self.cdae = cdae
             self.nodes = nodes
             self.node_translations = translations
             self.node_rotations = rotations
+            self.node_aligned_scales = aligned_scales
             self.objects = objects
 
 
@@ -99,15 +100,18 @@ class CdaeV31:
             if name is not None: target.nameIndex = self.cdae.get_name_index(name)
 
 
-        def create_node(self, name: str | None = None, parent_node_index: int = -1, translation: Vec3F | None = None, rotations: Quat4I16 | None = None):
+        def create_node(self, name: str | None = None, parent_node_index: int = -1, transforms: Transforms | None = None):
             node_index = len(self.nodes)
             node = CdaeV31.Node()
             self.nodes.append(node)
 
+            if transforms is None: transforms = Transforms.IDENTITY
+
             if name is not None: node.nameIndex = self.cdae.get_name_index(name)
             if parent_node_index != -1: self.link_node(parent_node_index, node_index)
-            self.node_translations.append(translation if translation is not None else Vec3F())
-            self.node_rotations.append(rotations if rotations is not None else Quat4I16.create_identity())
+            self.node_translations.append(transforms.translation)
+            self.node_rotations.append(transforms.rotation)
+            self.node_aligned_scales.append(transforms.scale)
 
             return (node_index, node)
 
@@ -492,6 +496,7 @@ class CdaeV31:
 
         self.defaultRotations = create_empty(8) #quat4h
         self.defaultTranslations = create_empty(12) #vec3f
+        self.defaultAlignedScales = create_empty(12) #vec3f virtual!
         self.nodeRotations = create_empty(8) #quat4h
         self.nodeTranslations = create_empty(12) #vec3f
 
@@ -545,7 +550,8 @@ class CdaeV31:
             self, self.unpack_nodes(), 
             self.unpack_objects(), 
             self.defaultTranslations.unpack_list(Vec3F), 
-            self.defaultRotations.unpack_list(Quat4I16)
+            self.defaultRotations.unpack_list(Quat4I16),
+            self.defaultAlignedScales.unpack_list(Vec3F)
         )
     
 
@@ -595,6 +601,7 @@ class CdaeV31:
         self.pack_objects(tree.objects)
         self.defaultTranslations.pack_list(tree.node_translations)
         self.defaultRotations.pack_list(tree.node_rotations)
+        self.defaultAlignedScales.pack_list(tree.node_aligned_scales)
     
 
     def pack_subshapes(self, subshapes: 'list[CdaeV31.SubShape]'):
