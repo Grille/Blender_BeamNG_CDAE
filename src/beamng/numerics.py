@@ -56,6 +56,10 @@ class Vec3F(Vec2F):
         return self
     
 
+    @property
+    def xy(self): return Vec2F(self.x, self.y)
+    
+
     def unpack(self, data: bytes):
         (self.x, self.y, self.z) = struct.unpack("<3f", data)
     

@@ -135,12 +135,12 @@ class OpPresetsUtils:
         presets = LocalStorage.get_presets(active_op.temp_presets_file)
     
         row = self.layout.row(align=True)
-        row.menu("GRILLE_MT_presets_menu", text=self.temp_presets_selection)
-        row.operator("grille.presets_save", text="", icon='FILE_TICK')
+        row.menu(MT_PresetsMenu.bl_idname, text=self.temp_presets_selection)
+        row.operator(OT_SavePreset.bl_idname, text="", icon='FILE_TICK')
         sub = row.row(align=True)
         sub.enabled = len(presets.presets) > 1
-        sub.operator("grille.presets_remove", text="", icon='TRASH')
-        sub.operator("grille.presets_set_default", text="", icon='SOLO_ON')
+        sub.operator(OT_RemovePreset.bl_idname, text="", icon='TRASH')
+        sub.operator(OT_SetDefaultPreset.bl_idname, text="", icon='SOLO_ON')
 
 
     @staticmethod

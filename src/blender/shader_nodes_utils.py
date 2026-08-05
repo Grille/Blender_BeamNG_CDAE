@@ -7,9 +7,14 @@ from .enums import *
 
 class NodeLayoutValidator(NodeWalker):
     
-    def __init__(self, node = None, stack = None):
+    def __init__(self, node = None, stack = None, messages: list[str] | None = None):
         super().__init__(node, stack)
         self.raise_layout_errors = False
+        self.messages = messages
+
+
+    def log(self, msg: str):
+        if self.messages is not None: self.messages.append(msg)
 
 
     def assert_image_colorspace(self, input_key: str | int, cs: ColorSpace, maxdepth = 8) -> bool:
@@ -26,3 +31,8 @@ class NodeLayoutValidator(NodeWalker):
             if not self.try_follow(0) or depth > maxdepth:
                 return True
             depth += 1
+
+
+    def assert_is_float_value(self, input_key: str | int):
+        if self.get_float_value(input_key) is None:
+            self.messages.append(f"{input_key} is not static")

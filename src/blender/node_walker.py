@@ -1,7 +1,7 @@
 import bpy
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 from ..beamng.numerics import *
 from .enums import *
@@ -14,7 +14,7 @@ class NodeLayoutError(Exception):
 
 class NodeWalker():
 
-    def __init__(self, node: bpy.types.Node = None, stack: list = None):
+    def __init__(self, node: bpy.types.Node | None = None, stack: list[bpy.types.NodeGroup] | None = None):
         self.current = node
         self.group_stack = [] if stack is None else list(stack)
         self.skip_groups = True
@@ -33,9 +33,15 @@ class NodeWalker():
         raise TypeError()
     
 
+    def is_node_any_idname(self, *ntypes: str | bpy.types.Node):
+        for ntype in ntypes:
+            if self.is_node_idname(self, ntype): return True
+        return False
+    
+
     def find_material_output(self, nodes: bpy.types.Nodes):
         for node in nodes:
-            if node.bl_idname == NodeName.OutputMaterial and node.is_active_output:
+            if node.bl_idname == NodeName.OutputMaterial and cast(bpy.types.ShaderNodeOutputMaterial, node).is_active_output:
                 self.current = node
                 break
         return self.current is not None
@@ -68,7 +74,7 @@ class NodeWalker():
         return self.walk_link_recursively(input.links[0])
 
 
-    def walk_link_recursively(self, link) -> bpy.types.Node | None:
+    def walk_link_recursively(self, link: bpy.types.NodeLink) -> bpy.types.Node | None:
 
         from_node: bpy.types.Node = link.from_node
         from_socket: bpy.types.NodeSocket = link.from_socket
@@ -81,6 +87,7 @@ class NodeWalker():
         if self.skip_groups:
 
             if from_node.bl_idname == NodeName.Group:
+                from_node = cast(bpy.types.NodeGroup, from_node)
 
                 group_output_node = None
                 for node in from_node.node_tree.nodes:
@@ -99,6 +106,7 @@ class NodeWalker():
                 return self.walk_link_recursively(inner_output_input.links[0])
 
             elif from_node.bl_idname == NodeName.GroupInput:
+                from_node = cast(bpy.types.NodeGroupInput, from_node)
 
                 if len(self.group_stack) == 0:
                     if self.raise_layout_errors:
@@ -134,7 +142,7 @@ class NodeWalker():
         return walk
     
 
-    def _get_any_value(self, input_key: str | int, idname):
+    def _get_any_value(self, input_key: str | int, idname: str | None):
         input = self.get_input(input_key, throw = False)
         if input is None:
             return None
@@ -151,7 +159,6 @@ class NodeWalker():
         finally:
             self.group_stack = stack
 
-    
 
     def get_float_value(self, input_key: str | int) -> float | None:
         try:
@@ -173,6 +180,14 @@ class NodeWalker():
         try:
             value = self._get_any_value(input_key, NodeName.RGB)
             return Color4F.from_list4(value)
+        except:
+            return None
+        
+
+    def get_vector_value(self, input_key: str | int) -> Vec3F | None:
+        try:
+            value = self._get_any_value(input_key, None)
+            return Vec3F.from_list3(value)
         except:
             return None
         

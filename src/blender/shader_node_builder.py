@@ -1,11 +1,46 @@
 import bpy
+from dataclasses import dataclass, asdict
+
+from typing import NamedTuple
 from .enums import *
 from .node_walker import NodeWalker
 from .enums import *
 
 
 
-class NodeTreeBuilder():
+class NodeTreeBuilder:
+
+    @dataclass
+    class NodeSocket:
+        node: bpy.types.ShaderNode
+        accessor: str | int = 0
+
+
+
+    class Signature:
+
+        class IO(NamedTuple):
+            inputs: 'NodeTreeBuilder.Signature'
+            outputs: 'NodeTreeBuilder.Signature'
+
+
+        @dataclass
+        class Socket:
+            name: str
+            type: SocketType
+
+
+        def __init__(self, *sockets: 'Socket'):
+            self.sockets = sockets
+    
+
+        def apply_to_collection(self, collection: bpy.types.NodeCombineBundleItems):
+            for socket in self.sockets:
+                item = collection.new(socket.type.to_data_type(), socket.name)
+                if item.name != socket.name: raise Exception(f"Invalid Socket Name '{socket.name}' converted to '{item.name}'")
+
+
+
     
     def __init__(self, tree: bpy.types.ShaderNodeTree):
         self.tree = tree
@@ -25,10 +60,54 @@ class NodeTreeBuilder():
 
     def clear(self):
         self.tree.nodes.clear()
+
+
+    def create_bundle_node(self, type: NodeName, signature: 'Signature'):
+        node: bpy.types.NodeCombineBundle | bpy.types.NodeSeparateBundle = self.create_node(type)
+        node.define_signature = True
+        signature.apply_to_collection(node.bundle_items)
+        return node
+
+
+    class Closure(NamedTuple):
+        input: bpy.types.NodeClosureInput
+        output: bpy.types.NodeClosureOutput
+
+
+    def create_closure(self, signatures: 'Signature.IO'):
+        input: bpy.types.NodeClosureInput = self.create_node(NodeName.ClosureInput)
+        output: bpy.types.NodeClosureOutput = self.create_node(NodeName.ClosureOutput)
+        input.pair_with_output(output)
+        output.define_signature = True
+        signatures.inputs.apply_to_collection(output.input_items)
+        signatures.outputs.apply_to_collection(output.output_items)
+        return NodeTreeBuilder.Closure(input, output)
+
+
+    def create_closure_eval(self, signatures: 'Signature.IO'):
+        node: bpy.types.NodeEvaluateClosure = self.create_node(NodeName.EvaluateClosure)
+        node.define_signature = True
+        signatures.inputs.apply_to_collection(node.input_items)
+        signatures.outputs.apply_to_collection(node.output_items)
+        return node
+
+
+    def combine_bundle(self, signature: 'Signature', output: 'NodeSocket | None' = None, *input_sockets: 'NodeSocket'):
+        node: bpy.types.NodeCombineBundle = self.create_bundle_node(NodeName.CombineBundle, signature)
+        for index, socket in enumerate(input_sockets): self.link(socket.node, socket.accessor, node, index)
+        if output is not None: self.link(node, 0, output.node, output.accessor)
+        return node
     
 
-    def create_math(self, operation: Operation, value0: float = None, value1: float = None):
-        default_values = [value0, value1]
+    def seperate_bundle(self, signature: 'Signature', input: 'NodeSocket | None' = None, *output_sockets: 'NodeSocket'):
+        node: bpy.types.NodeSeparateBundle = self.create_bundle_node(NodeName.SeparateBundle, signature)
+        for index, socket in enumerate(output_sockets): self.link(node, index, socket.node, socket.accessor)
+        if input is not None: self.link(input.node, input.accessor, node, 0)
+        return node
+    
+    
+    def create_math(self, operation: Operation, value0: float = None, value1: float = None, value2: float = None):
+        default_values = [value0, value1, value2]
         node: bpy.types.ShaderNodeMath = self.create_node(NodeName.Math, default_values, operation=operation)
         return node
     
@@ -76,9 +155,9 @@ class NodeTreeBuilder():
         nodes = list(self.tree.nodes)
 
         # Find depth of each node by walking backwards through inputs
-        depths = {}
+        depths: dict[bpy.types.Node, int] = {}
 
-        def get_depth(node):
+        def get_depth(node: bpy.types.Node):
             if node in depths:
                 return depths[node]
 
@@ -95,7 +174,7 @@ class NodeTreeBuilder():
             get_depth(node)
 
         # Group nodes by depth
-        levels = {}
+        levels: dict[int, list[bpy.types.Node]] = {}
         for node, depth in depths.items():
             levels.setdefault(depth, []).append(node)
 
@@ -136,7 +215,7 @@ class NodeGroupBuilder(NodeTreeBuilder):
 
 
     def create_any_input(self, name: str, type: SocketType, hide_value: bool = False, default_value = None, subtype: str = None):
-        input: bpy.types.NodeSocket = self.interface.new_socket(name, in_out=SocketType.INPUT, socket_type=f"NodeSocket{type.value}")
+        input: bpy.types.NodeSocket = self.interface.new_socket(name, in_out=SocketIOType.INPUT, socket_type=f"NodeSocket{type.value}")
 
         input.hide_value = hide_value
         if default_value is not None:
@@ -162,8 +241,9 @@ class NodeGroupBuilder(NodeTreeBuilder):
         return input
     
 
-    def create_vector_input(self, name: str, hide_value = False, subtype: str = None):
-        input = self.create_any_input(name, SocketType.Vector, hide_value, subtype=subtype)
+    def create_vector_input(self, name: str, hide_value = False, default_value: float = (0.0,0.0,0.0), subtype: str = None, dimensions: int = 3):
+        input: bpy.types.NodeSocketVector = self.create_any_input(name, SocketType.Vector, hide_value, default_value, subtype)
+        if hasattr(input, "dimensions"): input.dimensions = dimensions
         return input
     
 
@@ -172,13 +252,20 @@ class NodeGroupBuilder(NodeTreeBuilder):
         return input
     
 
-    def create_shader_input(self, name: str, hide_value = False):
-        input = self.create_any_input(name, SocketType.Shader, hide_value)
-        return input
+    def create_shader_input(self, name: str):
+        return self.create_any_input(name, SocketType.Shader)
+    
+
+    def create_bundle_input(self, name: str) -> bpy.types.NodeSocketBundle:
+        return self.create_any_input(name, SocketType.Bundle)
+
+
+    def create_closure_input(self, name: str) -> bpy.types.NodeSocketClosure:
+        return self.create_any_input(name, SocketType.Closure)
     
 
     def create_any_output(self, name: str, type: SocketType):
-        output = self.interface.new_socket(name, in_out=SocketType.OUTPUT, socket_type=f"NodeSocket{type.value}")
+        output = self.interface.new_socket(name, in_out=SocketIOType.OUTPUT, socket_type=f"NodeSocket{type.value}")
         self.move_to_panel(output)
         return output
     
@@ -197,3 +284,11 @@ class NodeGroupBuilder(NodeTreeBuilder):
 
     def create_shader_output(self, name: str):
         return self.create_any_output(name, SocketType.Shader)
+    
+
+    def create_bundle_output(self, name: str):
+        return self.create_any_output(name, SocketType.Bundle)
+
+
+    def create_closure_output(self, name: str):
+        return self.create_any_output(name, SocketType.Closure)

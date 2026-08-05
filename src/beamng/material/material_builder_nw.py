@@ -1,7 +1,7 @@
 import bpy
 import os
 
-from typing import TypeVar, Generic, Optional
+from typing import TypeVar, Generic, Optional, cast
 from dataclasses import dataclass
 
 from ...blender.node_walker import NodeWalker
@@ -108,26 +108,30 @@ class MaterialNodeWalker(NodeWalker):
 
 
         if self.is_node_idname(BeamDetailUVScale):
-            u = self.get_float_value("Scale U")
-            v = self.get_float_value("Scale V")
-            socket.scale = Vec2F(u, v)
+            scale = self.get_vector_value("Scale")
+            if scale is not None:
+                socket.scale = scale.xy
+            else:
+                u = self.get_float_value("Scale U")
+                v = self.get_float_value("Scale V")
+                socket.scale = Vec2F(u, v)
             self.follow("UV")
 
         if self.is_node_idname(NodeName.VectorMath):
-            scale = self.get_default_value(1)
-            socket.scale = Vec2F(scale[0], scale[1])
+            scale = self.get_vector_value(1)
+            socket.scale = scale.xy
             self.follow(0)
 
 
         if self.is_node_idname(NodeName.UVMap):
-            socket.layer = self.current.uv_map
+            socket.layer = cast(bpy.types.ShaderNodeUVMap, self.current).uv_map
 
 
     def get_socket(self, input_key: str | int, socket: 'MaterialNodeWalker.MatSocketInfo' = None) -> 'MaterialNodeWalker.MatSocketInfo':
 
         if socket is None:
             socket = MaterialNodeWalker.MatSocketInfo(issues=[])
-
+ 
         try:
             input = self.get_input(input_key, False)
             if input is not None:
@@ -188,8 +192,8 @@ class MaterialNodeWalker(NodeWalker):
             stages = []
 
         if self.is_node_idname(BeamStageMix):
-            context = self.fork("Overlay")
-            self.follow("Base")
+            context = self.fork("BNGS Overlay")
+            self.follow("BNGS Base")
             self.parse_stages_recursively(stages)
             context.parse_stages_recursively(stages)
         else:
@@ -222,6 +226,6 @@ class MaterialNodeWalker(NodeWalker):
         mat.invert_backface_normals = double_sided and invert_backface_normals
         mat.cast_shadows = cast_shadows
 
-        self.try_follow(SocketName.Shader)
+        self.try_follow(SocketName.BNGShader)
             
 
