@@ -53,15 +53,19 @@ class NodeWalker():
             return input_key
         
         if isinstance(input_key, str):
-            return self.current.inputs.get(input_key) 
+            get = self.current.inputs.get
+            return get(input_key) if throw else get(input_key, None)
         
-        elif isinstance(input_key, int) and input_key < len(self.current.inputs):
-            return self.current.inputs[input_key]
-        
-        elif throw:
-            raise NodeLayoutError(f"Expected input {input_key} not found.")
-        
-        return None
+        elif isinstance(input_key, int):
+            if input_key < len(self.current.inputs): return self.current.inputs[input_key]
+            elif throw:  raise ValueError(f"{input_key} out of range.")
+            else: return None
+
+        raise TypeError(input_key)
+
+
+    def has_input(self, input_key: str | int):
+        return self.get_input(input_key, False) is not None
         
         
     def get_node(self, input_key: str | int, throw = True) -> bpy.types.Node | None:
@@ -200,7 +204,9 @@ class NodeWalker():
             
 
     def get_image(self) -> bpy.types.Image:
-        return self.current.image
+        if type(self.current) is bpy.types.ShaderNodeTexImage:
+            return  self.current.image
+        raise Exception(f"{type(self.current)} is not a valid image node.")
     
 
     def get_default_value(self, input_key: str | int):

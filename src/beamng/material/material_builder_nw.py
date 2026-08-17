@@ -192,8 +192,12 @@ class MaterialNodeWalker(NodeWalker):
             stages = []
 
         if self.is_node_idname(BeamStageMix):
-            context = self.fork("BNGS Overlay")
-            self.follow("BNGS Base")
+            if self.has_input("Base"):
+                context = self.fork("Overlay")
+                self.follow("Base")
+            else:
+                context = self.fork("BNGS Overlay")
+                self.follow("BNGS Base")
             self.parse_stages_recursively(stages)
             context.parse_stages_recursively(stages)
         else:
@@ -226,6 +230,6 @@ class MaterialNodeWalker(NodeWalker):
         mat.invert_backface_normals = double_sided and invert_backface_normals
         mat.cast_shadows = cast_shadows
 
-        self.try_follow(SocketName.BNGShader)
+        if not self.try_follow(SocketName.Shader): self.follow(SocketName.BNGShader)
             
 

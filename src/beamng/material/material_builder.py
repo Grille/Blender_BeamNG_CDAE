@@ -134,7 +134,7 @@ class MaterialBuilder:
         if bmat.node_tree is not None:
             
             ctx = MaterialNodeWalker()
-            if not ctx.find_material_output(bmat.node_tree.nodes): raise Exception("Material Output not found.")
+            if not ctx.find_material_output(bmat.node_tree.nodes): raise Exception("ShaderNodeOutputMaterial not found.")
             ctx.follow(SocketName.Surface)
             self.parse_node_tree(ctx)
 

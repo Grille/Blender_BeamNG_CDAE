@@ -1,3 +1,5 @@
+import math
+
 from ..enums import *
 
 
@@ -15,6 +17,7 @@ class NodeName(StrEnum):
     Mix = "ShaderNodeMix"
     MixRGB = "ShaderNodeMixRGB"
     MixShader = "ShaderNodeMixShader"
+    AddShader = "ShaderNodeAddShader"
     NormalMap = "ShaderNodeNormalMap"
     TexImage = "ShaderNodeTexImage"
     UVMap = "ShaderNodeUVMap"
@@ -27,6 +30,7 @@ class NodeName(StrEnum):
     Geometry = "ShaderNodeNewGeometry"
     CombineXYZ = "ShaderNodeCombineXYZ"
     ColorAttribute = "ColorAttribute"
+    SceneTime = "GeometryNodeInputSceneTime"
 
     RGB = "ShaderNodeRGB"
     Value = "ShaderNodeValue"
@@ -91,6 +95,7 @@ class SocketName(StrEnum):
     Data = "Data"
     Value = "Value"
     Epsilon = "Epsilon"
+    Enabled = "Enabled"
 
     ThinWall = "Thin Wall"
     SubsurfaceWeight = "Subsurface Weight"
@@ -116,8 +121,9 @@ class SocketShape(StrEnum):
 
 class SocketIndex(IntEnum):
     MixFactor = 0
-    MixFloatIn0 = 1
-    MixFloatIn1 = 2
+    MixFactorNU = 1
+    MixFloatIn0 = 2
+    MixFloatIn1 = 3
     MixFloatOut = 0
     MixVectorIn0 = 4
     MixVectorIn1 = 5
@@ -143,8 +149,8 @@ class SocketIOType(StrEnum):
     OUTPUT = "OUTPUT"
 
 
-
 class SocketType(StrEnum):
+    Error = "Error"
     Bool = "Bool"
     Float = "Float"
     Integer = "Integer"
@@ -155,16 +161,100 @@ class SocketType(StrEnum):
     Bundle = "Bundle"
     Closure = "Closure"
 
-    def to_data_type(self):
-        if self == SocketType.Bool: return "BOOLEAN"
-        return self.upper()
+    @staticmethod
+    def from_data_type(value):
+        return _SOCKET_DATA_TYPE_INVERTED[value]
+
+    @staticmethod
+    def select_by_max_precedence(*types: 'SocketType'):
+
+        length = len(types)
+        if length < 1: return SocketType.Error
+        type0 = types[0]
+        if length == 1: return type0
+
+        max_p = type0.precedence
+        max_type = type0
+        exclusive = max_p < 0
+        all_equal = True
+
+        for i in range(1, length):
+            type = types[i]
+            all_equal &= type0 == type
+
+            p = type.precedence
+            exclusive |= p < 0
+            if p > max_p:
+                max_p = p
+                max_type = type
+
+        if all_equal: return type0
+        if exclusive: return SocketType.Error
+        return max_type
+
+    @property
+    def full_name(self):
+        return _SOCKET_FULL_NAME[self]
+    
+    @property
+    def data_type(self):
+        return _SOCKET_DATA_TYPE[self]
+
+    @property
+    def precedence(self):
+        return _SOCKET_PRECEDENCE.get(self, -1)
+
+    def simplify_value(self):
+        return _SOCKET_SIMPLIFY_VALUE.get(self, self)
+    
+    def simplify_vector(self):
+        return _SOCKET_SIMPLIFY_VECTOR.get(self, self)
+
+    def simplify(self):
+        return self.simplify_value().simplify_vector()
+    
+_SOCKET_FULL_NAME: dict[SocketType, str] = {}
+_SOCKET_DATA_TYPE: dict[SocketType, str] = {}
+_SOCKET_SIMPLIFY_VALUE = { 
+    SocketType.Bool: SocketType.Float,
+    SocketType.Float: SocketType.Float,
+    SocketType.Integer: SocketType.Float,
+}
+_SOCKET_SIMPLIFY_VECTOR = { 
+    SocketType.Vector: SocketType.Vector,
+    SocketType.Color: SocketType.Vector,
+}
+_SOCKET_PRECEDENCE: dict[SocketType, int] = {
+    SocketType.Bool: 0,
+    SocketType.Integer: 1,
+    SocketType.Float: 2,
+    SocketType.Vector: 3,
+    SocketType.Color: 4,
+    SocketType.Shader: 5,
+}
+
+for key in SocketType:
+    _SOCKET_FULL_NAME[key] = f"NodeSocket{key}"
+
+    if key == SocketType.Bool: _SOCKET_DATA_TYPE[key] = "BOOLEAN"
+    elif key == SocketType.Color: _SOCKET_DATA_TYPE[key] = "RGBA"
+    else: _SOCKET_DATA_TYPE[key] = key.upper()
+
+_SOCKET_DATA_TYPE_INVERTED = {value: key for key, value in _SOCKET_DATA_TYPE.items()}
+_SOCKET_DATA_TYPE_INVERTED["VALUE"] = SocketType.Float
+
+
+
+class SocketSubtype(StrEnum):
+    FACTOR = "FACTOR"
 
 
 
 class Operation(StrEnum):
+    ADD = 'ADD'
     SUBTRACT = 'SUBTRACT'
     MULTIPLY = 'MULTIPLY'
-    ADD = 'ADD'
+    DIVIDE = 'DIVIDE'
     MULTIPLY_ADD = 'MULTIPLY_ADD'
     GREATER_THAN = 'GREATER_THAN'
     LESS_THAN = 'LESS_THAN'

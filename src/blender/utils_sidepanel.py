@@ -34,7 +34,7 @@ class UtilsPanelPropertyGroup(PropertyGroup):
 
 
 class OT_convert_materials(bpy.types.Operator):
-    bl_idname = "beamng_cdae_utilspanel.convert_materials"
+    bl_idname = "grille_beamng_cdae_utilspanel.convert_materials"
     bl_label = "Convert Materials"
     bl_description = "Convert materials to BeamNG format"
 
@@ -53,7 +53,7 @@ class OT_convert_materials(bpy.types.Operator):
 
 class PT_materials_panel(bpy.types.Panel):
     bl_label = "Materials"
-    bl_idname = "PT_beamng_cdae_utilspanel"
+    bl_idname = "GRILLE_PT_beamng_cdae_utilspanel"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_category = 'BeamNG'
