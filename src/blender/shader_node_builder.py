@@ -60,20 +60,14 @@ class NodeTreeBuilder:
             return lb
 
 
-        def float_math(self, operation: Operation, *values: LinkSource, clamp = False):
-            node = self.node(bpy.types.ShaderNodeMath, *values, operation=operation)
-            node.node.use_clamp = clamp
-            return node
-
-
-        def math(self, operation: Operation, *values: LinkSource):
-            match _get_input_type_by_precedence(*values).simplify():
+        def math(self, operation: Operation, *values: LinkSource, socket_type: SocketType | None = None):
+            match _get_input_type_by_precedence(*values).simplify() if socket_type is None else socket_type:
                 case SocketType.Float:
                     return self.node(bpy.types.ShaderNodeMath, *values, operation=operation)
                 case SocketType.Vector:
                     return self.node(bpy.types.ShaderNodeVectorMath, *values, operation=operation)
                 case SocketType.Shader:
-                    if operation != Operation.ADD: raise ValueError()
+                    if operation != Operation.ADD: raise ValueError("Shader only supports Operation.Add")
                     return self.node(bpy.types.ShaderNodeAddShader, *values)
                 case _: raise ValueError()
 
@@ -87,7 +81,7 @@ class NodeTreeBuilder:
         def sub(self, value0: LinkSource, value1: LinkSource): return self.math(Operation.SUBTRACT, value0, value1)
 
 
-        def mix(self, a: LinkSource, b: LinkSource, factor: LinkSource = 0.5, op = Operation.MIX, clamp_factor = False, clamp_result = False):
+        def mix(self, factor: LinkSource, a: LinkSource, b: LinkSource, op = Operation.MIX, clamp_factor = False, clamp_result = False, socket_type: SocketType | None = None):
 
             def mix_node(data_type: SocketType):
                 mix = self.node(bpy.types.ShaderNodeMix)
@@ -96,8 +90,9 @@ class NodeTreeBuilder:
                 mix.node.clamp_factor = clamp_factor
                 mix.node.clamp_result = clamp_result
                 return mix
-            
-            match _get_input_type_by_precedence(a, b).simplify_value():
+
+            socket_type = _get_input_type_by_precedence(a, b).simplify_value() if socket_type is None else socket_type
+            match socket_type:
 
                 case SocketType.Float:
                     mix = mix_node(SocketType.Float)
@@ -132,7 +127,7 @@ class NodeTreeBuilder:
                     b >> mix[2]
                     return mix[0]
 
-                case _: raise ValueError()
+                case _: raise ValueError(f"Unexpected SocketType {socket_type}")
 
 
         def bool(self, value: LinkSource, invert = False):
@@ -273,25 +268,29 @@ class NodeTreeBuilder:
     @overload
     def create_node(self, node_type: type[TNODE], default_values: list = None, **dict) -> TNODE: ...
 
-    def create_node(self, node_type: str | type, default_values: list = None, **dict):
-
+    def _get_node_type_idname(self, node_type: str | type) -> str:
         if isinstance(node_type, str):
-            idname = node_type
+            return node_type
         elif isinstance(node_type, type):
             if issubclass(node_type, bpy.types.Node):
                 if hasattr(node_type, "bl_idname"):
-                    idname = node_type.bl_idname
+                    return node_type.bl_idname
                 else:
-                    idname = node_type.bl_rna.identifier
+                    return node_type.bl_rna.identifier
             else:
                 raise TypeError("node_type not subclass of 'bpy.types.Node'.")
         else:
             raise TypeError(f"node_type must be str or type.")
         
+
+    def create_node(self, node_type: str | type, default_values: list = None, **dict):
+
+        idname = self._get_node_type_idname(node_type)
         node = self.tree.nodes.new(idname)
 
         for key, value in dict.items():
             setattr(node, key, value)
+
         if default_values is not None:
             for idx, value in enumerate(default_values):
                 if value is not None:
@@ -502,21 +501,15 @@ class NodeGroupData:
 
 class NodeGroupBuilder(NodeTreeBuilder):
 
-    class _IO:
 
-        def __init__(self, ngb: 'NodeGroupBuilder'):
-            self._ngb = ngb
+    def input(self, create_info: SocketCreateInfo | SocketType, name: str, default_value: SocketValue | None = None):
+        self._create_socket(create_info, name, SocketIOType.INPUT, default_value)
+        return NodeGroupBuilder.LinkBuilder(self, self.inputs_node, name)
 
-
-        def input(self, create_info: SocketCreateInfo | SocketType, name: str, default_value: SocketValue | None = None):
-            socket = self._ngb.create_socket(create_info, name, SocketIOType.INPUT)
-            if default_value is not None: socket.default_value = default_value
-            return NodeGroupBuilder.LinkBuilder(self._ngb, self._ngb.inputs_node, name)
-
-        
-        def output(self, create_info: SocketCreateInfo | SocketType, name: str):
-            self._ngb.create_socket(create_info, name, SocketIOType.OUTPUT)
-            return NodeGroupBuilder.LinkBuilder(self._ngb, self._ngb.output_node, name)
+    
+    def output(self, create_info: SocketCreateInfo | SocketType, name: str):
+        self._create_socket(create_info, name, SocketIOType.OUTPUT)
+        return NodeGroupBuilder.LinkBuilder(self, self.output_node, name)
 
 
 
@@ -528,29 +521,28 @@ class NodeGroupBuilder(NodeTreeBuilder):
         self.inputs_node: bpy.types.NodeGroupInput = None
         self.output_node: bpy.types.NodeGroupOutput = None
         self.ngdata = NodeGroupData()
-        self.create_io()
-        self.io = NodeGroupBuilder._IO(self)
+        self._create_io()
 
 
-    def create_io(self):
+    def _create_io(self):
         if self.output_node is not None: return (self.inputs_node, self.output_node)
         self.inputs_node = self.create_node(NodeName.GroupInput)
         self.output_node = self.create_node(NodeName.GroupOutput)
         return (self.inputs_node, self.output_node)
 
 
-    def create_panel(self, name: str, description='', default_closed=True):
+    def panel(self, name: str, description='', default_closed=True):
         self.panel = self.interface.new_panel(name, description=description, default_closed=default_closed)
         self.panel_position = 0
 
 
-    def move_to_panel(self, item: bpy.types.NodeTreeInterfaceItem):
+    def _move_to_panel(self, item: bpy.types.NodeTreeInterfaceItem):
         if self.panel is None: return
         self.interface.move_to_parent(item, self.panel, self.panel_position)
         self.panel_position += 1
 
 
-    def create_socket(self, create_info: SocketCreateInfo | SocketType, name: str, in_out: SocketIOType):
+    def _create_socket(self, create_info: SocketCreateInfo | SocketType, name: str, in_out: SocketIOType, default_value: SocketValue | None = None):
 
         if isinstance(create_info, SocketCreateInfo):
             socket_type = create_info.type
@@ -560,11 +552,15 @@ class NodeGroupBuilder(NodeTreeBuilder):
 
         socket: bpy.types.NodeSocket = self.interface.new_socket(name, in_out=in_out, socket_type=socket_type.full_name)
 
+        if default_value is not None: socket.default_value = default_value
+
         if isinstance(create_info, SocketCreateInfo):
             socket.hide_value = create_info.hide_value
             if in_out == SocketIOType.INPUT: self.ngdata.input_shapes[name] = create_info.shape
             else: self.ngdata.output_shapes[name] = create_info.shape
             _apply_kwargs(socket, **create_info.kwargs)
+
+        self._move_to_panel(socket)
 
         return socket
 
@@ -577,7 +573,7 @@ class NodeGroupBuilder(NodeTreeBuilder):
         if subtype is not None:
             input.subtype = subtype
 
-        self.move_to_panel(input)
+        self._move_to_panel(input)
 
         return input
     
@@ -624,7 +620,7 @@ class NodeGroupBuilder(NodeTreeBuilder):
 
     def create_any_output(self, name: str, type: SocketType):
         output: bpy.types.NodeSocket = self.interface.new_socket(name, in_out=SocketIOType.OUTPUT, socket_type=f"NodeSocket{type.value}")
-        self.move_to_panel(output)
+        self._move_to_panel(output)
         return output
     
 
