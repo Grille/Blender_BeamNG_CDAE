@@ -24,7 +24,7 @@ RGBA =_Signature(
 
 BNGS_INPUT = _Signature(
     _Signature.Socket(SocketName.InvertBackfaceNormals, SocketType.Bool),
-    _Signature.Socket(SocketName.ReflectionEnabled, SocketType.Bool),
+    _Signature.Socket(SocketName.ReflectionMode, SocketType.Integer),
     _Signature.Socket(SocketName.SubsurfaceScattering, SocketType.Float)
 )
 BNGS_OUTPUT = _Signature(
@@ -33,18 +33,27 @@ BNGS_OUTPUT = _Signature(
 )
 BNGS_IO = _Signature.IO(BNGS_INPUT, BNGS_OUTPUT)
 
-TEXTURE_SOCKET_SHAPE = SocketShape.SQUARE
-VALUE_SOCKET_SHAPE = SocketShape.DIAMOND
+TEXTURE_SOCKET_SHAPE = SocketShape.DIAMOND
+VALUE_SOCKET_SHAPE = SocketShape.LINE
+PRIVATE_SOCKET_SHAPE = SocketShape.LIST
 
 COLOR_WHITE = (1,1,1,1)
-COLOR_BLACK = (0,0,0,0)
+COLOR_BLACK = (0,0,0,1)
+COLOR_NULL = (0,0,0,0)
+COLOR_NULL_HALF = (0.5,0.5,0.5,0.5)
 
+_BOOL_VALUE = _SCI(SocketType.Bool, VALUE_SOCKET_SHAPE, False)
 _FLOAT = _SCI.FACTOR
 _FLOAT_VALUE = _SCI(SocketType.Float, VALUE_SOCKET_SHAPE, False, default_value=1, **_SCI.FACTOR.kwargs)
 _FLOAT_TEXTURE = _SCI(SocketType.Float, TEXTURE_SOCKET_SHAPE, True, default_value=1)
 _COLOR = _SCI.COLOR
 _COLOR_VALUE = _SCI(SocketType.Color, VALUE_SOCKET_SHAPE, False, default_value=COLOR_WHITE)
 _COLOR_TEXTURE = _SCI(SocketType.Color, TEXTURE_SOCKET_SHAPE, True, default_value=COLOR_WHITE)
+_RGBA_X = _SCI(SocketType.Bundle)
+_RGBA_VALUE = _SCI(SocketType.Bundle, VALUE_SOCKET_SHAPE, False)
+_RGBA_TEXTURE = _SCI(SocketType.Bundle, TEXTURE_SOCKET_SHAPE, True)
+_NORMAL = _SCI(SocketType.Vector, SocketShape.CIRCLE, True)
+_INT_PRIVATE = _SCI(SocketType.Integer, PRIVATE_SOCKET_SHAPE, False)
 _VEC2 = _SCI.VEC2
 _VEC3 = _SCI.VEC3
 
@@ -67,14 +76,15 @@ class NodeRuntimeData:
 
 
     def __init__(self):
-        self.update_alpha_link_lock: bool = False
         self.messages: list[str] = []
-        
 
 
+
+_NODE_GROUP_DATA_RUNTIME_DICT: dict[int, NodeGroupData] = {}
 
 class BaseShaderNode(bpy.types.ShaderNodeCustomGroup):
 
+    bl_idname = f"{SHADER_NODE_PREFIX}BaseNode"
     bl_label = "BNG Node"
     bl_icon = 'NONE'
     tree_type = NodeName.ShaderNodeTree
@@ -116,7 +126,11 @@ class BaseShaderNode(bpy.types.ShaderNodeCustomGroup):
         tree = self.node_tree = self.get_node_group()
 
         if NODE_GROUP_JSON_KEY in tree:
-            ngdata =  NodeGroupData.from_text(tree[NODE_GROUP_JSON_KEY])
+            ptr = tree.as_pointer()
+            ngdata = _NODE_GROUP_DATA_RUNTIME_DICT.get(ptr, None)
+            if ngdata is None:
+                ngdata =  NodeGroupData.from_text(tree[NODE_GROUP_JSON_KEY])
+                _NODE_GROUP_DATA_RUNTIME_DICT[ptr] = ngdata
             for key in ngdata.input_shapes: self.inputs[key].display_shape = ngdata.input_shapes[key]
             for key in ngdata.output_shapes: self.outputs[key].display_shape = ngdata.output_shapes[key]
 
@@ -152,6 +166,7 @@ class BaseShaderNode(bpy.types.ShaderNodeCustomGroup):
         ngb.arrange_nodes()
         tree = ngb.tree
         tree.color_tag = self.ng_color_tag
+        _NODE_GROUP_DATA_RUNTIME_DICT[tree.as_pointer()] = ngb.ngdata
         tree[NODE_GROUP_JSON_KEY] = ngb.ngdata.dump()
         tree[NODE_GROUP_VERSION_MAYOR_KEY] = self.ng_version_mayor
         tree[NODE_GROUP_VERSION_MINOR_KEY] = self.ng_version_minor
@@ -168,28 +183,19 @@ class BeamImageTex(BaseShaderNode):
 
     bl_idname = f"{SHADER_NODE_PREFIX}TexImg"
     bl_label = "BNG Image Texture"
-    bl_icon = 'TEXTURE'
+    #bl_icon = 'TEXTURE'
 
     bl_width_default = 240
-    color_tag = GroupColorTag.TEXTURE
+    ng_color_tag = GroupColorTag.TEXTURE
 
     _updating = False
 
 
     class ImageType(StrEnum):
+        SRGB = "Color sRGBA"
         COLOR = "Color"
-        COLOR_HDR = "Color_HDR"
         NORMAL = "Normal"
         DATA = "Data"
-        SRGB = "sRGB"
-        NON_COLOR = "Non-Color"
-
-    ImageType_Dict = {
-        ImageType.COLOR: ImageType.SRGB,
-        ImageType.COLOR_HDR: ImageType.NON_COLOR,
-        ImageType.NORMAL: ImageType.NON_COLOR,
-        ImageType.DATA: ImageType.NON_COLOR,
-    }
 
 
     # Custom properties
@@ -197,18 +203,13 @@ class BeamImageTex(BaseShaderNode):
     image_type: bpy.props.EnumProperty(
         name="Type",
         items=[
-            (ImageType.COLOR, "Color", "sRGB"),
-            (ImageType.COLOR_HDR, "Color HDR", "Non-Color"),
-            (ImageType.NORMAL, "Normal", "Non-Color"),
-            (ImageType.DATA, "Data", "Non-Color"),
+            (ImageType.COLOR, "Color", ""),
+            (ImageType.SRGB, "Color HDR", ""),
+            (ImageType.NORMAL, "Normal", ""),
+            (ImageType.DATA, "Data", ""),
         ],
-        default=ImageType.COLOR_HDR,
+        default=ImageType.SRGB,
         update=lambda self, ctx: self.update_type(ctx)
-    )
-    uv_map: bpy.props.EnumProperty(
-        name="UV Map",
-        items=lambda self, context: self.uv_map_items(context),
-        update=lambda self, context: self.update_uvmap(context),
     )
 
 
@@ -216,122 +217,53 @@ class BeamImageTex(BaseShaderNode):
     def image(self) -> bpy.types.Image: return self.image_ptr
 
 
-    def get_teximage(self) -> bpy.types.ShaderNodeTexImage:
-        return self.node_tree.nodes.get(NodeName.TexImage)
-
-
-    def get_node_group_by_name(self, group_name: str):
-
-        if group_name in bpy.data.node_groups:
-            return bpy.data.node_groups[group_name]
-        
-        cls = type(self)
-        ngb = NodeGroupBuilder(group_name)
-        cls.create_node_group(ngb, self.image)
-        ngb.arrange_nodes()
-        tree = ngb.tree
-        tree.color_tag = cls.color_tag
-        return tree
-    
 
     def update_image(self, ctx):
-
-        group_name = self.get_node_group_image_name()
-
-        if self.node_tree.name == group_name:
-            return
-
-        self.node_tree = self.get_node_group_by_name(group_name)
-
-        #self.update_type(ctx)
+        self.init(ctx)
 
 
     def update_type(self, ctx):
-
-        ImageType = BeamImageTex.ImageType
-
-        teximage = self.get_teximage()
-        if teximage.image is None:
-            return
-        
-        match self.image_type:
-            case ImageType.COLOR:
-                self.outputs["Color"].enabled
-
-        
-        cs = teximage.image.colorspace_settings
-        if self.image_type == ImageType.COLOR and cs.name != ImageType.SRGB:
-            cs.name = ImageType.SRGB
-        elif cs.name != ImageType.NON_COLOR:
-            cs.name = ImageType.NON_COLOR
-
-            
-    def uv_map_items(self, context):
-        # Find active object with mesh data
-        obj = context.object
-        if not obj or not obj.type == 'MESH':
-            return [("UVMap", "UVMap", "Default UV Map")]
-
-        items = []
-        for uv in obj.data.uv_layers:
-            items.append((uv.name, uv.name, ""))
-        return items or [("UVMap", "UVMap", "Default UV Map")]
+        pass
 
 
-    def update_uvmap(self, context):
-        # Update the UV Map node's uv_map property when dropdown changes
-        if self.node_tree:
-            for node in self.node_tree.nodes:
-                if node.bl_idname == NodeName.UVMap:
-                    node.uv_map = self.uv_map
-
-
-    def get_node_group_image_name(self):
-        return f".{self.bl_idname}_{self.image.name_full}_v{self.bl_may}"
+    def get_node_group_name(self):
+        base_name = super().get_node_group_name()
+        return base_name if self.image is None else f"{base_name}_{self.image.name_full}"
     
 
-    @staticmethod
-    def create_node_group(ngb: NodeGroupBuilder, image: bpy.types.Image | None = None):
-        
-        ngb.create_vector_input(SocketName.UV, True)
-        ngb.create_color_output(SocketName.Color)
-        ngb.create_float_output(SocketName.Alpha)
-        ngb.create_vector_output(SocketName.Normal)
-        ngb.create_float_output(SocketName.Data)
+    def create_node_group(self, ngb):
 
-        inputs, outputs = ngb._create_io()
-        imgtex: bpy.types.ShaderNodeTexImage = ngb.create_node(NodeName.TexImage)
-        imgtex.name = NodeName.TexImage
-        imgtex.image = image
-        normal_map = ngb.create_node(NodeName.NormalMap)
+        LS = BeamImageTex.ImageType
 
-        ngb.link(inputs, SocketName.UV, imgtex)
-        ngb.link(imgtex, SocketName.Color, normal_map)
-        ngb.link(normal_map, SocketName.Normal, outputs)
-        ngb.link(imgtex, SocketName.Color, outputs, SocketName.Data)
-        ngb.link(imgtex, SocketName.Color, outputs, 0)
-        ngb.link(imgtex, SocketName.Alpha, outputs, 1)
+        in_strength = ngb.input(_FLOAT_VALUE, SocketName.Strength)
+        in_uv = ngb.input(_NORMAL, SocketName.Vector)
+        out_color = ngb.output(_COLOR_TEXTURE, LS.COLOR)
+        out_rgba = ngb.output(_RGBA_TEXTURE, LS.SRGB)
+        out_normal = ngb.output(_NORMAL, LS.NORMAL)
+        out_data = ngb.output(_FLOAT_TEXTURE, LS.DATA)
+
+        imgtex = ngb.nc.node(bpy.types.ShaderNodeTexImage, image = self.image)
+        normal_map = ngb.nc.node(bpy.types.ShaderNodeNormalMap)
+
+        in_uv >> imgtex[SocketName.Vector]
+
+        imgtex[SocketName.Color] >> out_color
+
+        in_strength >> normal_map[SocketName.Strength]
+        imgtex[SocketName.Color] >> normal_map[SocketName.Color]
+        normal_map[SocketName.Normal] >> out_normal
+
     
 
     def check_image_type(self, layout):
-
-        teximage = self.get_teximage()
-        if not teximage or not teximage.image:
-            return
-        
-        cs_name: str = teximage.image.colorspace_settings.name
-
-        if BeamImageTex.ImageType_Dict[self.image_type].value != cs_name:
-            row = layout.row()
-            row.alert = True
-            row.label(text=f"Color space mismatch! ({cs_name})")
+        pass
 
 
     def draw_buttons(self, context: bpy.types.Context, layout: bpy.types.UILayout):
         super().draw_buttons(context, layout)
         layout.template_ID(self, "image_ptr", open="image.open", new="image.new")
-        layout.prop(self, "image_type", text="Type")
-        self.check_image_type(layout)
+        #layout.prop(self, "image_type", text="Type")
+        #self.check_image_type(layout)
         #layout.prop(self, "uv_map")
         #uv1hint = getattr(context.space_data.id, MaterialProperties.UV1_HINT)
         #layout.label(text=f"UV Map Index: {1 if uv1hint in self.uv_map else 0}")
@@ -560,22 +492,10 @@ class BeamDetailNormal(BaseShaderNode):
 
     def create_node_group(self, ngb: NodeGroupBuilder):
         
-        ngb.create_vector_input("Base", True)
-        ngb.create_vector_input("Detail", True)
-
-        ngb.create_vector_output("Normal")
-
-        inputs, outputs = ngb._create_io()
-
-        normal: bpy.types.ShaderNodeNormalMap = ngb.create_node(NodeName.NormalMap)
-        math_sub = ngb.create_node(NodeName.VectorMath, operation=Operation.SUBTRACT)
-        math_add = ngb.create_node(NodeName.VectorMath, operation=Operation.ADD)
-
-        BeamNormalOrDefault.create(ngb, inputs, 1, math_sub, 0)
-        ngb.link(normal, 0, math_sub, 1)
-        BeamNormalOrDefault.create(ngb, inputs, 0, math_add, 0)
-        ngb.link(math_sub, 0, math_add, 1)
-        ngb.link(math_add, 0, outputs)
+        base = ngb.nc.node(BeamNormalOrDefault, ngb.input(_NORMAL, "Base"))
+        detail = ngb.nc.node(BeamNormalOrDefault, ngb.input(_NORMAL, "Detail"))
+        neutral = ngb.nc.node(bpy.types.ShaderNodeNormalMap)
+        (base + (neutral - detail)) >> ngb.output(_NORMAL, "Normal")
 
 
 
@@ -618,31 +538,14 @@ class BeamNormalOrDefault(BaseShaderNode):
 
     def create_node_group(self, ngb):
 
-        ngb.create_vector_input(SocketName.Normal, True)
-        ngb.create_vector_output(SocketName.Normal)
-        inputs, outputs = ngb._create_io()
+        value = ngb.input(_NORMAL, SocketName.Normal)
+        
+        length = ngb.nc.math(Operation.LENGTH, value)[SocketName.Value]
+        is_empty = ngb.nc.math(Operation.COMPARE, length, 0, 0)
+        default = ngb.nc.node(bpy.types.ShaderNodeNewGeometry)[SocketName.Normal]
 
-        length = ngb.create_node(NodeName.VectorMath, operation=Operation.LENGTH)
-        compare = ngb.create_math(Operation.COMPARE, 0, 0, 0)
-        geometry = ngb.create_node(NodeName.Geometry)
-        mix_by_normal_enabled = ngb.create_node(NodeName.Mix, data_type = Operation.VECTOR)
-
-        ngb.link(inputs, SocketName.Normal, length, 0)
-        ngb.link(length, SocketName.Value, compare, 0)
-
-        ngb.link(compare, 0, mix_by_normal_enabled, SocketIndex.MixFactor)
-        ngb.link(geometry, SocketName.Normal, mix_by_normal_enabled, SocketIndex.MixVectorIn1)
-        ngb.link(inputs, SocketName.Normal, mix_by_normal_enabled, SocketIndex.MixVectorIn0)
-
-        ngb.link(mix_by_normal_enabled, SocketIndex.MixVectorOut, outputs, SocketName.Normal)
-
-
-    @staticmethod
-    def create(ngb: NodeGroupBuilder, node0: bpy.types.ShaderNode, socket0: str | int, node1: bpy.types.ShaderNode = None, socket1: str | int = None):
-        node: BeamNormalOrDefault = ngb.create_node(BeamNormalOrDefault.bl_idname)
-        ngb.link(node0, socket0, node, 0)
-        if node1 is not None: ngb.link(node, 0, node1, socket1)
-        return node
+        result = ngb.nc.mix(is_empty, value, default)
+        result >> ngb.output(_NORMAL, SocketName.Normal)
 
 
 
@@ -655,28 +558,15 @@ class BeamInvertBackfaceNormal(BaseShaderNode):
 
     def create_node_group(self, ngb):
 
-        ngb.create_vector_input(SocketName.Normal, True)
-        ngb.create_bool_input(SocketName.InvertBackfaceNormals, False, default_value=True)
-        ngb.create_vector_output(SocketName.Normal)
-        inputs, outputs = ngb._create_io()
+        two_sided = ngb.input(_NORMAL, SocketName.Normal)
+        do_invert = ngb.input(_BOOL_VALUE, SocketName.InvertBackfaceNormals, default_value=True)
+        inverse = two_sided * (-1.0,-1.0,-1.0)
 
-        geometry = ngb.create_node(NodeName.Geometry)
-        invert_normal = ngb.create_node(NodeName.VectorMath, [None, (-1.0,-1.0,-1.0)], operation=Operation.MULTIPLY)
-        mix_by_backface = ngb.create_node(NodeName.Mix, data_type = Operation.VECTOR)
-        mix_by_invert_enabled = ngb.create_node(NodeName.Mix, data_type = Operation.VECTOR)
-        input_normal = BeamNormalOrDefault.create(ngb, inputs, SocketName.Normal)
-        
-        ngb.link(input_normal, 0, invert_normal, 0)
+        is_backfacing = ngb.nc.node(NodeName.Geometry)[SocketName.Backfacing]
+        one_sided = ngb.nc.mix(is_backfacing, two_sided, inverse)
 
-        ngb.link(geometry, SocketName.Backfacing, mix_by_backface, SocketIndex.MixFactor)
-        ngb.link(input_normal, 0, mix_by_backface, SocketIndex.MixVectorIn0)
-        ngb.link(invert_normal, 0, mix_by_backface, SocketIndex.MixVectorIn1)
-
-        ngb.link(inputs, SocketName.InvertBackfaceNormals, mix_by_invert_enabled, SocketIndex.MixFactor)
-        ngb.link(mix_by_backface, SocketIndex.MixVectorOut, mix_by_invert_enabled, SocketIndex.MixVectorIn0)
-        ngb.link(input_normal, 0, mix_by_invert_enabled, SocketIndex.MixVectorIn1)
-
-        ngb.link(mix_by_invert_enabled, SocketIndex.MixVectorOut, outputs, SocketName.Normal)
+        result = ngb.nc.mix(do_invert, one_sided, two_sided)
+        result >> ngb.output(_NORMAL, SocketName.Normal)
 
 
 
@@ -732,15 +622,19 @@ class BaseBeamRGBA(BaseShaderNode):
         layout.prop(self, "color", text="")
 
 
+
 def _RGBA_seperate(ngb: NodeGroupBuilder, value):
     return ngb.nc.seperate_bundle(RGBA, value)
 
-def _RGBA_input(ngb: NodeGroupBuilder, name: str, default_value: tuple | None = None):
-    value = ngb.input(SocketType.Bundle, name)
+def _RGBA_default(ngb: NodeGroupBuilder, value, default_value = COLOR_WHITE):
+    return ngb.nc.node(BeamRGBADefault, value, color=default_value)
+
+def _RGBA_input(ngb: NodeGroupBuilder, name: str, default_value: tuple | None = None, sci = _RGBA_VALUE):
+    value = ngb.input(sci, name)
     if default_value is None:
         return _RGBA_seperate(ngb, value)
     else:
-        return _RGBA_seperate(ngb, ngb.nc.node(BeamRGBADefault, value, color=default_value))
+        return _RGBA_seperate(ngb, _RGBA_default(ngb, value, default_value))
 
 def _RGBA_combine(ngb: NodeGroupBuilder, color, alpha):
     return ngb.nc.combine_bundle(RGBA, color, alpha, True)
@@ -800,6 +694,24 @@ class BeamRGBADefault(BaseBeamRGBA):
 
 
 
+class BeamMathHardLight(BaseShaderNode):
+
+    bl_idname = f"{SHADER_NODE_PREFIX}MathHardLight"
+    bl_label = "BNG HardLight"
+    ng_color_tag = GroupColorTag.CONVERTER
+
+    def create_node_group(self, ngb: NodeGroupBuilder):
+
+        i = ngb.input(_FLOAT_VALUE, "I")
+        m = ngb.input(_FLOAT_VALUE, "M")
+
+        dark = 2 * i * m
+        light = 1 - (2 * (1 - m) * (1 - i))
+
+        ngb.nc.mix(m > 0.5, dark, light) >> ngb.output(_FLOAT_VALUE, SocketName.Value)
+
+
+
 class BeamRGBAMath(BaseShaderNode):
 
     bl_idname = f"{SHADER_NODE_PREFIX}RGBA_Math"
@@ -807,24 +719,6 @@ class BeamRGBAMath(BaseShaderNode):
     ng_color_tag = GroupColorTag.COLOR
 
 
-    class ImageType(StrEnum):
-        COLOR = "Color"
-        COLOR_HDR = "Color_HDR"
-        NORMAL = "Normal"
-        DATA = "Data"
-        SRGB = "sRGB"
-        NON_COLOR = "Non-Color"
-
-    ImageType_Dict = {
-        ImageType.COLOR: ImageType.SRGB,
-        ImageType.COLOR_HDR: ImageType.NON_COLOR,
-        ImageType.NORMAL: ImageType.NON_COLOR,
-        ImageType.DATA: ImageType.NON_COLOR,
-    }
-
-
-    # Custom properties
-    image_ptr: bpy.props.PointerProperty(type=bpy.types.Image, update=lambda self, ctx: self.update_image(ctx))
     operation: bpy.props.EnumProperty(
         name="Type",
         items=[
@@ -835,6 +729,7 @@ class BeamRGBAMath(BaseShaderNode):
             (Operation.MINIMUM, Operation.MINIMUM, ""),
             (Operation.MAXIMUM, Operation.MAXIMUM, ""),
             (Operation.OVERLAY, Operation.OVERLAY, ""),
+            (Operation.HARD_LIGHT, Operation.HARD_LIGHT, ""),
         ],
         default=Operation.MULTIPLY,
         update=lambda self, ctx: self.init(ctx)
@@ -853,6 +748,15 @@ class BeamRGBAMath(BaseShaderNode):
 
         if self.operation == Operation.OVERLAY:
             _RGBA_output(ngb, "Result", ngb.nc.mix(b[1], a[0], b[0]), a[1])
+        elif self.operation == Operation.HARD_LIGHT:
+            a_rgb = ngb.nc.node(bpy.types.ShaderNodeSeparateColor, a)
+            b_rgb = ngb.nc.node(bpy.types.ShaderNodeSeparateColor, b)
+            red = ngb.nc.node(BeamMathHardLight, a_rgb[0], b_rgb[0])
+            green = ngb.nc.node(BeamMathHardLight, a_rgb[1], b_rgb[1])
+            blue = ngb.nc.node(BeamMathHardLight, a_rgb[2], b_rgb[2])
+            color = ngb.nc.node(bpy.types.ShaderNodeCombineColor, red, green, blue)
+            alpha = ngb.nc.node(BeamMathHardLight, a[1], b[1])
+            _RGBA_output(ngb, "Result", color, alpha)
         else:
             color = ngb.nc.math(self.operation, a[0], b[0]) 
             alpha = ngb.nc.math(self.operation, a[1], b[1]) 
@@ -868,7 +772,7 @@ class BeamRGBAMath(BaseShaderNode):
 class BeamBDSF10Basic(BaseShaderNode):
 
     bl_idname = f"{SHADER_NODE_PREFIX}BSDF10Basic"
-    bl_label = "BNG 1.0 Basic BSDF"
+    bl_label = "BNG 1.0 BNGS"
     bl_icon = 'SHADERFX'
     bl_nclass = "SHADER"
     bl_width_default = 240
@@ -878,101 +782,155 @@ class BeamBDSF10Basic(BaseShaderNode):
     class Sockets(StrEnum):
         COLOR_MAP = "RGBA Color Map"
         COLOR_FACTOR = "RGBA Color"
-        OVERLAY_MAP = "RGBA Color"
+        OVERLAY_MAP = "RGBA Overlay Map"
+        PALETTE_MAP = "RGBA Palette Map"
         SPECULAR_MAP = "Specular Map"
+        SPECULAR_ENABLED = "Specualr Enabled"
         SPECULAR_COLOR = "Specular Color"
-        SPECULAR_ROUGHNESS = SocketName.Roughness
+        SPECULAR_ROUGHNESS = "Specular Roughness"
         RM = "RGBA Reflectivity Map"
         RM_FACTOR = "Reflectivity Map Factor"
         RM_ENABLED = "Reflectivity Map Enabled"
         OPACITY_MAP = "Opacity Map"
-        DETAIL_COLOR = "RGBA Detail Color"
+        DETAIL_COLOR = "Detail RGBA Color Map"
         EMISIVE = SocketName.Emissive
         GLOW_COLOR = "Glow Color"
 
         
-    def update(self):
-        LS = BeamBDSF10Basic.Sockets
-        rm_enabled: bpy.types.NodeSocketBool = self.inputs[LS.RM_ENABLED]
-        rm_enabled.default_value = self.inputs[LS.RM].is_linked
-        rm_enabled.hide = False
+    #def update(self):
+        #LS = BeamBDSF10Basic.Sockets
+        #rm_enabled: bpy.types.NodeSocketBool = self.inputs[LS.RM_ENABLED]
+        #rm_enabled.default_value = self.inputs[LS.RM].is_linked
+        #rm_enabled.hide = False
 
 
     def create_node_group(self, ngb: NodeGroupBuilder):
 
+        def rgba_math(a, b, operation = Operation.MULTIPLY): return ngb.nc.node(BeamRGBAMath, a, b, operation = operation)
+        def rgba_mix(factor, a, b): return ngb.nc.node(BeamRGBAMix, factor, a, b)
         LS = BeamBDSF10Basic.Sockets
-        BLACK = (0,0,0,1)
 
-        ngb.create_bundle_input(LS.COLOR_MAP)
-        ngb.create_bundle_input(LS.COLOR_FACTOR)
-        ngb.create_bool_input(SocketName.VertexColor) 
-        ngb.create_vector_input(SocketName.Normal, True)
-        ngb.create_closure_output(SocketName.BNGShader)
-        
+        # io
+        in_rgba_cm = ngb.input(_RGBA_TEXTURE, LS.COLOR_MAP)
+        in_rgba_cf = ngb.input(_RGBA_VALUE, LS.COLOR_FACTOR)
+        in_ic_enabled = ngb.input(_BOOL_VALUE, SocketName.InstanceColor) 
+        in_vc_enabled = ngb.input(_BOOL_VALUE, SocketName.VertexColor) 
+        in_normal_map = ngb.input(_NORMAL, SocketName.Normal)
+        out_result = ngb.output(SocketType.Closure, SocketName.BNGShader)
+
+        ngb.panel("Detail")
+        in_detail_color = ngb.input(_RGBA_TEXTURE, LS.DETAIL_COLOR)
+        in_detail_normal = ngb.input(_NORMAL, SocketName.DetailNormal)
         ngb.panel("Advanced")
-        ngb.create_bundle_input(LS.RM)
-        ngb.create_float_input(LS.RM_FACTOR)
-        ngb.create_bundle_input(LS.DETAIL_COLOR)
-        ngb.create_vector_input(SocketName.DetailNormal, True)
+        rgba_rm = ngb.input(_RGBA_TEXTURE, LS.RM)
+        rm_factor = ngb.input(_FLOAT_VALUE, LS.RM_FACTOR)
+        overlay = ngb.input(_RGBA_TEXTURE, LS.OVERLAY_MAP)
+        ngb.input(_RGBA_TEXTURE, LS.PALETTE_MAP)
+        opacity_map = ngb.input(_FLOAT_TEXTURE, LS.OPACITY_MAP, default_value=1.0)
         ngb.panel("Lighting")
-        ngb.create_color_input(LS.SPECULAR_COLOR, default_value=BLACK)
-        ngb.create_float_input(LS.SPECULAR_MAP, True)
-        ngb.create_float_input(LS.SPECULAR_ROUGHNESS)
-        ngb.create_color_input(LS.GLOW_COLOR, default_value=BLACK)
-        ngb.create_bool_input(LS.EMISIVE)
+        in_se = ngb.input(_BOOL_VALUE, LS.SPECULAR_ENABLED, default_value=False)
+        in_spec_map = ngb.input(_FLOAT_TEXTURE, LS.SPECULAR_MAP)
+        in_sc = ngb.input(_COLOR_VALUE, LS.SPECULAR_COLOR, default_value=COLOR_WHITE)
+        in_sr = ngb.input(_FLOAT_VALUE, LS.SPECULAR_ROUGHNESS)
+        in_glow_color = ngb.input(_COLOR_VALUE, LS.GLOW_COLOR, default_value=COLOR_BLACK)
+        in_emisive = ngb.input(_BOOL_VALUE, LS.EMISIVE)
 
 
-        inputs, outputs = ngb._create_io()
-        closure = ngb.create_closure(BNGS_IO)
+        closure = ngb.nc.closure(BNGS_IO)
+        closure.output >> out_result
 
-        # diffuse = ngb.create_node(NodeName.BsdfDiffuse)
-        # metallic = ngb.create_node(NodeName.BsdfMetallic)
-        # metallic.inputs[SocketName.Roughness].default_value = 0.0
-        # metallic.inputs[SocketName.BaseColor].default_value = (1,1,1,1)
-        # metallic.inputs[SocketName.EdgeTint].default_value = (1,1,1,1)
-        # mix_shader = ngb.create_node(NodeName.MixShader)
-        # mix_rgb = ngb.create_node(NodeName.VectorMath, operation=Operation.MULTIPLY)
-        # mix_alpha = ngb.create_math(Operation.MULTIPLY)
-        # mix_reflect = ngb.create_math(Operation.MULTIPLY)
-        # invert_backface_normal = ngb.create_node(BeamInvertBackfaceNormal.bl_idname)
+        object_info = ngb.nc.node(bpy.types.ShaderNodeObjectInfo)
+        vc_info = ngb.nc.node(bpy.types.ShaderNodeVertexColor)
 
-        # ngb.link(inputs, SocketName.Normal, invert_backface_normal)
-        # ngb.link()
-
-        # ngb.link(inputs, SocketName.BaseColor, mix_rgb, 0)
-        # ngb.link(inputs, SocketName.VertexColor, mix_rgb, 1)
-        # ngb.link(mix_rgb, 0, diffuse, SocketName.Color)
-
-        # ngb.link(inputs, SocketName.BaseAlpha, mix_alpha, 0)
-        # ngb.link(inputs, SocketName.VertexAlpha, mix_alpha, 1)
-        # ngb.link(mix_alpha, 0, mix_reflect, 0)
-        # ngb.link(inputs, SocketName.ReflectionEnabled, mix_reflect, 1)
-        # ngb.link(mix_reflect, 0, mix_shader, 0)
-
-        # ngb.link(invert_backface_normal, SocketName.Normal, diffuse, SocketName.Normal)
-        # ngb.link(invert_backface_normal, SocketName.Normal, metallic, SocketName.Normal)
-        # ngb.link(diffuse, 0, mix_shader, 1)
-        # ngb.link(metallic, 0, mix_shader, 2)
-
-        # ngb.combine_bundle(BNG_SHADER, _NS(outputs), _NS(mix_shader), _NS(mix_alpha))
+        ic = _RGBA_combine(ngb, object_info[SocketName.Color], object_info[SocketName.Alpha])
+        vc = _RGBA_combine(ngb, vc_info[SocketName.Color], vc_info[SocketName.Alpha])
 
 
-    def post_init(self):
-        LS = BeamBDSF10Basic.Sockets
-        self.inputs[LS.RM_ENABLED].hide = True
+        rgba = _RGBA_default(ngb, in_rgba_cm, COLOR_WHITE)
+        rgba = rgba_math(rgba, _RGBA_default(ngb, in_detail_color, COLOR_NULL_HALF), Operation.HARD_LIGHT)
+        rgba = rgba_math(rgba, in_rgba_cf)
+        rgba = rgba_mix(in_ic_enabled, rgba, rgba_math(rgba, ic))
+        rgba = rgba_mix(in_vc_enabled, rgba, rgba_math(rgba, vc))
+        rgba = ngb.nc.node(BeamRGBAMath, rgba, overlay, operation = Operation.OVERLAY)
+
+        normal = ngb.nc.node(BeamInvertBackfaceNormal, ngb.nc.node(BeamDetailNormal, in_normal_map, in_detail_normal), closure[SocketName.InvertBackfaceNormals])
+
+        rgba_bundle = _RGBA_seperate(ngb, rgba)
+        color = rgba_bundle[SocketName.Color]
+        gamma = ngb.nc.node(bpy.types.ShaderNodeGamma, color, 2.2)
+        alpha = rgba_bundle[SocketName.Alpha]
+        alpha *= opacity_map
+        alpha >> closure[SocketName.Alpha]
+
+        # diffuse
+        diffuse = ngb.nc.node(bpy.types.ShaderNodeBsdfDiffuse)
+        gamma >> diffuse[SocketName.Color]
+        normal >> diffuse[SocketName.Normal]
+
+        # specular
+        specular = ngb.nc.node(bpy.types.ShaderNodeEeveeSpecular)
+        specular[SocketName.BaseColor] << COLOR_NULL
+        spec_color = in_sc * in_spec_map
+        spec_color >> specular[SocketName.Specular]
+        in_sr >> specular[SocketName.Roughness]
+        normal >> specular[SocketName.Normal]
+
+        shader = ngb.nc.mix(in_se, diffuse, diffuse + specular) 
+
+        # emissive
+        emssion = ngb.nc.node(bpy.types.ShaderNodeEmission)
+        color * (0.5, 0.5, 0.5) >> emssion[SocketName.Color]
+
+        shader = shader.mix(emssion, in_emisive)
+
+        # reflection
+        metallic = ngb.nc.node(bpy.types.ShaderNodeBsdfMetallic)
+        metallic[SocketName.Roughness] << 0.0
+        metallic[SocketName.BaseColor] << COLOR_WHITE
+        metallic[SocketName.EdgeTint] << COLOR_WHITE
+        normal >> metallic[SocketName.Normal]
+
+        rgba_rm_bundle = _RGBA_seperate(ngb, rgba_rm)
+        reflectivity = ngb.nc.mix(rgba_rm_bundle[SocketName.Enabled], alpha, rgba_rm_bundle[SocketName.Alpha] * rm_factor) 
+        reflectivity *= ngb.nc.bool(closure[SocketName.ReflectionMode])
+
+        shader = shader.mix(metallic, reflectivity)
+
+        #glow
+        glow = ngb.nc.node(bpy.types.ShaderNodeEmission)
+        in_glow_color >> glow[SocketName.Color]
+
+        shader += glow
+
+        # output
+        shader >> closure[SocketName.Shader]
+        alpha >> closure[SocketName.Alpha]
+
+
+
+class BeamBSDF15Detail(BaseShaderNode):
+
+    bl_idname = f"{SHADER_NODE_PREFIX}BNGS15Detail"
+    bl_label = "BNG 1.5 Detail"
+    bl_width_default = 240
+    ng_color_tag = GroupColorTag.SHADER
+
+
+    def create_node_group(self, ngb):
+        pass
 
 
 
 class BeamBSDF15(BaseShaderNode):
 
     bl_idname = f"{SHADER_NODE_PREFIX}BSDF"
-    bl_label = "BNG 1.5 BSDF"
+    bl_label = "BNG 1.5 BNGS"
     bl_icon = 'SHADERFX'
     bl_nclass = "SHADER"
     bl_width_default = 240
     ng_color_tag = GroupColorTag.SHADER
 
-
+ 
     def update(self):
         messages = self.runtime.messages
         messages.clear()
@@ -1042,54 +1000,29 @@ class BeamStageMix(BaseShaderNode):
     bl_label = "BNG Stage Mix 1.5"
     bl_nclass = "SHADER"
     ng_color_tag = GroupColorTag.SHADER
-    #bl_icon = 'SHADERFX'
-
-
-    def post_init(self):
-        pass
 
 
     def create_node_group(self, ngb: NodeGroupBuilder):
 
-        ngb.create_closure_input("BNGS Base")
-        ngb.create_closure_input("BNGS Overlay")
+        in_base = ngb.input(SocketType.Closure, "BNGS Base")
+        in_overlay = ngb.input(SocketType.Closure, "BNGS Overlay")
+        output = ngb.output(SocketType.Closure, SocketName.BNGShader)
 
-        ngb.create_closure_output(SocketName.BNGShader)
+        base = ngb.nc.eval_closure(BNGS_IO, in_base)
+        overlay = ngb.nc.eval_closure(BNGS_IO, in_overlay)
+        base_alpha = base[SocketName.Alpha]
+        overlay_alpha = overlay[SocketName.Alpha]
 
-        inputs, outputs = ngb._create_io()
+        closure = ngb.nc.closure(BNGS_IO)
+        BNGS_IO.inputs.forward(closure, base)
+        BNGS_IO.inputs.forward(closure, overlay)
 
-        mix = ngb.create_node(NodeName.MixShader)
+        shader = ngb.nc.mix(overlay_alpha, base[SocketName.Shader], overlay[SocketName.Shader])
+        alpha = base_alpha * (1.0 - overlay_alpha) + overlay_alpha
+        shader >> closure[SocketName.Shader]
+        alpha >> closure[SocketName.Alpha]
 
-        sub = ngb.create_math(Operation.SUBTRACT, value0=1.0)
-        mul = ngb.create_math(Operation.MULTIPLY)
-        add = ngb.create_math(Operation.ADD)
-
-        sep_base = ngb.create_closure_eval(BNGS_IO)
-        ngb.link(inputs, "BNGS Base", sep_base, SocketName.Closure)
-        sep_overlay = ngb.create_closure_eval(BNGS_IO)
-        ngb.link(inputs, "BNGS Overlay", sep_overlay, SocketName.Closure)
-
-        closure = ngb.create_closure(BNGS_IO)
-
-        ngb.link(closure.input, SocketName.InvertBackfaceNormals, sep_base)
-        ngb.link(closure.input, SocketName.SubsurfaceScattering, sep_base)
-        ngb.link(closure.input, SocketName.InvertBackfaceNormals, sep_overlay)
-        ngb.link(closure.input, SocketName.SubsurfaceScattering, sep_overlay)
-
-        ngb.link(sep_overlay, 1, mix, 0)
-        ngb.link(sep_base, 0, mix, 1)
-        ngb.link(sep_overlay, 0, mix, 2)
-
-        ngb.link(sep_overlay, 1, sub, 1)
-        ngb.link(sep_overlay, 1, add, 1)
-        ngb.link(sep_base, 1, mul, 0)
-
-        ngb.link(sub, 0, mul, 1)
-        ngb.link(mul, 0, add, 0)
-
-        ngb.link(mix, 0, closure.output, SocketName.Shader)
-        ngb.link(add, 0, closure.output, SocketName.Alpha)
-        ngb.link(closure.output, SocketName.Closure, outputs, SocketName.BNGShader)
+        closure.output >> output
 
 
 
@@ -1097,6 +1030,12 @@ class ReflectionMode(StrEnum):
     NONE = "None"
     LEVEL = "Level"
     CUBEMAP = "Cubemap"
+
+_ReflectionMode_INT_DICT: dict[ReflectionMode, int] = {
+    ReflectionMode.NONE: 0,
+    ReflectionMode.LEVEL: 1,
+    ReflectionMode.CUBEMAP: 2,
+}
 
 
 
@@ -1117,7 +1056,7 @@ class BeamMaterial(BaseShaderNode):
             (ReflectionMode.LEVEL, ReflectionMode.LEVEL, ""),
             (ReflectionMode.CUBEMAP, ReflectionMode.CUBEMAP, ""),
         ],
-        default=ReflectionMode.LEVEL,
+        default=ReflectionMode.NONE,
         update=lambda self, ctx: self.update_reflection_mode(ctx)
     )
     reflection_cubemap: bpy.props.StringProperty(name="Cubemap", default="none")
@@ -1134,8 +1073,8 @@ class BeamMaterial(BaseShaderNode):
 
 
     def update_reflection_mode(self, ctx: bpy.types.Context):
-        input: bpy.types.NodeSocketBool = self.inputs[SocketName.ReflectionEnabled]
-        input.default_value = self.reflection_mode != ReflectionMode.NONE
+        input: bpy.types.NodeSocketInt = self.inputs[SocketName.ReflectionMode]
+        input.default_value = _ReflectionMode_INT_DICT.get(self.reflection_mode)
 
 
     def draw_buttons(self, context: bpy.types.Context, layout: bpy.types.UILayout):
@@ -1156,76 +1095,51 @@ class BeamMaterial(BaseShaderNode):
         self.inputs[LS.INVERT_BACKFACE_NORMALS].display_shape = VALUE_SOCKET_SHAPE
         self.inputs[LS.SHADOWS].display_shape = VALUE_SOCKET_SHAPE
         self.inputs[LS.SUBSURFACE_SCATTERING].display_shape = VALUE_SOCKET_SHAPE
-        self.inputs[SocketName.ReflectionEnabled].hide = True
+        self.inputs[SocketName.ReflectionMode].hide = True
 
 
     def create_node_group(self, ngb: NodeGroupBuilder):
         
         LS = BeamMaterial.Sockets
 
-        ngb.create_closure_input(SocketName.BNGShader)
+        in_bngs = ngb.input(SocketType.Closure, SocketName.BNGShader)
 
-        ngb.create_bool_input(LS.CLIP)
-        ngb.create_float_input(LS.CLIP_T, default_value=0.5)
-        ngb.create_bool_input(LS.BLEND)
-        ngb.create_bool_input(LS.DOUBLE_SIDED)
-        ngb.create_bool_input(LS.INVERT_BACKFACE_NORMALS, default_value=True)
-        ngb.create_bool_input(LS.SHADOWS, default_value=True)
-        ngb.create_float_input(LS.SUBSURFACE_SCATTERING, default_value=0.0, range=(0,1))
-        ngb.create_bool_input(SocketName.ReflectionEnabled, default_value=True)
-        ngb.create_shader_output(SocketName.Shader)
+        in_clip = ngb.input(_BOOL_VALUE, LS.CLIP)
+        in_clip_t = ngb.input(_FLOAT_VALUE, LS.CLIP_T, default_value=0.5)
+        in_blend = ngb.input(_BOOL_VALUE, LS.BLEND)
+        in_ds = ngb.input(_BOOL_VALUE, LS.DOUBLE_SIDED)
+        in_ibn = ngb.input(_BOOL_VALUE, LS.INVERT_BACKFACE_NORMALS, default_value=True)
+        in_shadows_enabled = ngb.input(_BOOL_VALUE, LS.SHADOWS, default_value=True)
+        in_ss = ngb.input(_FLOAT_VALUE, LS.SUBSURFACE_SCATTERING, default_value=0.0)
+        in_rmode = ngb.input(_INT_PRIVATE, SocketName.ReflectionMode, default_value=0)
+        output = ngb.output(SocketType.Shader, SocketName.Shader)
 
-        inputs, outputs = ngb._create_io()
+        eval = ngb.nc.eval_closure(BNGS_IO)
+        in_bngs >> eval[SocketName.Closure]
+        in_ibn >> eval[SocketName.InvertBackfaceNormals]
+        in_rmode >> eval[SocketName.ReflectionMode]
+        in_ss >> eval[SocketName.SubsurfaceScattering]
 
-        geometry = ngb.create_node(NodeName.Geometry)
-        light_path = ngb.create_node(NodeName.LightPath)
+        shader = eval[SocketName.Shader]
+        alpha = eval[SocketName.Alpha]
 
-        transparent = ngb.create_node(NodeName.BsdfTransparent)
-        mix_blend = ngb.create_node(NodeName.MixShader)
-        mix_clip = ngb.create_node(NodeName.MixShader)
+        geometry = ngb.nc.node(bpy.types.ShaderNodeNewGeometry)
+        backface_enabled = in_ds | ngb.nc.bool(geometry[SocketName.Backfacing], True)
+        light_path = ngb.nc.node(bpy.types.ShaderNodeLightPath)
+        shadows_enabled = in_shadows_enabled | ngb.nc.bool(light_path[SocketName.IsShadowRay])
+        discard = backface_enabled & shadows_enabled
 
-        clip_t = ngb.create_math(Operation.GREATER_THAN)
-        blend_enabled = ngb.create_math(Operation.MAXIMUM)
-        clip_enabled = ngb.create_math(Operation.MAXIMUM)
-        backface_enabled = ngb.create_math(Operation.MAXIMUM)
-        shadows_enabled = ngb.create_math(Operation.MAXIMUM)
-        discard = ngb.create_math(Operation.MINIMUM)
-        discard_clip = ngb.create_math(Operation.MINIMUM)
+        clip_t = alpha > in_clip_t
+        clip_enabled = clip_t | ngb.nc.bool(in_clip, True)
+        clip_factor = clip_enabled & discard
 
-        eval = ngb.create_closure_eval(BNGS_IO)
+        blend_factor = eval[SocketName.Alpha] | in_blend
 
-        ngb.link(inputs, SocketName.BNGShader, eval, SocketName.Closure)
-        ngb.link(inputs, LS.INVERT_BACKFACE_NORMALS, eval)
-        ngb.link(inputs, SocketName.ReflectionEnabled, eval)
-        ngb.link(inputs, LS.SUBSURFACE_SCATTERING, eval)
+        transparent = ngb.nc.node(bpy.types.ShaderNodeBsdfTransparent)
+        mix_blend = ngb.nc.mix(blend_factor, transparent, shader)
+        mix_clip = ngb.nc.mix(clip_factor, transparent, mix_blend)
 
-        ngb.link(transparent, 0, mix_blend, 1)
-        ngb.link(transparent, 0, mix_clip, 1)
-        ngb.link(eval, SocketName.Shader, mix_blend, 2)
-        ngb.link(mix_blend, 0, mix_clip, 2)
-        ngb.link(mix_clip, 0, outputs, 0)
-
-        ngb.link(eval, SocketName.Alpha, blend_enabled, 0)
-        ngb.link_bool(inputs, LS.BLEND, blend_enabled, 1, True)
-        ngb.link(blend_enabled, 0, mix_blend, 0)
-
-        ngb.link(eval, SocketName.Alpha, clip_t, 0)
-        ngb.link(inputs, LS.CLIP_T, clip_t, 1)
-        ngb.link(clip_t, 0, clip_enabled, 0)
-        ngb.link_bool(inputs, LS.CLIP, clip_enabled, 1, True)
-
-        ngb.link_bool(inputs, LS.DOUBLE_SIDED, backface_enabled, 0)
-        ngb.link_bool(geometry, SocketName.Backfacing, backface_enabled, 1, True)
-
-        ngb.link_bool(inputs, LS.SHADOWS, shadows_enabled, 0)
-        ngb.link_bool(light_path, SocketName.IsShadowRay, shadows_enabled, 1, True)
-
-        ngb.link(backface_enabled, 0, discard, 0)
-        ngb.link(shadows_enabled, 0, discard, 1)
-
-        ngb.link(clip_enabled, 0, discard_clip, 0)
-        ngb.link(discard, 0, discard_clip, 1)
-        ngb.link(discard_clip, 0, mix_clip, 0)
+        mix_clip >> output
 
 
 
@@ -1261,6 +1175,7 @@ class ShaderNodeTree(bpy.types.Menu):
         "Utils",
         BeamBSDFCollision,
         BeamImageTex,
+        BeamMathHardLight,
     ]
 
 
@@ -1317,6 +1232,7 @@ class ShaderNodeRegistry:
         BeamRGBADefault,
         BeamRGBAMath,
         BeamNormalOrDefault,
+        BeamMathHardLight,
     ]
 
 

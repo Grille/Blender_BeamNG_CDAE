@@ -53,13 +53,17 @@ class SocketName(StrEnum):
     InstanceColor = "Instance Color"
     Metallic = "Metallic"
     Roughness = "Roughness"
+    Specular = "Specular"
     Alpha = "Alpha"
     BaseAlpha = "Base Alpha"
     Normal = "Normal"
     NormalEnabled = "Normal Enabled"
     InvertBackfaceNormals = "Invert Backface Normals"
+    ReflectionMode = "ReflectionMode"
     ReflectionEnabled = "Reflection Enabled"
     SubsurfaceScattering = "Subsurface Scattering"
+    Strength = "Strength"
+    Vector = "Vector"
 
     DetailColor = "Detail Color"
     DetailNormal = "Detail Normal"
@@ -153,7 +157,7 @@ class SocketType(StrEnum):
     Error = "Error"
     Bool = "Bool"
     Float = "Float"
-    Integer = "Integer"
+    Integer = "Int"
     Vector = "Vector"
     Color = "Color"
     Shader = "Shader"
@@ -232,13 +236,15 @@ _SOCKET_PRECEDENCE: dict[SocketType, int] = {
     SocketType.Color: 4,
     SocketType.Shader: 5,
 }
+_SOCKET_DATA_TYPE_REMAP: dict[SocketType, str] = {
+    SocketType.Bool: "Boolean",
+    SocketType.Integer: "Int",
+    SocketType.Color: "RGBA",
+}
 
 for key in SocketType:
     _SOCKET_FULL_NAME[key] = f"NodeSocket{key}"
-
-    if key == SocketType.Bool: _SOCKET_DATA_TYPE[key] = "BOOLEAN"
-    elif key == SocketType.Color: _SOCKET_DATA_TYPE[key] = "RGBA"
-    else: _SOCKET_DATA_TYPE[key] = key.upper()
+    _SOCKET_DATA_TYPE[key] = _SOCKET_DATA_TYPE_REMAP.get(key, key).upper()
 
 _SOCKET_DATA_TYPE_INVERTED = {value: key for key, value in _SOCKET_DATA_TYPE.items()}
 _SOCKET_DATA_TYPE_INVERTED["VALUE"] = SocketType.Float
@@ -265,6 +271,7 @@ class Operation(StrEnum):
     RGBA = 'RGBA'
     MIX = 'MIX'
     LINEAR_LIGHT = 'LINEAR_LIGHT'
+    HARD_LIGHT = 'HARD_LIGHT'
     OVERLAY = 'OVERLAY'
     LENGTH = 'LENGTH'
     COMPARE = 'COMPARE'
@@ -276,9 +283,11 @@ class ColorSpace(StrEnum):
     NON_COLOR = "Non-Color"
 
 
+
 class OperatorResult(StrEnum):
     FINISHED = "FINISHED"
     CANCELLED = "CANCELLED"
+
 
 
 class GroupColorTag(StrEnum):
