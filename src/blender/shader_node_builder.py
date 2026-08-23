@@ -206,11 +206,15 @@ class NodeTreeBuilder:
 
 
         def link_to(self_src, dst: 'NodeTreeBuilder.LinkBuilder'):
-            dst.link_from(self_src)
+            return dst.link_from(self_src)
 
 
         def mix(self, other: LinkSource, factor: LinkSource):
             return self.ntb.nc.mix(factor, self, other)
+
+
+        def is_true(self): return self > 0.5
+        def is_false(self): return self < 0.5
 
 
         def __rshift__(self, other: 'NodeTreeBuilder.LinkBuilder'): return self.link_to(other)
@@ -403,10 +407,11 @@ class SocketCreateInfo:
     COLOR: 'SocketCreateInfo'
     SHADER: 'SocketCreateInfo'
 
-    def __init__(self, type = SocketType.Float, shape = SocketShape.CIRCLE, hide_value = False, **kwargs):
+    def __init__(self, type = SocketType.Float, shape = SocketShape.CIRCLE, hide_value = False, hide_socket = False, **kwargs):
         self.type = type
         self.shape = shape
         self.hide_value = hide_value
+        self.hide_socket = hide_socket
         self.kwargs = kwargs
 
 SocketCreateInfo.BOOL = SocketCreateInfo(SocketType.Bool)
@@ -428,10 +433,47 @@ def _apply_kwargs(obj, **kwargs):
 
 class NodeGroupData:
 
-    def __init__(self):
-        self.input_shapes: dict[str, SocketShape] = {}
-        self.output_shapes: dict[str, SocketShape] = {}
+    @dataclass
+    class SocketItem:
+        shape: SocketShape = SocketShape.CIRCLE
+        hide: bool = False
 
+        def serialize(self): return asdict(self)
+                
+        def deserialize(self, data: dict[str, Any]):
+            self.shape = data.get("shape", SocketShape.CIRCLE)
+            self.hide = data.get("hide", False)
+
+        def apply(self, dst: bpy.types.NodeSocket):
+            dst.display_shape = self.shape
+            dst.hide = self.hide
+
+
+    class Sockets(dict[str, SocketItem]):
+
+        def get_new(self, key: str):
+            item = self.get(key, None)
+            if item is not None: return item
+            item = self[key] = NodeGroupData.SocketItem()
+            return item
+
+        def serialize(self):
+            dict = {}
+            for key in self:
+                dict[key] = self[key].serialize()
+            return dict
+
+        def deserialize(self, data: dict[str, dict[str, Any]]):
+            for key in data: self.get_new(key).deserialize(data[key])
+
+
+    def __init__(self):
+        self.inputs = NodeGroupData.Sockets()
+        self.outputs = NodeGroupData.Sockets()
+
+    def clear(self):
+        self.inputs.clear()
+        self.outputs.clear()
 
     @classmethod
     def from_text(cls, text: str):
@@ -439,19 +481,21 @@ class NodeGroupData:
         self.load(text)
         return self
 
+    def serialize(self):
+        return {
+            "inputs": self.inputs.serialize(),
+            "outputs": self.outputs.serialize(),
+        }
+
+    def deserialize(self, data: dict):
+        self.inputs.deserialize(data["inputs"])
+        self.outputs.deserialize(data["outputs"])
 
     def dump(self):
-        json_dict = {
-            "input_shapes": self.input_shapes,
-            "output_shapes": self.output_shapes,
-        }
-        return json.dumps(json_dict)
-
+        return json.dumps(self.serialize())
 
     def load(self, text: str):
-        json_dict: dict = json.loads(text)
-        self.input_shapes = json_dict.get("input_shapes")
-        self.output_shapes = json_dict.get("output_shapes")
+        self.deserialize(json.loads(text))
 
 
 
@@ -510,8 +554,8 @@ class NodeGroupBuilder(NodeTreeBuilder):
 
         if isinstance(create_info, SocketCreateInfo):
             socket.hide_value = create_info.hide_value
-            if in_out == SocketIOType.INPUT: self.ngdata.input_shapes[name] = create_info.shape
-            else: self.ngdata.output_shapes[name] = create_info.shape
+            item = NodeGroupData.SocketItem(create_info.shape, create_info.hide_socket)
+            (self.ngdata.inputs if in_out == SocketIOType.INPUT else self.ngdata.outputs)[name] = item
             _apply_kwargs(socket, **create_info.kwargs)
 
         self._move_to_panel(socket)

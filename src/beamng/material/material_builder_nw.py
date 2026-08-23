@@ -217,7 +217,7 @@ class MaterialNodeWalker(NodeWalker):
         
         alpha_clip = self.get_float_value(BeamMaterial.Sockets.CLIP) > 0.5
         alpha_clip_threshold = self.get_float_value(BeamMaterial.Sockets.CLIP_T)
-        alpha_blend = self.get_float_value(BeamMaterial.Sockets.BLEND) > 0.5
+        alpha_blend = self.get_float_value(BeamMaterial.Sockets.BLEND_MODE) > 0.5
         double_sided = self.get_float_value(BeamMaterial.Sockets.DOUBLE_SIDED) > 0.5
         invert_backface_normals = self.get_float_value(BeamMaterial.Sockets.INVERT_BACKFACE_NORMALS) > 0.5
         cast_shadows = self.get_float_value(BeamMaterial.Sockets.SHADOWS) > 0.5

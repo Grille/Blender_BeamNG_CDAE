@@ -59,7 +59,8 @@ class SocketName(StrEnum):
     Normal = "Normal"
     NormalEnabled = "Normal Enabled"
     InvertBackfaceNormals = "Invert Backface Normals"
-    ReflectionMode = "ReflectionMode"
+    ReflectionMode = "Reflection Mode"
+    AlphaBlendMode = "Alpha Blend Mode"
     ReflectionEnabled = "Reflection Enabled"
     SubsurfaceScattering = "Subsurface Scattering"
     Strength = "Strength"
@@ -275,6 +276,7 @@ class Operation(StrEnum):
     OVERLAY = 'OVERLAY'
     LENGTH = 'LENGTH'
     COMPARE = 'COMPARE'
+    NORMALIZE = "NORMALIZE"
 
 
 
