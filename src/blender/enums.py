@@ -277,6 +277,7 @@ class Operation(StrEnum):
     LENGTH = 'LENGTH'
     COMPARE = 'COMPARE'
     NORMALIZE = "NORMALIZE"
+    ABSOLUTE = "ABSOLUTE"
 
 
 

@@ -72,6 +72,11 @@ class NodeTreeBuilder:
                 case _: raise ValueError()
 
 
+        def abs(self, value: LinkSource): return self.math(Operation.ABSOLUTE, value)
+
+        def clamp(self, value: LinkSource, min: LinkSource = 0, max: LinkSource = 1): return self.math(Operation.MAXIMUM, self.math(Operation.MINIMUM, value, max), min)
+
+
         def mul(self, value0: LinkSource, value1: LinkSource): return self.math(Operation.MULTIPLY, value0, value1)
 
         def div(self, value0: LinkSource, value1: LinkSource): return self.math(Operation.DIVIDE, value0, value1)
@@ -193,15 +198,31 @@ class NodeTreeBuilder:
             return NodeTreeBuilder.LinkBuilder(self.ntb, self.input_node, key, self.output_node, key)
 
 
+        @property
+        def node(self):
+            return self.input_node
+
+
         def get_input(self): return self.input_node.inputs[self.input_key]
         def get_output(self): return self.output_node.outputs[self.output_key]
+
+
+        def set_default_value(self, value: SocketValue):
+            input = self.input_node.inputs[self.input_key]
+            input_type = SocketType.from_data_type(input.type)
+            value_type = _get_input_type(value).simplify_value()
+
+            if (input_type == SocketType.Vector and value_type == SocketType.Float):
+                value = (value, value, value)
+
+            self.input_node.inputs[self.input_key].default_value = value
 
 
         def link_from(self_dst, src: LinkSource):
             if isinstance(src, NodeTreeBuilder.LinkBuilder):
                 self_dst.ntb.link(src.output_node, src.output_key, self_dst.input_node, self_dst.input_key)
             else:
-                self_dst.input_node.inputs[self_dst.input_key].default_value = src
+                self_dst.set_default_value(src)
             return self_dst[0]
 
 
@@ -211,6 +232,9 @@ class NodeTreeBuilder:
 
         def mix(self, other: LinkSource, factor: LinkSource):
             return self.ntb.nc.mix(factor, self, other)
+
+
+        def clamp(self, min: LinkSource = 0, max: LinkSource = 1): return self.ntb.nc.clamp(self, min, max)
 
 
         def is_true(self): return self > 0.5
