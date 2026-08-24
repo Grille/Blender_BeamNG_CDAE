@@ -41,7 +41,7 @@ class MaterialLibary:
     def save(self, filepath: str):
         rawdict = {}
         for key, material in self.materials.items():
-            rawdict[key] = material.dict
+            rawdict[key] = material._dict
         
         with open(filepath, 'w') as f:
             json.dump(rawdict, f, indent=4)

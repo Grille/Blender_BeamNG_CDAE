@@ -25,7 +25,7 @@ class MaterialBuilder:
         self.uv1_hint = "1"
 
 
-    def parse_socket(self, socket: Socket, src: MaterialNodeWalker.MatSocketInfo, set: SocketParserSettings):
+    def parse_socket(self, socket: _TexValueSocket, src: MaterialNodeWalker.MatSocketInfo, set: SocketParserSettings):
 
         if set.color_enabled and src.color is not None:
             socket.factor = src.color.srgb.tuple3 if set.color_is_vec3 else src.color.srgb.tuple4
@@ -61,7 +61,7 @@ class MaterialBuilder:
         self.material.version = ctx.try_get_version_hint()
         self.material.dynamic_cubemap = ctx.try_get_reflect_hint()
 
-        def parse_socket(socket: Socket, socket_name: str | list[str], settings: SocketParserSettings, detail: Socket = None):
+        def parse_socket(socket: _TexValueSocket, socket_name: str | list[str], settings: SocketParserSettings, detail: _TexValueSocket = None):
             nw_socket = ctx.get_any_socket(socket_name)
             self.parse_socket(socket, nw_socket, settings)
             if detail and nw_socket.child:

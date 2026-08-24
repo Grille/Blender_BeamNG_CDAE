@@ -1331,14 +1331,6 @@ _ENUM_INT_DICT: dict[ReflectionMode, int] = {
     ReflectionMode.CUBEMAP: 2,
 }
 
-class AlphaBlendMode(StrEnum):
-    NONE = "None"
-    ADD = "Add"
-    ADD_ALPHA = "AddAlpha"
-    LERP_ALPHA = "LerpAlpha"
-    MUL = "Mul"
-    SUB = "Sub"
-
 
 
 class BeamMaterial(BaseShaderNode):
