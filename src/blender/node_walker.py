@@ -5,6 +5,7 @@ from typing import Any, cast
 
 from ..beamng.numerics import *
 from .enums import *
+from . node_utils import get_node_type_idname
 
 class NodeLayoutError(Exception):
 
@@ -24,20 +25,15 @@ class NodeWalker():
         self.last_socket_value: Any = None
 
 
-    def is_node_idname(self, ntype: str | bpy.types.Node):
-        current = self.current.bl_idname
-        if isinstance(ntype, str):
-            return current == ntype
-        elif hasattr(ntype, "bl_idname"):
-            return current == ntype.bl_idname
-        raise TypeError()
+    def is_node_idname(self, ntype: str | type):
+        return self.current.bl_idname == get_node_type_idname(ntype)
     
 
-    def is_node_any_idname(self, *ntypes: str | bpy.types.Node):
+    def is_node_any_idname(self, *ntypes: str | type):
         for ntype in ntypes:
             if self.is_node_idname(self, ntype): return True
         return False
-    
+
 
     def find_material_output(self, nodes: bpy.types.Nodes):
         for node in nodes:

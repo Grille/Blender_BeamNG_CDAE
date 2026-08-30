@@ -86,6 +86,10 @@ class NodeTreeBuilder:
         def sub(self, value0: LinkSource, value1: LinkSource): return self.math(Operation.SUBTRACT, value0, value1)
 
 
+        def compare(self, value0: LinkSource, value1: LinkSource, epsilon: LinkSource = 0):
+            return self.math(Operation.COMPARE, value0, value1, epsilon)
+        
+
         def mix(self, factor: LinkSource, a: LinkSource, b: LinkSource, op = Operation.MIX, clamp_factor = False, clamp_result = False, socket_type: SocketType | None = None):
 
             def mix_node(data_type: SocketType):
@@ -159,11 +163,12 @@ class NodeTreeBuilder:
             return lb
 
 
-        def menu_switch(self, type: SocketType, *items: str):
+        def menu_switch(self, type: SocketType, *items: str, menu: LinkSource | None = None):
             lb = self.node(bpy.types.GeometryNodeMenuSwitch)
             lb.input_node.data_type = type.data_type
             lb.input_node.enum_items.clear()
             for item in items: lb.input_node.enum_items.new(item)
+            if menu is not None: menu >> lb
             return lb
 
 
@@ -438,6 +443,16 @@ class SocketCreateInfo:
         self.hide_socket = hide_socket
         self.kwargs = kwargs
 
+
+    @staticmethod
+    def cast(value: 'SocketCreateInfo | SocketType'):
+        if isinstance(value, SocketCreateInfo):
+            return value
+        elif isinstance(value, SocketType):
+            return SocketCreateInfo(value)
+        raise TypeError()
+    
+
 SocketCreateInfo.BOOL = SocketCreateInfo(SocketType.Bool)
 SocketCreateInfo.FLOAT = SocketCreateInfo(SocketType.Float)
 SocketCreateInfo.INT = SocketCreateInfo(SocketType.Integer)
@@ -459,18 +474,32 @@ class NodeGroupData:
 
     @dataclass
     class SocketItem:
+
         shape: SocketShape = SocketShape.CIRCLE
         hide: bool = False
+        default_value: SocketValue | None = None
 
-        def serialize(self): return asdict(self)
+
+        def serialize(self):
+            data = {
+                "shape": self.shape,
+                "hide": self.hide,
+            }
+            if self.default_value is not None: data["value"] = self.default_value
+            return data
+
                 
         def deserialize(self, data: dict[str, Any]):
             self.shape = data.get("shape", SocketShape.CIRCLE)
             self.hide = data.get("hide", False)
+            self.default_value = data.get("value", None)
+
 
         def apply(self, dst: bpy.types.NodeSocket):
             dst.display_shape = self.shape
             dst.hide = self.hide
+            if self.default_value is not None: dst.default_value = self.default_value
+
 
 
     class Sockets(dict[str, SocketItem]):
@@ -481,23 +510,28 @@ class NodeGroupData:
             item = self[key] = NodeGroupData.SocketItem()
             return item
 
+
         def serialize(self):
             dict = {}
             for key in self:
                 dict[key] = self[key].serialize()
             return dict
 
+
         def deserialize(self, data: dict[str, dict[str, Any]]):
             for key in data: self.get_new(key).deserialize(data[key])
+
 
 
     def __init__(self):
         self.inputs = NodeGroupData.Sockets()
         self.outputs = NodeGroupData.Sockets()
 
+
     def clear(self):
         self.inputs.clear()
         self.outputs.clear()
+
 
     @classmethod
     def from_text(cls, text: str):
@@ -505,18 +539,22 @@ class NodeGroupData:
         self.load(text)
         return self
 
+
     def serialize(self):
         return {
             "inputs": self.inputs.serialize(),
             "outputs": self.outputs.serialize(),
         }
 
+
     def deserialize(self, data: dict):
         self.inputs.deserialize(data["inputs"])
         self.outputs.deserialize(data["outputs"])
 
+
     def dump(self):
         return json.dumps(self.serialize())
+
 
     def load(self, text: str):
         self.deserialize(json.loads(text))
@@ -568,22 +606,21 @@ class NodeGroupBuilder(NodeTreeBuilder):
 
     def _create_socket(self, create_info: SocketCreateInfo | SocketType, name: str, in_out: SocketIOType, default_value: SocketValue | None = None):
 
-        if isinstance(create_info, SocketCreateInfo):
-            socket_type = create_info.type
-        elif isinstance(create_info, SocketType):
-            socket_type = create_info
-        else: raise TypeError()
+        create_info = SocketCreateInfo.cast(create_info)
 
-        socket: bpy.types.NodeSocket = self.interface.new_socket(name, in_out=in_out, socket_type=socket_type.full_name)
+        socket = self.interface.new_socket(name, in_out=in_out, socket_type=create_info.type.full_name)
+
+        ngdata_target = self.ngdata.inputs if in_out == SocketIOType.INPUT else self.ngdata.outputs
+        item = ngdata_target.get_new(name)
 
         if isinstance(create_info, SocketCreateInfo):
             socket.hide_value = create_info.hide_value
             item = NodeGroupData.SocketItem(create_info.shape, create_info.hide_socket)
-            (self.ngdata.inputs if in_out == SocketIOType.INPUT else self.ngdata.outputs)[name] = item
+            ngdata_target[name] = item
             _apply_kwargs(socket, **create_info.kwargs)
 
         self._move_to_panel(socket)
-
+        
         if default_value is not None: socket.default_value = default_value
 
         return socket

@@ -25,7 +25,7 @@ class MaterialBuilder:
         self.uv1_hint = "1"
 
 
-    def parse_socket(self, socket: _TexValueSocket, src: MaterialNodeWalker.MatSocketInfo, set: SocketParserSettings):
+    def parse_socket(self, socket, src: MaterialNodeWalker.MatSocketInfo, set: SocketParserSettings):
 
         if set.color_enabled and src.color is not None:
             socket.factor = src.color.srgb.tuple3 if set.color_is_vec3 else src.color.srgb.tuple4
@@ -47,7 +47,7 @@ class MaterialBuilder:
             socket.use_uv = 1 if set.uv1hint.lower() in src.layer.lower() else 0
 
 
-    def parse_stage(self, stage: Stage, info: MaterialNodeWalker.MatStageInfo):
+    def parse_stage(self, stage: MaterialStage, info: MaterialNodeWalker.MatStageInfo):
 
         COLOR4 = SocketParserSettings(self.uv1_hint, True, False)
         COLOR3 = SocketParserSettings(self.uv1_hint, True, False, color_is_vec3=True)
@@ -61,7 +61,7 @@ class MaterialBuilder:
         self.material.version = ctx.try_get_version_hint()
         self.material.dynamic_cubemap = ctx.try_get_reflect_hint()
 
-        def parse_socket(socket: _TexValueSocket, socket_name: str | list[str], settings: SocketParserSettings, detail: _TexValueSocket = None):
+        def parse_socket(socket, socket_name: str | list[str], settings: SocketParserSettings, detail = None):
             nw_socket = ctx.get_any_socket(socket_name)
             self.parse_socket(socket, nw_socket, settings)
             if detail and nw_socket.child:
@@ -71,8 +71,6 @@ class MaterialBuilder:
         stage.color.factor = (1,1,1,1)
 
         socket = parse_socket(stage.color, [SocketName.ColorHDR, SocketName.Color, SocketName.BaseColor], COLOR4, stage.detail)
-        stage.move("baseColorMapUseUV", "diffuseMapUseUV")
-        stage.move("detailMapStrength", "detailBaseColorMapStrength")
         stage.vertex_color = socket.enabled_vc
         stage.instance_diffuse = socket.enabled_ic
         
@@ -85,8 +83,6 @@ class MaterialBuilder:
         parse_socket(stage.roughness, SocketName.Roughness, FLOAT)
 
         parse_socket(stage.normal, SocketName.Normal, MAP_ONLY, stage.detail_normal)
-        stage.move("detailNormalScale", "detailScale")
-        stage.move("detailNormalMapUseUV", "normalDetailMapUseUV")
 
         parse_socket(stage.opacity, SocketName.Alpha, FLOAT)
 

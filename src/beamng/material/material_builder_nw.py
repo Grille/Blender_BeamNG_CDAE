@@ -214,18 +214,29 @@ class MaterialNodeWalker(NodeWalker):
 
         if not self.is_node_idname(BeamMaterial):
             return
-        
-        alpha_clip = self.get_float_value(BeamMaterial.Sockets.CLIP) > 0.5
-        alpha_clip_threshold = self.get_float_value(BeamMaterial.Sockets.CLIP_T)
-        alpha_blend = self.get_float_value(BeamMaterial.Sockets.BLEND_MODE) > 0.5
-        double_sided = self.get_float_value(BeamMaterial.Sockets.DOUBLE_SIDED) > 0.5
-        invert_backface_normals = self.get_float_value(BeamMaterial.Sockets.INVERT_BACKFACE_NORMALS) > 0.5
-        cast_shadows = self.get_float_value(BeamMaterial.Sockets.SHADOWS) > 0.5
 
-        mat.alpha_test = alpha_clip
+        LS = BeamMaterial.Sockets
+        node = cast(BeamMaterial, self.current)
+        
+        alpha_clip = self.get_bool_value(LS.CLIP)
+        alpha_clip_threshold = self.get_float_value(LS.CLIP_T)
+        double_sided = self.get_bool_value(LS.DOUBLE_SIDED)
+        invert_backface_normals = self.get_bool_value(LS.INVERT_BACKFACE_NORMALS)
+        cast_shadows = self.get_bool_value(LS.SHADOWS)
+        subsurface = self.get_float_value(LS.SUBSURFACE_SCATTERING)
+
+        mat.alpha_test = alpha_clip 
         mat.alpha_ref = int(alpha_clip_threshold * 255)
-        mat.translucent = alpha_blend
-        mat.translucent_blend_op = "PreMulAlpha" if alpha_blend else None
+
+        mat.translucent.enabled = node.blend_mode != AlphaBlendMode.NONE
+        if mat.translucent.enabled:
+            mat.translucent.blend_mode = node.blend_mode
+            mat.translucent.zwrite = node.blend_z
+            mat.translucent.recv_shadows = node.blend_rshadows
+
+        mat.subsurface.enabled = subsurface > 0
+        mat.subsurface.intensity = subsurface
+
         mat.double_sided = double_sided
         mat.invert_backface_normals = double_sided and invert_backface_normals
         mat.cast_shadows = cast_shadows

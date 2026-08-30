@@ -322,8 +322,3 @@ Vec3F.ZERO = Vec3F(0.0,0.0,0.0)
 Vec3F.ONE = Vec3F(1.0,1.0,1.0)
 
 Transforms.IDENTITY = Transforms()
-
-
-
-
-

@@ -8,6 +8,12 @@ from ...blender.enums import *
 
 TDICT = TypeVar('TDICT', bound='_BaseDict')
 
+type Tuple4 = tuple[float, float, float, float]
+type Tuple3 = tuple[float, float, float]
+type Tuple2 = tuple[float, float]
+
+
+
 class _BaseDict:
 
     def __init__(self, dict: dict[str], **kwargs):
@@ -36,9 +42,9 @@ class _KeyPtrDict(_BaseDict):
 T = TypeVar('T')
 class DictProperty(Generic[T]):
 
-    def __init__(self, key: str, use_prefix = True):
+    def __init__(self, key: str, default: T | None = None):
         self.key = key
-        self.use_prefix = use_prefix
+        self.default = default
 
 
     def _get_full_key(self, instance: _BaseDict):
@@ -48,13 +54,13 @@ class DictProperty(Generic[T]):
     def __get__(self, instance: _BaseDict, owner) -> T | None:
         key = self._get_full_key(instance)
         if key is None: return None
-        return instance._dict.get(self._get_full_key(instance), None)
+        return instance._dict.get(self._get_full_key(instance), self.default)
 
 
     def __set__(self, instance: _BaseDict, value: T | None):
         key = self._get_full_key(instance)
         if key is None: raise KeyError(f"{self.key} not valid in this context")
-        if value is None:
+        if value is None or value == self.default:
             instance._dict.pop(key, None)
         else:
             instance._dict[key] = value
@@ -81,17 +87,17 @@ class _TexPaletteSocket(_TextureSocket):
     clear_coat = DictProperty[bool]("paletteClearCoat")
     clear_coat_roughness = DictProperty[bool]("paletteClearCoatRoughness")
 
-class _TexColorSocket(_TextureSocket):
-    factor = DictProperty[list[float]]("value")
+class _TexColorSocket(Generic[T], _TextureSocket):
+    factor = DictProperty[T]("value")
     vertex_enabled = DictProperty[bool]("vertex")
     instance_enabled = DictProperty[bool]("instance")
 
-class _TexEmissiveSocket(_TexColorSocket):
+class _TexEmissiveSocket(_TexColorSocket[Tuple3]):
     intensity_nits = DictProperty[float]("emissiveIntensityNits")
 
 class _TexSpecularSocket(_TextureSocket):
     enabled = DictProperty[bool]("pixelSpecular")
-    factor = DictProperty[list[float]]("specular")
+    factor = DictProperty[Tuple4]("specular")
     roughness = DictProperty[float]("roughnessFactor")
 
 class _TexCCSocket(_TexFactorSocket):
@@ -99,13 +105,29 @@ class _TexCCSocket(_TexFactorSocket):
 
 
 
-class Stage(_BaseDict):
+class AnimationFlags(IntEnum):
+    ROTATION = 2
+    SCROLL = 1
+    WAVE = 4
+    SCALE = 8
+    SEQUENCE = 16
+
+
+
+class AnimationWaveType(StrEnum):
+    SIN = "Sin"
+    SQUARE = "Square"
+    TRIANGLE = "Triangle"
+
+
+
+class MaterialStage(_BaseDict):
 
     class _Detail(_BaseDict):
 
-        scale = DictProperty[list[float]]("detailScale")
+        scale = DictProperty[Tuple2]("detailScale")
 
-        def __init__(self, parent: Stage):
+        def __init__(self, parent: 'MaterialStage'):
             super().__init__(parent._dict) 
 
             def new(map, value, uv):
@@ -120,16 +142,28 @@ class Stage(_BaseDict):
 
     class _RetroReflective(_BaseDict):
         factor = DictProperty[float]("retroreflectivity")
-        color = DictProperty[list[float]]("retroreflectiveColor")
+        color = DictProperty[Tuple3]("retroreflectiveColor")
 
     class _LegacyLight(_BaseDict):
         emissive_enabled = DictProperty[bool]("emissive")
-        emissive_color = DictProperty[list[float]]("emissiveFactor")
+        emissive_color = DictProperty[Tuple3]("emissiveFactor")
         emissive_intensity_nits = DictProperty[float]("emissiveIntensityNits")
         glow_enabled = DictProperty[bool]("glow")
-        glow_color = DictProperty[list[float]]("glowFactor")
+        glow_color = DictProperty[Tuple3]("glowFactor")
         vert_lit = DictProperty[bool]("vertLit")
         minnaert_constant = DictProperty[float]("minnaertConstant")
+
+    class _Animation(_BaseDict):
+        flags = DictProperty[AnimationFlags]("animFlags")
+        scroll_speed = DictProperty[float]("scrollSpeed")
+        scroll_direction = DictProperty[Tuple2]("scrollDir")
+        rot_speed = DictProperty[float]("rotSpeed")
+        rot_pivot_offset = DictProperty[Tuple2]("rotPivotOffset")
+        seq_frames_per_sec = DictProperty[float]("sequenceFramePerSec")
+        seq_segment_size = DictProperty[float]("sequenceSegmentSize")
+        wave_amp = DictProperty[float]("waveAmp")
+        wave_freq = DictProperty[float]("waveFreq")
+        wave_type = DictProperty[AnimationWaveType]("waveType")
 
     use_anisotropic = DictProperty[bool]("useAnisotropic")
 
@@ -138,14 +172,15 @@ class Stage(_BaseDict):
         super().__init__(dict)
 
         self._sockets: list[_TextureSocket] = []
-        self.detail = Stage._Detail(self)
-        self.retro_reflectivity = self.new(Stage._RetroReflective)
-        self.legacy_light = self.new(Stage._LegacyLight)
+        self.detail = MaterialStage._Detail(self)
+        self.retro_reflectivity = self.new(MaterialStage._RetroReflective)
+        self.legacy_light = self.new(MaterialStage._LegacyLight)
+        self.animation = self.new(MaterialStage._Animation)
 
         def newvs(map, value, uv, type: type[TDICT] = _TexFactorSocket, **kwargs):
             return self.new_socket(type, map=map, value=value, uv=uv, **kwargs)
 
-        def newcs(map, value, uv, instance, vertex, type: type[TDICT] = _TexColorSocket):
+        def newcs(map, value, uv, instance, vertex, type: type[TDICT] = _TexColorSocket[Tuple4]):
             return newvs(map, value, uv, type, instance=instance, vertex=vertex)
 
         def newos(map, value, uv, instance):
@@ -231,7 +266,7 @@ class Material(_BaseDict):
         raw_stages = self._raw_stages
         while len(raw_stages) < 4: raw_stages.append({})
 
-        self.stages = [Stage(raw_stages[0]), Stage(raw_stages[1]), Stage(raw_stages[2]), Stage(raw_stages[3])]
+        self.stages = [MaterialStage(raw_stages[0]), MaterialStage(raw_stages[1]), MaterialStage(raw_stages[2]), MaterialStage(raw_stages[3])]
 
         self.translucent = Material._Translucent(self._dict)
         self.subsurface = Material._Subsurface(self._dict)

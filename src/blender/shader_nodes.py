@@ -57,6 +57,11 @@ BNGS_OUTPUT = _Signature(
     _Signature.Socket(SocketName.Shader, SocketType.Shader),
     _Signature.Socket(SocketName.Alpha, SocketType.Float)
 )
+UVMATRIX = _Signature(
+    _Signature.Socket("U", SocketType.Vector),
+    _Signature.Socket("V", SocketType.Vector),
+    _Signature.Socket(SocketName.Enabled, SocketType.Bool),
+)
 BNGS_IO = _Signature.IO(BNGS_INPUT, BNGS_OUTPUT)
 
 NODE_SOCKET_SHAPE = SocketShape.CIRCLE
@@ -89,7 +94,8 @@ _PALETTE_NODE = _SCI(SocketType.Bundle, NODE_SOCKET_SHAPE)
 _UV_NODE = _SCI(SocketType.Vector, NODE_SOCKET_SHAPE, True)
 _INT_PRIVATE = _SCI(SocketType.Integer, DISPLAY_SOCKET_SHAPE, False, hide_socket=True)
 _PAINT_DISPLAY = _SCI(SocketType.Bundle, DISPLAY_SOCKET_SHAPE)
-_VEC2 = _SCI.VEC2
+_UV_NODE = _SCI(SocketType.Vector, NODE_SOCKET_SHAPE, True)
+_VEC2_VALUE = _SCI(SocketType.Vector, VALUE_SOCKET_SHAPE, **_SCI.VEC2.kwargs)
 _VEC3 = _SCI.VEC3
 
 
@@ -394,16 +400,97 @@ class BeamDetailUVScale(BaseShaderNode):
 
 
 
+class BeamUVData(BaseShaderNode):
+
+    bl_idname = f"{SHADER_NODE_PREFIX}UVData"
+    bl_label = "BNG UV"
+    ng_color_tag = GroupColorTag.VECTOR
+
+    class Sockets(StrEnum):
+        UV0 = "UV 0"
+        UV1 = "UV 1"
+        ANIMATION = "Animation"
+        DETAIL_SCALE = "Detail Scale"
+        DETAIL_UV0 = "Detail UV 0"
+        DETAIL_UV1 = "Detail UV 1"
+
+
+    def create_node_group(self, ngb):
+
+        INVALID = -1e20
+        INVALID_VEC = (0, 0, INVALID)
+
+        def seperate_xyz(src): return ngb.nc.node(bpy.types.ShaderNodeSeparateXYZ, src)
+        def combine_xyz(x, y, z): return ngb.nc.node(bpy.types.ShaderNodeCombineXYZ, x, y, z)
+
+        LS = BeamUVData.Sockets
+        
+        in_uv0 = ngb.input(_UV_NODE, LS.UV0, INVALID_VEC)
+        in_uv1 = ngb.input(_UV_NODE, LS.UV1, INVALID_VEC)
+        out_uv0 = ngb.output(_UV_NODE, LS.UV0)
+        out_uv1 = ngb.output(_UV_NODE, LS.UV1)
+        anim_bundle = ngb.input(_PALETTE_NODE, LS.ANIMATION)
+
+        ngb.panel("Detail")
+        detail_scale = ngb.input(_VEC2_VALUE, LS.DETAIL_SCALE, (1,1,1))
+        out_detail_uv0 = ngb.output(_UV_NODE, LS.DETAIL_UV0)
+        out_detail_uv1 = ngb.output(_UV_NODE, LS.DETAIL_UV1)
+
+        default_uv = ngb.nc.node(bpy.types.ShaderNodeUVMap)
+
+        uv0_z = seperate_xyz(in_uv0)[2]
+        uv0_is_invalid = ngb.nc.compare(uv0_z, INVALID)
+
+        uv0 = in_uv0.mix(default_uv, uv0_is_invalid)
+        uv1 = in_uv1
+
+        anim_split = ngb.nc.seperate_bundle(UVMATRIX, anim_bundle)
+        anim_enabled = anim_split[SocketName.Enabled]
+        anim_matrix = (
+            seperate_xyz(anim_split["U"]), 
+            seperate_xyz(anim_split["V"])
+        )
+
+        def apply_matrix(uv):
+            xy = seperate_xyz(uv)
+            new_x = xy[0] * anim_matrix[0][0] + xy[1] * anim_matrix[0][1] + anim_matrix[0][2]
+            new_y = xy[0] * anim_matrix[1][0] + xy[1] * anim_matrix[1][1] + anim_matrix[1][2]
+            xy = combine_xyz(new_x, new_y, xy[2])
+            return ngb.nc.mix(anim_enabled, uv, xy)
+
+        uv0 = apply_matrix(uv0)
+        uv1 = apply_matrix(uv1)
+
+        uv0 >> out_uv0
+        uv1 >> out_uv1
+
+        uv0 * detail_scale >> out_detail_uv0
+        uv1 * detail_scale >> out_detail_uv1
+
+        
+
 class BeamUVAnimation(BaseShaderNode):
 
     bl_idname = f"{SHADER_NODE_PREFIX}UVAnimation"
     bl_label = "BNG UV Animation"
-    bl_nclass = "OP_VECTOR"
     ng_color_tag = GroupColorTag.VECTOR
 
 
     class Sockets(StrEnum):
-        pass
+        UV = "UV"
+        ANIMATION = "Animation"
+        ROTATION_PIVOT_OFFSET = "Rotation Pivot Offset"
+        ROTATION_SPEED = "Rotation Speed"
+        SCROLL_FACTOR = "Scroll Factor"
+        SCROLL_SPEED = "Scroll Speed"
+        WAVE_TYPE = "Wave Type"
+        WAVE_SCALE = "Wave Scale"
+        WAVE_AMPLITUDE = "Wave Amplitude"
+        WAVE_FREQUENCY = "Wave Frequency"
+        FRAMES_SEC = "Frames/Sec"
+        FRAMES = "Frames"
+        TIME_SOURCE = "Time"
+        SECONDS = "Seconds"
 
 
     class WaveType(StrEnum):
@@ -413,49 +500,46 @@ class BeamUVAnimation(BaseShaderNode):
         TRIANGLE = "Triangle"
 
 
-    @staticmethod
-    def create_inputs(ngb: NodeGroupBuilder):
-
-        ngb.panel("Rotation Animation")
-        ngb.create_vector_input("Rotation Pivot Offset", dimensions=2)
-        ngb.create_float_input("Rotation Speed")
-
-        ngb.panel("Scroll Animation")
-        ngb.create_vector_input("Scroll UV", dimensions=2)
-        ngb.create_float_input("Scroll Speed")
-
-        ngb.panel("Wave Animation")
-        ngb.create_menu_input("Wave Type")
-        ngb.create_bool_input("Wave Scale")
-        ngb.create_float_input("Wave Amplitude")
-        ngb.create_float_input("Wave Frequency")
-
-        ngb.panel("Image Sequence")
-        ngb.create_float_input("Frames Sec")
-        ngb.create_float_input("Frames")
+    class TimeSource(StrEnum):
+        SCENE = "Scene Time"
+        VALUE = "Value"
 
 
     def create_node_group(self, ngb: NodeGroupBuilder):
+
+        LS = BeamUVAnimation.Sockets
+
+        time_source_input = ngb.input(_MENU, LS.TIME_SOURCE)
+        time_source_value = ngb.input(_FLOAT, LS.SECONDS)
         
-        ngb.create_vector_input("UV", True)
-        ngb.create_vector_output("UV")
+        ngb.output(_PALETTE_NODE, LS.ANIMATION)
 
-        BeamUVAnimation.create_inputs(ngb)
+        ngb.panel("Rotation")
+        ngb.input(_VEC2_VALUE, LS.ROTATION_PIVOT_OFFSET)
+        rot_speed = ngb.input(_FLOAT_VALUE, LS.ROTATION_SPEED, 0)
 
-        inputs, outputs = ngb._create_io()
+        ngb.panel("Scroll")
+        ngb.input(_VEC2_VALUE, LS.SCROLL_FACTOR)
+        ngb.input(_FLOAT_VALUE, LS.SCROLL_SPEED, 0)
 
-        time = ngb.create_node(NodeName.SceneTime)
-        _WT = BeamUVAnimation.WaveType
-        switch = ngb.create_menu_switch(SocketType.Float, _WT.NONE, _WT.SIN, _WT.SQUARE, _WT.TRIANGLE)
-        ngb.link(inputs, "Wave Type", switch, 0)
+        ngb.panel("Wave")
+        menu_socket = ngb.input(_MENU, LS.WAVE_TYPE)
+        ngb.input(_BOOL_VALUE, LS.WAVE_SCALE)
+        ngb.input(_FLOAT_VALUE, LS.WAVE_AMPLITUDE, 0)
+        ngb.input(_FLOAT_VALUE, LS.WAVE_FREQUENCY, 0)
+
+        ngb.panel("Image Sequence")
+        ngb.input(_FLOAT_VALUE, LS.FRAMES_SEC, 0)
+        ngb.input(_FLOAT_VALUE, LS.FRAMES, 0)
+
+        seconds = ngb.nc.menu_switch(SocketType.Float, *BeamUVAnimation.TimeSource, menu=time_source_input)
+        ngb.nc.node(bpy.types.GeometryNodeInputSceneTime)[LS.SECONDS] >> seconds[BeamUVAnimation.TimeSource.SCENE]
+        time_source_value >> seconds[BeamUVAnimation.TimeSource.VALUE]
 
 
-    def post_init(self):
-        self.inputs["Wave Type"].default_value = BeamUVAnimation.WaveType.NONE
-    
+        ngb.nc.menu_switch(SocketType.Float, *BeamUVAnimation.WaveType, menu=menu_socket)
 
-
-
+        sin = ngb.nc.math("SINE", seconds)
 
 
 
@@ -916,7 +1000,7 @@ class BeamBDSF10Basic(BaseShaderNode):
         OVERLAY_MAP = "RGBA Overlay Map"
         PALETTE = "Palette"
         SPECULAR_MAP = "Specular Map"
-        SPECULAR_ENABLED = "Specualr Enabled"
+        SPECULAR_ENABLED = "Specular Enabled"
         SPECULAR_COLOR = "Specular Color"
         SPECULAR_ROUGHNESS = "Specular Roughness"
         RM = "RGBA Reflectivity Map"
@@ -1491,6 +1575,7 @@ class ShaderNodeTree(bpy.types.Menu):
         BeamPaint,
         BeamPaletteEval,
         BeamBSDFRetroReflect,
+        BeamUVData,
     ]
 
 
@@ -1553,6 +1638,7 @@ class ShaderNodeRegistry:
         BeamPaletteEval,
         BeamBSDF15Detail,
         BeamBSDFRetroReflect,
+        BeamUVData,
     ]
 
 
