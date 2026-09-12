@@ -18,7 +18,7 @@ from ..beamng.cdae.v31 import CdaeV31
 from ..beamng.material.material_libary import MaterialLibary
 from ..beamng.material.material_builder import MaterialBuilder
 from .local_storage import LocalStorage
-from .presets_operators import OpPresetsUtils
+from .presets_operators import OpPresetsUtils, PresetOperator
 from ..beamng.cdae.io import *
 from .enums import *
 
@@ -58,7 +58,7 @@ def update_samples(self: 'ExportBase', ctx):
 
 
 
-class ExportBase(Operator, ExportHelper):
+class ExportBase(PresetOperator, ExportHelper):
 
     bl_idname = "grille.export_beamng_dae"
     bl_label = "Export BeamNG"
@@ -68,10 +68,6 @@ class ExportBase(Operator, ExportHelper):
     selection_only: BoolProperty(name="Selection Only", default=False, description="Use selected Objects.")
     include_children: BoolProperty(name="Include Children", default=False, description="Include all Children of selected Objects.")
     include_hidden: BoolProperty(name="Include Hidden", default=False, description="Include Objects that are hidden in Viewport.")
-
-    temp_presets_initalized: BoolProperty(default=False)
-    temp_presets_file: StringProperty(default="export")
-    temp_presets_selection: StringProperty()
 
     file_format: EnumProperty(
         name="Format",
@@ -348,6 +344,9 @@ class ExportBase(Operator, ExportHelper):
 
     def draw(self, context):
 
+        assert context is not None
+        assert self.layout is not None
+
         layout = self.layout
         layout.use_property_split = True
         layout.use_property_decorate = False
@@ -357,7 +356,7 @@ class ExportBase(Operator, ExportHelper):
         format = self.file_format
         write_file = format != FileFormat.NONE
 
-        def alert(obj, text):
+        def alert(obj: bpy.types.UILayout, text: str):
             row = obj.row()
             row.alert = True
             row.label(text=text, icon="ERROR")

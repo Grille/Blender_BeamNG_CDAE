@@ -4,8 +4,7 @@ from enum import Enum
 from .material_properties import *
 from .enums import *
 from .shader_nodes_utils import *
-from .shader_node_builder import NodeGroupBuilder, SocketCreateInfo, NodeGroupData
-_Signature = NodeGroupBuilder.Signature
+from .shader_node_builder import NodeGroupBuilder, SocketCreateInfo, NodeGroupData, NodeSignature
 _SCI = SocketCreateInfo
 #_NS = NodeGroupBuilder.NodeSocket
 
@@ -16,53 +15,68 @@ NODE_GROUP_VERSION_MAYOR_KEY = "grille_beamng_cdae_mayor_version"
 NODE_GROUP_VERSION_MINOR_KEY = "grille_beamng_cdae_minor_version"
 SHADER_NODE_PREFIX = "ShaderNodeCustom.grille_beamng_cdae_"
 
-RGBA =_Signature(
-    _Signature.Socket(SocketName.Color, SocketType.Color),
-    _Signature.Socket(SocketName.Alpha, SocketType.Float),
-    _Signature.Socket(SocketName.Enabled, SocketType.Bool),
+RGBA = NodeSignature(
+    (SocketName.Color, SocketType.Color),
+    (SocketName.Alpha, SocketType.Float),
+    (SocketName.Enabled, SocketType.Bool),
 )
 
-PAINT_LAYER =_Signature(
-    _Signature.Socket(SocketName.Color, SocketType.Color),
-    _Signature.Socket(SocketName.Alpha, SocketType.Float),
-    _Signature.Socket(SocketName.Metallic, SocketType.Float),
-    _Signature.Socket(SocketName.Roughness, SocketType.Float),
-    _Signature.Socket(SocketName.ClearCoat, SocketType.Float),
-    _Signature.Socket(SocketName.ClearCoatRoughness, SocketType.Float),
-    _Signature.Socket(SocketName.Enabled, SocketType.Bool),
+PAINT_LAYER = NodeSignature(
+    (SocketName.Color, SocketType.Color),
+    (SocketName.Alpha, SocketType.Float),
+    (SocketName.Metallic, SocketType.Float),
+    (SocketName.Roughness, SocketType.Float),
+    (SocketName.ClearCoat, SocketType.Float),
+    (SocketName.ClearCoatRoughness, SocketType.Float),
+    (SocketName.Enabled, SocketType.Bool),
 )
-DETAIL_LAYER = _Signature(
-    _Signature.Socket(SocketName.Color, SocketType.Color),
-    _Signature.Socket(SocketName.Alpha, SocketType.Float),
-    _Signature.Socket(SocketName.Normal, SocketType.Vector),
-    _Signature.Socket(SocketName.Metallic, SocketType.Float),
-    _Signature.Socket(SocketName.Roughness, SocketType.Float),
-    _Signature.Socket(SocketName.AmbientOcclusion, SocketType.Float),
-    _Signature.Socket(SocketName.Enabled, SocketType.Bool),
-)
-
-PAINT3 = _Signature(
-    _Signature.Socket("Layer 1", SocketType.Bundle),
-    _Signature.Socket("Layer 2", SocketType.Bundle),
-    _Signature.Socket("Layer 3", SocketType.Bundle),
+DETAIL_LAYER = NodeSignature(
+    (SocketName.Color, SocketType.Color),
+    (SocketName.Alpha, SocketType.Float),
+    (SocketName.Normal, SocketType.Vector),
+    (SocketName.Metallic, SocketType.Float),
+    (SocketName.Roughness, SocketType.Float),
+    (SocketName.AmbientOcclusion, SocketType.Float),
+    (SocketName.Enabled, SocketType.Bool),
 )
 
-BNGS_INPUT = _Signature(
-    _Signature.Socket(SocketName.ReflectionMode, SocketType.Integer),
-    _Signature.Socket(SocketName.AlphaBlendMode, SocketType.Integer),
-    _Signature.Socket(SocketName.InvertBackfaceNormals, SocketType.Bool),
-    _Signature.Socket(SocketName.SubsurfaceScattering, SocketType.Float)
+PAINT3 = NodeSignature(
+    ("Layer 1", PAINT_LAYER),
+    ("Layer 2", PAINT_LAYER),
+    ("Layer 3", PAINT_LAYER),
 )
-BNGS_OUTPUT = _Signature(
-    _Signature.Socket(SocketName.Shader, SocketType.Shader),
-    _Signature.Socket(SocketName.Alpha, SocketType.Float)
+PALETTE = NodeSignature(
+    (SocketName.Vector, SocketType.Vector),
+    (SocketName.Color, SocketType.Bool),
+    (SocketName.Metallic, SocketType.Bool),
+    (SocketName.Roughness, SocketType.Bool),
+    (SocketName.ClearCoat, SocketType.Bool),
+    (SocketName.ClearCoatRoughness, SocketType.Bool),
 )
-UVMATRIX = _Signature(
-    _Signature.Socket("U", SocketType.Vector),
-    _Signature.Socket("V", SocketType.Vector),
-    _Signature.Socket(SocketName.Enabled, SocketType.Bool),
+DISPLAY_INFO = NodeSignature(
+    (SocketName.Paint, PAINT3),
+    (SocketName.VertexColor, RGBA),
+    (SocketName.AmbientOcclusionStrength, SocketType.Float),
+    (SocketName.Enabled, SocketType.Bool),
 )
-BNGS_IO = _Signature.IO(BNGS_INPUT, BNGS_OUTPUT)
+
+BNGS_INPUT = NodeSignature(
+    (SocketName.ReflectionMode, SocketType.Integer),
+    (SocketName.AlphaBlendMode, SocketType.Integer),
+    (SocketName.InvertBackfaceNormals, SocketType.Bool),
+    (SocketName.SubsurfaceScattering, SocketType.Float),
+    (SocketName.DisplayInfo, DISPLAY_INFO)
+)
+BNGS_OUTPUT = NodeSignature(
+    (SocketName.Shader, SocketType.Shader),
+    (SocketName.Alpha, SocketType.Float)
+)
+UVMATRIX = NodeSignature(
+    ("U", SocketType.Vector),
+    ("V", SocketType.Vector),
+    (SocketName.Enabled, SocketType.Bool),
+)
+BNGS_IO = NodeSignature.IO(BNGS_INPUT, BNGS_OUTPUT)
 
 NODE_SOCKET_SHAPE = SocketShape.CIRCLE
 TEXTURE_SOCKET_SHAPE = SocketShape.DIAMOND
@@ -82,18 +96,20 @@ _MENU = _SCI(SocketType.Menu, VALUE_SOCKET_SHAPE, False)
 _FLOAT = _SCI.FACTOR
 _FLOAT_VALUE = _SCI(SocketType.Float, VALUE_SOCKET_SHAPE, False, default_value=1, **_SCI.FACTOR.kwargs)
 _FLOAT_TEXTURE = _SCI(SocketType.Float, TEXTURE_SOCKET_SHAPE, True, default_value=1)
+_FLOAT_DISPLAY = _SCI(SocketType.Float, DISPLAY_SOCKET_SHAPE, False, default_value=1)
 _COLOR = _SCI.COLOR
 _COLOR_VALUE = _SCI(SocketType.Color, VALUE_SOCKET_SHAPE, False, default_value=COLOR_WHITE)
 _COLOR_TEXTURE = _SCI(SocketType.Color, TEXTURE_SOCKET_SHAPE, True, default_value=COLOR_WHITE)
+_COLOR_DISPLAY = _SCI(SocketType.Color, DISPLAY_SOCKET_SHAPE, False, default_value=COLOR_WHITE)
 _RGBA_X = _SCI(SocketType.Bundle)
 _RGBA_VALUE = _SCI(SocketType.Bundle, VALUE_SOCKET_SHAPE, False)
 _RGBA_TEXTURE = _SCI(SocketType.Bundle, TEXTURE_SOCKET_SHAPE, True)
 _NORMAL_TEXTURE = _SCI(SocketType.Vector, TEXTURE_SOCKET_SHAPE, True)
 _NORMAL_MIX = _SCI(SocketType.Vector, TVMIX_SOCKET_SHAPE, True)
-_PALETTE_NODE = _SCI(SocketType.Bundle, NODE_SOCKET_SHAPE)
+_BUNDLE_NODE = _SCI(SocketType.Bundle, NODE_SOCKET_SHAPE)
 _UV_NODE = _SCI(SocketType.Vector, NODE_SOCKET_SHAPE, True)
 _INT_PRIVATE = _SCI(SocketType.Integer, DISPLAY_SOCKET_SHAPE, False, hide_socket=True)
-_PAINT_DISPLAY = _SCI(SocketType.Bundle, DISPLAY_SOCKET_SHAPE)
+_BUNDLE_DISPLAY = _SCI(SocketType.Bundle, DISPLAY_SOCKET_SHAPE)
 _UV_NODE = _SCI(SocketType.Vector, NODE_SOCKET_SHAPE, True)
 _VEC2_VALUE = _SCI(SocketType.Vector, VALUE_SOCKET_SHAPE, **_SCI.VEC2.kwargs)
 _VEC3 = _SCI.VEC3
@@ -129,7 +145,7 @@ class NodeRuntimeData:
 
 
     @staticmethod
-    def get_instance(node: bpy.types.Struct):
+    def get_instance(node: 'BaseShaderNode'):
         dict = NodeRuntimeData._node_runtime_dict
         key = node.as_pointer()
         data = dict.get(key)
@@ -178,8 +194,9 @@ class BaseShaderNode(bpy.types.ShaderNodeCustomGroup):
 
 
     @classmethod
-    def poll(cls, ntree: bpy.types.NodeTree):
-        return ntree.bl_idname == NodeName.ShaderNodeTree
+    def poll(cls, node_tree):
+        if node_tree is None: return False
+        return node_tree.bl_idname == NodeName.ShaderNodeTree
     
 
     def get_validator(self):
@@ -324,7 +341,7 @@ class BeamImageTex(BaseShaderNode):
         pass
 
 
-    def draw_buttons(self, context: bpy.types.Context, layout: bpy.types.UILayout):
+    def draw_buttons(self, context, layout):
         super().draw_buttons(context, layout)
         layout.template_ID(self, "image_ptr", open="image.open", new="image.new")
         #layout.prop(self, "image_type", text="Type")
@@ -429,7 +446,7 @@ class BeamUVData(BaseShaderNode):
         in_uv1 = ngb.input(_UV_NODE, LS.UV1, INVALID_VEC)
         out_uv0 = ngb.output(_UV_NODE, LS.UV0)
         out_uv1 = ngb.output(_UV_NODE, LS.UV1)
-        anim_bundle = ngb.input(_PALETTE_NODE, LS.ANIMATION)
+        anim_bundle = ngb.input(_BUNDLE_NODE, LS.ANIMATION)
 
         ngb.panel("Detail")
         detail_scale = ngb.input(_VEC2_VALUE, LS.DETAIL_SCALE, (1,1,1))
@@ -512,7 +529,7 @@ class BeamUVAnimation(BaseShaderNode):
         time_source_input = ngb.input(_MENU, LS.TIME_SOURCE)
         time_source_value = ngb.input(_FLOAT, LS.SECONDS)
         
-        ngb.output(_PALETTE_NODE, LS.ANIMATION)
+        ngb.output(_BUNDLE_NODE, LS.ANIMATION)
 
         ngb.panel("Rotation")
         ngb.input(_VEC2_VALUE, LS.ROTATION_PIVOT_OFFSET)
@@ -743,11 +760,11 @@ class BaseBeamRGBA(BaseShaderNode):
 
 
     @property
-    def inputs_rgb(self) -> bpy.types.NodeSocketColor: return self.inputs["RGB"]
+    def inputs_rgb(self): return self.inputs["RGB"]
 
 
     @property
-    def input_a(self) -> bpy.types.NodeSocketColor: return self.inputs["A"]
+    def input_a(self): return self.inputs["A"]
 
 
     def update_color(self, ctx):
@@ -761,7 +778,7 @@ class BaseBeamRGBA(BaseShaderNode):
         self.input_a.hide = True
 
 
-    def draw_buttons(self, context, layout: bpy.types.UILayout):
+    def draw_buttons(self, context, layout):
         layout.prop(self, "color", text="")
 
 
@@ -830,7 +847,7 @@ class BeamMathHardLight(BaseShaderNode):
         dark = 2 * i * m
         light = 1 - (2 * (1 - m) * (1 - i))
 
-        ngb.nc.mix(m > 0.5, dark, light) >> ngb.output(_FLOAT_VALUE, SocketName.Value)
+        dark.mix(light, m > 0.5) >> ngb.output(_FLOAT_VALUE, SocketName.Value)
 
 
 
@@ -900,7 +917,7 @@ class BeamPaletteEval(BaseShaderNode):
 
     def create_node_group(self, ngb):
 
-        pallete_bundle = ngb.input(_PALETTE_NODE, "Palette")
+        pallete_bundle = ngb.input(_BUNDLE_NODE, "Palette")
         pallete = ngb.nc.seperate_bundle(PAINT_LAYER, pallete_bundle)
         enabled = pallete[SocketName.Enabled]
         enabled >> ngb.output(SocketType.Bool, SocketName.Enabled)
@@ -931,7 +948,7 @@ class BeamPalette(BaseShaderNode):
         roughness_enabled = ngb.input(_BOOL_VALUE, SocketName.Roughness, True)
         cc_enabled = ngb.input(_BOOL_VALUE, SocketName.ClearCoat, True)
         ccr_enabled = ngb.input(_BOOL_VALUE, SocketName.ClearCoatRoughness, True)
-        paint_bundle = ngb.input(_PAINT_DISPLAY, "Paint")
+        paint_bundle = ngb.input(_BUNDLE_DISPLAY, "Paint")
 
         layers_bundle = ngb.nc.seperate_bundle(PAINT3, paint_bundle)
         def sep_layer(index: int): return ngb.nc.seperate_bundle(PAINT_LAYER, layers_bundle[index])
@@ -955,7 +972,7 @@ class BeamPalette(BaseShaderNode):
         mix3(SocketName.ClearCoat, cc_enabled)
         mix3(SocketName.ClearCoatRoughness, ccr_enabled)
 
-        result >> ngb.output(_PALETTE_NODE, "Palette")
+        result >> ngb.output(_BUNDLE_NODE, "Palette")
 
 
 
@@ -966,21 +983,57 @@ class BeamPaint(BaseShaderNode):
     ng_color_tag = GroupColorTag.INPUT
 
     def create_node_group(self, ngb):
-        output = ngb.output(_PAINT_DISPLAY, "Paint")
+        output = ngb.output(_BUNDLE_DISPLAY, "Paint")
         def new_layer(index: int):
             panel_name = f"Layer {index}"
             ngb.panel(panel_name)
             def new_input(info, name): return ngb.input(info, f"{panel_name} {name}")
             inputs = (
-                new_input(_COLOR_VALUE, SocketName.Color),
-                new_input(_FLOAT_VALUE, SocketName.Alpha),
-                new_input(_FLOAT_VALUE, SocketName.Metallic),
-                new_input(_FLOAT_VALUE, SocketName.Roughness),
-                new_input(_FLOAT_VALUE, SocketName.ClearCoat),
-                new_input(_FLOAT_VALUE, SocketName.ClearCoatRoughness),
+                new_input(_COLOR_DISPLAY, SocketName.Color),
+                new_input(_FLOAT_DISPLAY, SocketName.Alpha),
+                new_input(_FLOAT_DISPLAY, SocketName.Metallic),
+                new_input(_FLOAT_DISPLAY, SocketName.Roughness),
+                new_input(_FLOAT_DISPLAY, SocketName.ClearCoat),
+                new_input(_FLOAT_DISPLAY, SocketName.ClearCoatRoughness),
             )
             return ngb.nc.combine_bundle(PAINT_LAYER, *inputs, True)
         ngb.nc.combine_bundle(PAINT3, new_layer(1), new_layer(2), new_layer(3)) >> output
+
+
+
+class BeamDisplayInject(BaseShaderNode):
+
+    bl_idname = f"{SHADER_NODE_PREFIX}DisplayInject"
+    bl_label = "BNGS Display Inject"
+    ng_color_tag = GroupColorTag.SHADER
+
+
+    class Sockets(StrEnum):
+        PAINT = "Paint"
+        VERTEX = "Vertex RGBA"
+        AO_STRENGTH = SocketName.AmbientOcclusionStrength
+
+
+    def create_node_group(self, ngb):
+
+        LS = BeamDisplayInject.Sockets
+
+        input = ngb.input(SocketType.Closure, SocketName.BNGShader)
+        output = ngb.output(SocketType.Closure, SocketName.BNGShader)
+
+        paint = ngb.input(_BUNDLE_DISPLAY, LS.PAINT)
+        vtx_color = ngb.input(_BUNDLE_DISPLAY, LS.VERTEX)
+        ao_strength = ngb.input(_FLOAT_DISPLAY, SocketName.AmbientOcclusionStrength, 0.5)
+
+        display_info = ngb.nc.combine_bundle(DISPLAY_INFO, paint, vtx_color, ao_strength)
+
+        closure = ngb.nc.closure(BNGS_IO)
+        eval = ngb.nc.eval_closure(BNGS_IO, input)
+
+        BNGS_INPUT.forward(closure, eval, exclude=(SocketName.DisplayInfo))
+        display_info >> eval[SocketName.DisplayInfo]
+        BNGS_OUTPUT.forward(eval, closure)
+        closure.output >> output
 
 
 
@@ -1041,7 +1094,7 @@ class BeamBDSF10Basic(BaseShaderNode):
         rgba_rm = ngb.input(_RGBA_TEXTURE, LS.RM)
         rm_factor = ngb.input(_FLOAT_VALUE, LS.RM_FACTOR)
         overlay = ngb.input(_RGBA_TEXTURE, LS.OVERLAY_MAP)
-        pallete_bundle = ngb.input(_PALETTE_NODE, LS.PALETTE)
+        pallete_bundle = ngb.input(_BUNDLE_NODE, LS.PALETTE)
         opacity_map = ngb.input(_FLOAT_TEXTURE, LS.OPACITY_MAP, default_value=1.0)
 
         ngb.panel("Lighting")
@@ -1284,7 +1337,7 @@ class BeamBSDF15(BaseShaderNode):
 
         ngb.panel("Advanced")
         detail_bundle = ngb.input(SocketType.Bundle, LS.DETAIL)
-        palette_bundle = ngb.input(_PALETTE_NODE, LS.PALETTE)
+        palette_bundle = ngb.input(_BUNDLE_NODE, LS.PALETTE)
         e_m = ngb.input(_COLOR_TEXTURE, LS.EMISSIVE_MAP)
         e_f = ngb.input(_COLOR_VALUE, LS.EMISSIVE_FACTOR, COLOR_BLACK)
         e_i = ngb.input(_FLOAT_VALUE, LS.EMISSIVE_INTENSITY, -1)
@@ -1299,6 +1352,8 @@ class BeamBSDF15(BaseShaderNode):
 
         closure = ngb.nc.closure(BNGS_IO)
         closure.output >> output
+
+        display_info = ngb.nc.seperate_bundle(DISPLAY_INFO, closure[SocketName.DisplayInfo])
 
         palette = ngb.nc.node(BeamPaletteEval, palette_bundle)
         palette_c = palette[SocketName.Color]
@@ -1363,8 +1418,10 @@ class BeamBSDF15(BaseShaderNode):
         cc_n >> principled[SocketName.CoatNormal]
 
         emission_ao = ngb.nc.node(bpy.types.ShaderNodeEmission, COLOR_BLACK)
+        emission_ao_strength = (1 - ao) * display_info[SocketName.AmbientOcclusionStrength]
+        shader = principled.mix(emission_ao, emission_ao_strength)
+
         emission_e = ngb.nc.node(bpy.types.ShaderNodeEmission, e)
-        shader = principled.mix(emission_ao, (1 - ao) * 0.5)
         shader += emission_e
 
         shader >> closure[SocketName.Shader]
@@ -1576,6 +1633,7 @@ class ShaderNodeTree(bpy.types.Menu):
         BeamPaletteEval,
         BeamBSDFRetroReflect,
         BeamUVData,
+        BeamDisplayInject,
     ]
 
 
@@ -1639,6 +1697,7 @@ class ShaderNodeRegistry:
         BeamBSDF15Detail,
         BeamBSDFRetroReflect,
         BeamUVData,
+        BeamDisplayInject,
     ]
 
 

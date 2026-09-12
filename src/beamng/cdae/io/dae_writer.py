@@ -1,17 +1,22 @@
 import struct
-import numpy as np
-import xml.etree.cElementTree as ET
 
 from dataclasses import dataclass
 from enum import Enum
 from io import BufferedReader, TextIOWrapper
 from numpy.typing import NDArray
 from datetime import datetime, timezone
+from typing import Sequence
 
 from .dae import *
 from ..v31 import CdaeV31
 from ...numerics import *
 from ....debug_utils import Stopwatch
+
+import numpy as np
+import xml.etree.cElementTree as ET
+
+
+type Float32Sequence = Sequence[float] | NDArray[np.float32]
 
 
 def format_id(id: str):
@@ -22,29 +27,15 @@ def format_float(value: float) -> str:
     return str(round(value, DaeWriter.limit_precision_dp)) if DaeWriter.limit_precision_enabled else str(value)
 
 
-def format_float_list(values: list[float]) -> str:
+def format_float_list(values: Float32Sequence) -> str:
     return " ".join(map(format_float, values))
-
-
-def append_matrix(quat: Quat4F, location: Vec3F, scale: Vec3F, values: list[float]):
-    matrix = quat.to_collada_matrix()
-    matrix.translation = location.tuple3
-    for col in range(4): 
-        for row in range(4):
-            values.append(matrix[col][row])
-
-
-def get_matrix(quat: Quat4F, location: Vec3F):
-    values: list[float] = []
-    append_matrix(quat, location, Vec3F(1,1,1), values)
-    return values
 
 
 def make_id(name, suffix):
         return f"{name}_{suffix}"
 
 
-def write_float_array(xml: ET.Element, flat_array: NDArray[np.float32], array_id: str):
+def write_float_array(xml: ET.Element, flat_array: Float32Sequence, array_id: str):
 
     array_length = len(flat_array)
     xml_float_array = ET.SubElement(xml, DaeTag.float_array, {
@@ -64,7 +55,7 @@ def write_accessor(xml: ET.Element, source_id: str, count: int, accessor: Access
     }).extend([ET.Element(DaeTag.param, {"name": acc.name, "type": acc.type}) for acc in accessor.params])
 
 
-def write_src_float(xml: ET.Element, flat_array: NDArray[np.float32], name: str, accessor: Accessor):
+def write_src_float(xml: ET.Element, flat_array: Float32Sequence, name: str, accessor: Accessor):
 
     xml_source = ET.SubElement(xml, DaeTag.source, {"id": name})
     array_id = f"{name}_array"
@@ -78,13 +69,13 @@ def write_geometry(mesh: CdaeV31.Mesh, lib_geometries: ET.Element, mesh_index: i
     geom = ET.SubElement(lib_geometries, DaeTag.geometry, {"id": geom_id, "name": mesh_name})
     mesh_elem = ET.SubElement(geom, DaeTag.mesh)
 
-    def try_write_src(vector: NDArray[np.float32], name: str, accessor: Accessor) -> str:
+    def try_write_src(vector: NDArray[np.float32], name: str, accessor: Accessor) -> str | None:
         if vector.size == 0: return None
         src_id = f"{geom_id}_{name}"
         write_src_float(mesh_elem, vector, src_id, accessor)
         return src_id
     
-    def try_write_src_uv(vector: NDArray[np.float32], name: str) -> str:
+    def try_write_src_uv(vector: NDArray[np.float32], name: str) -> str | None:
         if vector.size == 0: return None
         uv = vector.reshape(-1, 2).copy()   # copy -> writable, keeps both columns
         uv[:, 1] = 1.0 - uv[:, 1]           # invert V
@@ -95,6 +86,9 @@ def write_geometry(mesh: CdaeV31.Mesh, lib_geometries: ET.Element, mesh_index: i
     uv0s_id = try_write_src_uv(mesh.tverts0.to_numpy_array(np.float32), "uv0s")
     uv1s_id = try_write_src_uv(mesh.tverts1.to_numpy_array(np.float32), "uv1s")
     color_id = try_write_src(mesh.get_vec4f_colors(), "colors", Accessors.VEC4)
+
+    assert positions_id is not None
+    assert normals_id is not None
 
     # Vertices
     vert_id = make_id(geom_id, "vertices")
@@ -127,28 +121,29 @@ def write_geometry(mesh: CdaeV31.Mesh, lib_geometries: ET.Element, mesh_index: i
         ET.SubElement(tris, DaeTag.p).text = " ".join(str(indices[i]) for i in range(reg.index_start, reg.index_start + reg.index_count))
 
 
-def collapse_animation(times: list[float], transforms: list[float]) -> tuple[list[float], list[float]]:
-    transforms_np = np.array(transforms).reshape(-1, 16)
+def collapse_animation(times: list[float], transforms: list[DaeMatrix]) -> tuple[list[float], list[DaeMatrix]]:
+
     collapsed_times = [times[0]]
-    collapsed_transforms = [transforms_np[0].tolist()]
+    collapsed_transforms = [transforms[0]]
 
     for i in range(1, len(times)):
-        if not np.allclose(transforms_np[i], transforms_np[i - 1]):
+        if not np.allclose(transforms[i].values, transforms[i - 1].values):
             collapsed_times.append(times[i])
-            collapsed_transforms.append(transforms_np[i].tolist())
+            collapsed_transforms.append(transforms[i])
 
-    return collapsed_times, [v for mat in collapsed_transforms for v in mat]
+    return collapsed_times, collapsed_transforms
 
 
-def write_animation(xml: ET.Element, target_id: str, times: list[float], transforms: list[float]):
+def write_animation(xml: ET.Element, target_id: str, times: list[float], transforms: list[DaeMatrix]):
     xml_anim = ET.SubElement(xml, DaeTag.animation)
 
     ctimes, ctransforms = collapse_animation(times, transforms)
+    ctransforms_flat = DaeMatrix.flatten_matrices(ctransforms)
 
     src_input_id = f"{target_id}-anim-input"
     write_src_float(xml_anim, ctimes, src_input_id, Accessors.TIME)
     src_output_id = f"{target_id}-anim-output"
-    write_src_float(xml_anim, ctransforms, src_output_id, Accessors.TRANSFORM)
+    write_src_float(xml_anim, ctransforms_flat, src_output_id, Accessors.TRANSFORM)
 
     sampler_id = f"{target_id}-sampler"
     xml_sampler = ET.SubElement(xml_anim, DaeTag.sampler, {"id": sampler_id})
@@ -261,7 +256,11 @@ def write_to_tree(cdae: CdaeV31, dae: ET.Element):
             keyframes_node_index += 1
 
             times: list[float] = []
-            transforms: list[float] = []
+            transforms: list[DaeMatrix] = []
+
+            def append_matrix(index: int):
+                matrix = DaeMatrix.from_cdae(node_rotation[index], node_translations[index])
+                transforms.append(matrix)
 
             for index in range(0, num_keyframes):
 
@@ -270,10 +269,10 @@ def write_to_tree(cdae: CdaeV31, dae: ET.Element):
                 times.append(time)
                 
                 keyframe_index = index + keyframes_offset
-                append_matrix(node_rotation[keyframe_index], node_translations[keyframe_index], Vec3F(1,1,1), transforms)
+                append_matrix(keyframe_index)
 
             times.append(seq.duration)
-            append_matrix(node_rotation[keyframes_offset], node_translations[keyframes_offset], Vec3F(1,1,1), transforms)
+            append_matrix(keyframes_offset)
 
             node_name = cdae.names[node.nameIndex]
             write_animation(lib_animations, node_name, times, transforms)

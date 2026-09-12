@@ -2,6 +2,7 @@ import struct
 import msgpack
 import zstandard
 
+from typing import Any
 from io import BufferedWriter, BytesIO
 
 from ...numerics import *
@@ -18,7 +19,7 @@ class MsgpackWriter:
         return self.buffer.getvalue()
         
 
-    def write(self, obj: any):
+    def write(self, obj: Any):
         data = self.packer.pack(obj)
         self.buffer.write(data)
 

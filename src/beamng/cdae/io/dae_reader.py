@@ -1,18 +1,24 @@
 import struct
-import numpy as np
-import zstandard as zstd
-import xml.etree.cElementTree as ET
 
 from dataclasses import dataclass
 from enum import Enum
 from io import BufferedReader
 from numpy.typing import NDArray
+from typing import TypeVar
 
 from .dae import *
 from ..packed_vector import PackedVector
 from ..v31 import CdaeV31
 from ...numerics import *
-    
+
+import numpy as np
+import zstandard as zstd
+import xml.etree.cElementTree as ET
+
+
+
+_T = TypeVar('_T')
+
 
 
 def _strip_namespaces(elem: ET.Element):
@@ -22,43 +28,81 @@ def _strip_namespaces(elem: ET.Element):
         _strip_namespaces(child)
 
 
-def parse_array_text(text: str | None, dtype=np.float32) -> NDArray:
-    if text is None:
-        array = np.empty(0, dtype=dtype)
-    else:
-        array = np.fromstring(text, dtype=dtype, sep=" ")
-    return array
+
+class XmlReader:
+
+    def __init__(self, element: ET.Element) -> None:
+        self.element = element
 
 
-def parse_float_array(xml: ET.Element) -> NDArray[np.float32]:
-    #count = int(xml.get(DaeAttributes.COUNT))
-    array = parse_array_text(xml.text)
-    return array
+    def _layout_error(self): return Exception()
 
 
-def parse_input(xml: ET.Element) -> Geometry.Triangles.Input:
-    return Geometry.Triangles.Input(Semantic(xml.get("semantic")), xml.get("source")[1:], int(xml.get("offset", 0)), int(xml.get("set", 0)))
+    def get(self, key: str, default: str | None = None) -> str:
+        value = self.element.get(key, default)
+        if value is None: raise self._layout_error()
+        return value
 
 
-def parse_triangles(xml: ET.Element, parent: Geometry) -> Geometry.Triangles:
-    result = Geometry.Triangles(parent)
+    def get_int(self, key: str, default: int | None = None):
+        value = self.element.get(key)
+        if value is not None: return int(value)
+        elif default is not None: return default
+        raise self._layout_error()
 
-    result.material_name = xml.get(DaeAttributes.MATERIAL)
-    result.triangle_count = int(xml.get(DaeAttributes.COUNT))
 
-    result.indices = parse_array_text(xml.find(DaeTag.p).text, np.int32)
+    def get_float(self, key: str, default: float | None = None):
+        value = self.element.get(key)
+        if value is not None: return float(value)
+        elif default is not None: return default
+        raise self._layout_error()
+
+
+    def find(self, *path: str):
+        element = self.element
+        for name in path:
+            element = element.find(name)
+            if element is None: raise self._layout_error()
+        return XmlReader(element)
+
+
+    def findall(self, path: str):
+        items = self.element.findall(path)
+        return [XmlReader(item) for item in items]
+
+
+    def parse_array(self, dtype: np.typing.DTypeLike=np.float32):
+        if self.text is None:
+            array = np.empty(0, dtype=dtype)
+        else:
+            array = np.fromstring(self.text, dtype=dtype, sep=" ")
+        return array
+
+
+    @property
+    def text(self): return self.element.text
+
+
+
+def parse_input(xml: XmlReader) -> Geometry.Triangles.Input:
+    return Geometry.Triangles.Input(Semantic(xml.get("semantic")), xml.get("source")[1:], xml.get_int("offset", 0), xml.get_int("set", 0))
+
+
+def parse_triangles(xml: XmlReader, parent: Geometry) -> Geometry.Triangles:
+    triangle_count = xml.get_int(DaeAttributes.COUNT)
+    material_name = xml.get(DaeAttributes.MATERIAL)
+    indices = xml.find(DaeTag.p).parse_array(np.int32)
 
     inputlist = xml.findall(DaeTag.input)
-    for input in inputlist:
-        result.inputs.append(parse_input(input))
+    inputs = [parse_input(input) for input in inputlist]
 
-    return result
+    return Geometry.Triangles(parent, triangle_count, material_name, indices, inputs)
 
 
-def parse_polylist(xml: ET.Element, parent: Geometry)-> Geometry.Triangles:
+def parse_polylist(xml: XmlReader, parent: Geometry)-> Geometry.Triangles:
     result = parse_triangles(xml, parent)
 
-    vcount = parse_array_text(xml.find(DaeTag.vcount).text, np.int32)
+    vcount = xml.find(DaeTag.vcount).parse_array(np.int32)
     triangle_indices: list[int] = []
     stride = result.stride
 
@@ -83,7 +127,7 @@ def parse_polylist(xml: ET.Element, parent: Geometry)-> Geometry.Triangles:
     return result
 
 
-def parse_geometry(xml: ET.Element) -> Geometry:
+def parse_geometry(xml: XmlReader) -> Geometry:
     result = Geometry()
     result.name = xml.get("name")
     mesh = xml.find(DaeTag.mesh)
@@ -91,10 +135,10 @@ def parse_geometry(xml: ET.Element) -> Geometry:
     srclist = mesh.findall(DaeTag.source)
     for src in srclist:
         key = src.get("id")
-        array = parse_float_array(src.find(DaeTag.float_array))
-        accessor = src.find(DaeTag.technique_common).find(DaeTag.accessor)
-        count = int(accessor.get(DaeAttributes.COUNT))
-        stride = int(accessor.get(DaeAttributes.STRIDE))
+        array = src.find(DaeTag.float_array).parse_array()
+        accessor = src.find(DaeTag.technique_common, DaeTag.accessor)
+        count = accessor.get_int(DaeAttributes.COUNT)
+        stride = accessor.get_int(DaeAttributes.STRIDE)
         result.sources[key] = Geometry.Source(array, count, stride)
 
     vertices = mesh.find(DaeTag.vertices)
@@ -113,20 +157,20 @@ def parse_geometry(xml: ET.Element) -> Geometry:
     return result
 
 
-def parse_node(xml: ET.Element) -> Node:
+def parse_node(xml: XmlReader) -> Node:
     res = Node()
     res.name = xml.get("name")
 
     geometry = xml.find(DaeTag.instance_geometry)
     if geometry is not None:
         url = geometry.get("url")[1:]
-        materials = geometry.find(DaeTag.bind_material).find(DaeTag.technique_common).findall(DaeTag.instance_material)
+        materials = geometry.find(DaeTag.bind_material, DaeTag.technique_common).findall(DaeTag.instance_material)
         matdict = {mat.get("symbol"): mat.get("target", "")[1:] for mat in materials}
         res.geometry_instance = GeometryInstance(url, matdict)
 
-    matrix = xml.find(DaeTag.matrix)
+    matrix = xml.find(DaeTag.matrix).parse_array()
     if matrix is not None:
-        res.matrix = DaeMatrix(parse_array_text(matrix.text))
+        res.matrix = DaeMatrix(matrix)
     else:
         res.matrix = None
 
@@ -138,10 +182,10 @@ def parse_node(xml: ET.Element) -> Node:
     return res
 
 
-def parse_collada(xml: ET.Element) -> Collada:
+def parse_collada(xml: XmlReader) -> Collada:
     dae = Collada()
 
-    dae.unit_meter = float(xml.find(DaeTag.asset).find(DaeTag.unit).get(DaeAttributes.METER))
+    dae.unit_meter = xml.find(DaeTag.asset, DaeTag.unit).get_float(DaeAttributes.METER)
     
     matlib = xml.find(DaeTag.library_materials)
     matlist = matlib.findall(DaeTag.material)
@@ -321,7 +365,7 @@ class DaeReader:
         if (root.tag != DaeTag.COLLADA):
             raise Exception("XML data is not valid Collada.")
         
-        dae = parse_collada(root)
+        dae = parse_collada(XmlReader(root))
         return convert(dae)
 
 

@@ -3,7 +3,7 @@ import json
 import numpy as np
 
 from io import TextIOWrapper
-from dataclasses import *
+from dataclasses import asdict
 
 from typing import Any
 from ..packed_vector import PackedVector
@@ -151,7 +151,7 @@ class DebugWriter:
         json.dump(data, f, indent=4, sort_keys=True)
 
 
-    staticmethod
+    @staticmethod
     def write_to_file(cdae: CdaeV31, filepath: str):
         with open(filepath, 'w') as f:
             DebugWriter.write_to_stream(cdae, f)

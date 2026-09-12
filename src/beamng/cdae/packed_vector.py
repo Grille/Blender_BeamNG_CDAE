@@ -1,8 +1,16 @@
 import numpy as np
 
-from typing import Type, TypeVar
+from typing import Type, TypeVar, Protocol, Self
 
-T = TypeVar('T')
+
+T = TypeVar('T', bound=_PPackable)
+
+
+class _PPackable(Protocol):
+    def unpack(self, data: bytes): ...
+    def pack(self) -> bytes: ...
+    
+
 
 class PackedVector:
 
@@ -30,7 +38,7 @@ class PackedVector:
         return unpacked
     
 
-    def pack_list(self, list: list):
+    def pack_list(self, list: list[T]):
         data_array = bytearray()
         for obj in list:
             chunk = obj.pack()
@@ -56,9 +64,9 @@ class PackedVector:
         self.data = bytes(bytearray(self.element_count * self.element_size))
     
 
-    def to_numpy_array(self, type: type[np.dtype]) -> np.ndarray:
-        size = (len(self.data) // self.element_count) // np.dtype(type).itemsize if self.element_count != 0 else 0
-        return np.frombuffer(self.data, type, self.element_count * size)
+    def to_numpy_array(self, dtype: np.typing.DTypeLike) -> np.ndarray:
+        size = (len(self.data) // self.element_count) // np.dtype(dtype).itemsize if self.element_count != 0 else 0
+        return np.frombuffer(self.data, dtype, self.element_count * size)
     
 
     def set_numpy_array(self, array: np.ndarray):
@@ -66,11 +74,11 @@ class PackedVector:
         self.element_count = len(self.data) // self.element_size
 
 
-    def __eq__(self, other: 'PackedVector') -> bool:
+    def __eq__(self, other) -> bool:
         if self is other:
             return True
         if not isinstance(other, PackedVector):
-            return NotImplemented
+            return False
         return (
             self.element_count == other.element_count
             and self.element_size == other.element_size

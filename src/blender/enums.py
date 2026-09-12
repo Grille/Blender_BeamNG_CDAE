@@ -63,12 +63,14 @@ class SocketName(StrEnum):
     AlphaBlendMode = "Alpha Blend Mode"
     ReflectionEnabled = "Reflection Enabled"
     SubsurfaceScattering = "Subsurface Scattering"
+    DisplayInfo = "Display Info"
     Strength = "Strength"
     Vector = "Vector"
 
     DetailColor = "Detail Color"
     DetailNormal = "Detail Normal"
     AmbientOcclusion = "Ambient Occlusion"
+    AmbientOcclusionStrength = "AO Strength"
     Palette = "Palette"
     Emissive = "Emissive"
     EmissiveVertexColor = "Emissive Vertex Color"
@@ -108,6 +110,7 @@ class SocketName(StrEnum):
     SubsurfaceScale = "Subsurface Scale"
     SubsurfaceIOR = "Subsurface IOR"
     SubsurfaceAnisotropy = "Subsurface Anisotropy"
+    Paint = "Paint"
 
 
 

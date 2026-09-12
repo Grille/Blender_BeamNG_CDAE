@@ -3,6 +3,8 @@ import math
 import mathutils
 import numpy as np
 
+from typing import Sequence
+
 class Vec2F:
     
     def __init__(self, x: float = 0.0, y: float = 0.0):
@@ -51,7 +53,7 @@ class Vec3F(Vec2F):
 
 
     @classmethod
-    def from_list3(cls, list: list[float]):
+    def from_list3(cls, list: Sequence[float] | mathutils.Vector):
         self = cls(*list[:3])
         return self
     
@@ -114,7 +116,7 @@ class Vec4F(Vec3F):
 
 
     @classmethod
-    def from_list4(cls, list: list[float]):
+    def from_list4(cls, list: Sequence[float]):
         self = cls(*list[:4])
         return self
 
@@ -297,7 +299,7 @@ class Transforms:
 
     IDENTITY: 'Transforms'
 
-    def __init__(self, position: Vec3F = None, scale: Vec3F = None, rotation: Quat4I16 = None):
+    def __init__(self, position: Vec3F| None = None, scale: Vec3F | None = None, rotation: Quat4I16 | None = None):
         self.translation = Vec3F.ZERO if position is None else position
         self.scale = Vec3F.ONE if scale is None else scale
         self.rotation = Quat4I16.create_identity() if rotation is None else rotation

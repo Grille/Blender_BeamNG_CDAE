@@ -1,6 +1,6 @@
 import mathutils
 import xml.etree.cElementTree as ET
-import numpy as np
+#import numpy as np
 
 from numpy.typing import NDArray
 from dataclasses import dataclass
@@ -86,7 +86,14 @@ class Geometry:
 
 
 
+    @dataclass
     class Triangles:
+        owner: Geometry
+        triangle_count: int
+        material_name: str
+        indices: NDArray[np.int32]
+        inputs: list['Geometry.Triangles.Input']
+
 
         @dataclass
         class Input:
@@ -96,18 +103,9 @@ class Geometry:
             set: int = 0
 
 
-
         @property
         def stride(self):
             return max(input.offset for input in self.inputs) + 1
-
-
-        def __init__(self, owner: 'Geometry'):
-            self.owner = owner
-            self.triangle_count: int = 0
-            self.material_name: str = None
-            self.indices: NDArray[np.int32] = None
-            self.inputs: list['Geometry.Triangles.Input'] = []
 
 
         def get_input(self, semantic: Semantic, set: int = 0) -> Input | None:
@@ -183,34 +181,28 @@ class Collada:
 class Accessor:
     stride: int
     params: list['Accessor.Param']
-    source: str = None
-    count: int = 0
 
     @dataclass(frozen=True)
     class Param:
         name: str
         type: str
 
-    def extend_by_float(self, key: str):
-        return Accessor(self.stride + 1, self.params + [Accessor.Param(key, "float")])
+    def extend(self, key: str, type: str = "float"):
+        return Accessor(self.stride + 1, self.params + [Accessor.Param(key, type)])
     
     @staticmethod
-    def create(stride: int, key: str, type: str):
+    def create(key: str, type: str = "float", stride: int = 1):
         return Accessor(stride, [Accessor.Param(key, type)])
-    
-    @staticmethod
-    def create_float(key: str):
-        return Accessor.create(1, key, "float")
 
 
 
 class Accessors:
-    VEC1 = Accessor.create_float("X")
-    VEC2 = VEC1.extend_by_float("Y")
-    VEC3 = VEC2.extend_by_float("Z")
-    VEC4 = VEC3.extend_by_float("W")
-    TIME = Accessor.create_float("TIME")
-    TRANSFORM = Accessor.create(16, "TRANSFORM", "float4x4")
+    VEC1 = Accessor.create("X")
+    VEC2 = VEC1.extend("Y")
+    VEC3 = VEC2.extend("Z")
+    VEC4 = VEC3.extend("W")
+    TIME = Accessor.create("TIME")
+    TRANSFORM = Accessor.create("TRANSFORM", "float4x4", 16)
 
 
 
@@ -226,7 +218,8 @@ class DaeMatrix:
     
 
     def to_matrix(self):
-        return mathutils.Matrix(np.array(self.values, dtype=np.float32).reshape((4, 4), order='F'))
+        array = np.array(self.values, dtype=np.float32).reshape((4, 4), order='F')
+        return mathutils.Matrix(array) # pyright: ignore[reportArgumentType]
 
 
     @staticmethod
@@ -234,5 +227,10 @@ class DaeMatrix:
         matrix = quat.to_collada_quaternion().to_matrix().to_4x4()
         matrix.translation = location.tuple3
         return DaeMatrix.from_matrix(matrix)
+
+
+    @staticmethod
+    def flatten_matrices(matrices: Sequence[DaeMatrix]) -> list[float]:
+        return [v for mat in matrices for v in mat.values]
 
 

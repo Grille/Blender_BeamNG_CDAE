@@ -1,13 +1,19 @@
 import struct
-import numpy as np
 
 from dataclasses import dataclass, asdict
-from typing import Protocol
+from typing import Protocol, Sequence, TypeVar
 from enum import Enum, IntFlag
 from numpy.typing import NDArray
 
 from .packed_vector import PackedVector
 from ..numerics import *
+
+
+
+class _PHasNameIndex(Protocol):
+    nameIndex: int
+T_NAMEINDEX = TypeVar('T_NAMEINDEX', bound=_PHasNameIndex)
+
 
 
 class CdaeV31:
@@ -127,18 +133,19 @@ class CdaeV31:
             return (obj_index, obj)
         
 
-        def _get_item_from_list(self, key: str, target: 'list[CdaeV31.Node|CdaeV31.Object]'):
+        def _get_item_from_list(self, key: str, target: 'list[T_NAMEINDEX]'):
             for item in target:
                 if self.cdae.names[item.nameIndex] == key:
                     return item
             raise KeyError(key)
         
 
-        def get_node(self, key: str) -> 'CdaeV31.Node': return self._get_item_from_list(key, self.nodes)
-        def get_object(self, key: str) -> 'CdaeV31.Object': return self._get_item_from_list(key, self.objects)
+        def get_node(self, key: str): return self._get_item_from_list(key, self.nodes)
+        def get_object(self, key: str): return self._get_item_from_list(key, self.objects)
 
-        
-        def _set_last_sibling(list: 'list[CdaeV31.Node|CdaeV31.Object]', current_index: int, value: int):
+
+        @staticmethod
+        def _set_last_sibling(list: 'Sequence[CdaeV31.Node|CdaeV31.Object]', current_index: int, value: int):
             next_index = list[current_index].nextSibling
             if next_index == -1:
                 list[current_index].nextSibling = value
@@ -369,10 +376,10 @@ class CdaeV31:
 
 
         class Flags(IntFlag):
-            BILLBOARD = 1 << 31,
-            HAS_DETAIL_TEXTURE = 1 << 30,
-            BILLBOARD_Z_AXIS = 1 << 29,
-            USE_ENCODED_NORMALS = 1 << 28,
+            BILLBOARD = 1 << 31
+            HAS_DETAIL_TEXTURE = 1 << 30
+            BILLBOARD_Z_AXIS = 1 << 29
+            USE_ENCODED_NORMALS = 1 << 28
 
 
 
@@ -399,7 +406,7 @@ class CdaeV31:
             self.tangents = create_empty(16) #vtx vec4
 
             self.vertsPerFrame: int = 0
-            self.flags: CdaeV31.Mesh.Flags = 0
+            self.flags: int = 0
 
 
         def unpack_regions(self):
@@ -417,7 +424,7 @@ class CdaeV31:
         
 
         def data_equals(self, other: 'CdaeV31.Mesh') -> bool:
-            pass
+            raise NotImplementedError()
 
 
 
@@ -467,7 +474,7 @@ class CdaeV31:
 
         def __init__(self, name: str =""):
             self.name: str = name
-            self.flags: CdaeV31.Material.Flags = 3
+            self.flags: int = 3
             self.reflect: int = 0
             self.bump: int = 0
             self.detail: int = 0

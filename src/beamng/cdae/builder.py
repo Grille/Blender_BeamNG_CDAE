@@ -1,18 +1,20 @@
 import bpy
 import bmesh
 import re
-import numpy as np
 
 from numpy.typing import NDArray
 from enum import Enum
 from dataclasses import dataclass
 from typing import List, Dict, Optional, Tuple
 from collections import defaultdict
+from typing import cast
 
 from .v31 import *
 from ...blender.object_properties import ObjectProperties, ObjectRole
 from .builder_tree import CdaeTree
 from ..u8_normal_table import U8NormalTable
+
+import numpy as np
 
 
 class CdaeMaterialIndexer:
@@ -43,20 +45,20 @@ class CdaeMeshBuilder:
 
         def __init__(self):
 
-            self.draw_regions: NDArray[np.int32] = None
-            self.indices: NDArray[np.int32] = None
-            self.positions: NDArray[np.float32] = None
-            self.normals: NDArray[np.float32] = None
-            self.tangents: NDArray[np.float32] = None
-            self.uvs0: NDArray[np.float32] = None
-            self.uvs1: NDArray[np.float32] = None
-            self.colors: NDArray[np.uint8] = None
+            self.draw_regions: NDArray[np.int32] | None = None
+            self.indices: NDArray[np.int32] | None = None
+            self.positions: NDArray[np.float32] | None = None
+            self.normals: NDArray[np.float32] | None = None
+            self.tangents: NDArray[np.float32] | None = None
+            self.uvs0: NDArray[np.float32] | None = None
+            self.uvs1: NDArray[np.float32] | None = None
+            self.colors: NDArray[np.uint8] | None = None
 
 
         def concatenate(self):
 
             keys = []
-            def append(array: NDArray):
+            def append(array: NDArray | None):
                 if array is not None:
                     keys.append(array)
             
@@ -81,8 +83,10 @@ class CdaeMeshBuilder:
 
             self.indices = inverse[self.indices].astype(np.int32)
 
-            self.positions = self.positions[unique_indices]
-            self.normals = self.normals[unique_indices]
+            if self.positions is not None:
+                self.positions = self.positions[unique_indices]
+            if self.normals is not None:
+                self.normals = self.normals[unique_indices]
             if self.uvs0 is not None:
                 self.uvs0 = self.uvs0[unique_indices]
             if self.uvs1 is not None:
@@ -92,19 +96,114 @@ class CdaeMeshBuilder:
 
 
 
+    class BpyMeshContext:
+
+        def __init__(self, mesh: bpy.types.Mesh):
+            self.mesh = mesh
+
+
+        def get_vtx_indices(self):
+            loop_vertex_indices = np.empty(len(self.mesh.loops), dtype=np.int32)
+            self.mesh.loops.foreach_get("vertex_index", loop_vertex_indices)
+            return loop_vertex_indices
+
+
+        def map_vtx_to_loop(self, vtx_data: NDArray, size: int, indices):
+            vtx_data = vtx_data.reshape((-1, size))
+            return vtx_data[indices]
+        
+
+        def get_vtx_data(self, key: str, size: int, indices):
+            vertex_data = np.empty(len(self.mesh.vertices) * size, dtype=np.float32)
+            self.mesh.vertices.foreach_get(key, vertex_data)
+            return self.map_vtx_to_loop(vertex_data, size, indices)
+
+
+        def get_loop_data(self, key: str, size: int):
+            loop_data = np.empty(len(self.mesh.loops) * size, dtype=np.float32)
+            self.mesh.loops.foreach_get(key, loop_data)
+            return loop_data.reshape((-1, size))
+        
+
+        def get_uv_layer(self, uv_hint: str | int):
+
+            if isinstance(uv_hint, str):
+                for item in self.mesh.uv_layers:
+                    key: str = item.name
+                    if uv_hint in key.lower():
+                        return item.data
+                return None
+
+            elif isinstance(uv_hint, int):
+
+                if len(self.mesh.uv_layers) > uv_hint:
+                    return self.mesh.uv_layers[uv_hint].data
+
+                return None
+
+            raise TypeError(uv_hint)
+        
+
+        def get_uv_data(self, uv_hint: str | int):
+
+            uv_layer = self.get_uv_layer(uv_hint)
+            if uv_layer is None:
+                return None
+            
+            uv_data = np.empty(len(uv_layer) * 2, dtype=np.float32)
+            uv_layer.foreach_get("uv", uv_data)
+            uv_data = uv_data.reshape((-1, 2))
+            uv_data[:, 1] = 1.0 - uv_data[:, 1]
+            return uv_data
+            
+
+        def get_color_data(self, indices: np.typing.NDArray[np.int32]):
+
+            if len(self.mesh.color_attributes) > 0:
+                layer_name = self.mesh.color_attributes[0].name
+            else:
+                return None 
+        
+            color_layer = cast(bpy.types.FloatColorAttribute, self.mesh.color_attributes.get(layer_name))
+            if not color_layer:
+                return None
+
+            loop_count = len(self.mesh.loops)
+            vert_count = len(self.mesh.vertices)
+            components = 4
+
+            if color_layer.domain == 'CORNER':
+                raw = np.empty(loop_count * components, dtype=np.float32)
+                color_layer.data.foreach_get("color", raw)
+                colors = raw.reshape((loop_count, components))
+
+            elif color_layer.domain == 'POINT':
+                raw = np.empty(vert_count * components, dtype=np.float32)
+                color_layer.data.foreach_get("color", raw)
+                colors = raw.reshape((vert_count, components))
+
+                colors = colors[indices]
+
+            else:
+                return None
+
+            colors_u8 = (colors * 255.0).astype(np.uint8)
+            return colors_u8
+
+ 
+
     def __init__(self, material_indexer: CdaeMaterialIndexer):
-        self.mesh: bpy.types.Mesh = None
         self.apply_scale: bool = True
         self.split_draw_regions: bool = False
         self.scale = Vec3F(1,1,1)
         self.material_indexer = material_indexer
         self.use_uv_hint: bool = False
-        self.uv0_hint: str = None
-        self.uv1_hint: str = None
+        self.uv0_hint: str = "0"
+        self.uv1_hint: str = "1"
         self.compute_tangents: bool = False
         self.compute_encoded_normals: bool = False
         self.eval_mode = MeshDataEvalMode.Depsgraph
-        self.depsgraph: bpy.types.Depsgraph = None
+        self.depsgraph: bpy.types.Depsgraph | None = None
 
 
     @staticmethod
@@ -112,131 +211,47 @@ class CdaeMeshBuilder:
         return math.sqrt(bounds.range().max_unit()*2)
 
 
-    def get_vtx_indices(self):
-        loop_vertex_indices = np.empty(len(self.mesh.loops), dtype=np.int32)
-        self.mesh.loops.foreach_get("vertex_index", loop_vertex_indices)
-        return loop_vertex_indices
-
-
-    def map_vtx_to_loop(self, vtx_data: NDArray, size: int, indices):
-        vtx_data = vtx_data.reshape((-1, size))
-        return vtx_data[indices]
-    
-
-    def get_vtx_data(self, key: str, size: int, indices):
-        vertex_data = np.empty(len(self.mesh.vertices) * size, dtype=np.float32)
-        self.mesh.vertices.foreach_get(key, vertex_data)
-        return self.map_vtx_to_loop(vertex_data, size, indices)
-
-
-    def get_loop_data(self, key: str, size: int):
-        loop_data = np.empty(len(self.mesh.loops) * size, dtype=np.float32)
-        self.mesh.loops.foreach_get(key, loop_data)
-        return loop_data.reshape((-1, size))
-    
-
-    def get_uv_layer(self, index: int, uv_hint: str):
-
-        if self.use_uv_hint:
-            for item in self.mesh.uv_layers:
-                key: str = item.name
-                if uv_hint in key.lower():
-                    return item.data
-            return None
-
-        elif len(self.mesh.uv_layers) > index:
-            return self.mesh.uv_layers[index].data
-
-        return None
-    
-
-    def get_uv_data(self, index: int, uv_hint: str):
-
-        uv_layer = self.get_uv_layer(index, uv_hint)
-        if uv_layer is None:
-            return None
-        
-        uv_data = np.empty(len(uv_layer) * 2, dtype=np.float32)
-        uv_layer.foreach_get("uv", uv_data)
-        uv_data = uv_data.reshape((-1, 2))
-        uv_data[:, 1] = 1.0 - uv_data[:, 1]
-        return uv_data
-        
-
-    def get_color_data(self, indices):
-
-        if len(self.mesh.color_attributes) > 0:
-            layer_name = self.mesh.color_attributes[0].name
-        else:
-            return None 
-    
-        color_layer = self.mesh.color_attributes.get(layer_name)
-        if not color_layer:
-            return None
-
-        loop_count = len(self.mesh.loops)
-        vert_count = len(self.mesh.vertices)
-        components = 4
-
-        if color_layer.domain == 'CORNER':
-            raw = np.empty(loop_count * components, dtype=np.float32)
-            color_layer.data.foreach_get("color", raw)
-            colors = raw.reshape((loop_count, components))
-
-        elif color_layer.domain == 'POINT':
-            raw = np.empty(vert_count * components, dtype=np.float32)
-            color_layer.data.foreach_get("color", raw)
-            colors = raw.reshape((vert_count, components))
-
-            colors = colors[indices]
-
-        else:
-            return None
-
-        colors_u8 = (colors * 255.0).astype(np.uint8)
-        return colors_u8
-        
-
     def build_from_mesh(self, mesh: bpy.types.Mesh)-> CdaeV31.Mesh:
         
-        if any(len(p.vertices) > 4 for p in mesh.polygons):
+        if any(len(p.vertices) > 4 for p in mesh.polygons): # pyright: ignore[reportArgumentType]
             bm = bmesh.new()
             bm.from_mesh(mesh)
-            bmesh.ops.triangulate(bm, faces=bm.faces)
+            bmesh.ops.triangulate(bm, faces=bm.faces) # pyright: ignore[reportArgumentType]
             bm.to_mesh(mesh)
             bm.free()
 
-        self.mesh = mesh
         mesh.calc_loop_triangles()
+        ctx = CdaeMeshBuilder.BpyMeshContext(mesh)
 
-        vertex_indices = self.get_vtx_indices()
+        vertex_indices = ctx.get_vtx_indices()
+
+        uv0_hint = self.uv0_hint if self.use_uv_hint else 0
+        uv1_hint = self.uv1_hint if self.use_uv_hint else 1
 
         npmesh = CdaeMeshBuilder.NpMesh()
-        npmesh.positions = self.get_vtx_data("co", 3, vertex_indices)
-        npmesh.normals = self.get_loop_data("normal", 3)
-        npmesh.uvs0 = self.get_uv_data(0, self.uv0_hint)
-        npmesh.uvs1 = self.get_uv_data(1, self.uv1_hint)
-        npmesh.colors = self.get_color_data(vertex_indices)
+        npmesh.positions = ctx.get_vtx_data("co", 3, vertex_indices)
+        npmesh.normals = ctx.get_loop_data("normal", 3)
+        npmesh.uvs0 = ctx.get_uv_data(uv0_hint)
+        npmesh.uvs1 = ctx.get_uv_data(uv1_hint)
+        npmesh.colors = ctx.get_color_data(vertex_indices)
 
         if self.compute_tangents and npmesh.uvs0 is not None and len(npmesh.uvs0) > 0:
             mesh.calc_tangents()
-            npmesh.tangents = self.get_loop_data("tangent", 4)
+            npmesh.tangents = ctx.get_loop_data("tangent", 4)
 
-
-        material_ranges: defaultdict[int, list] = defaultdict(list)
+        material_ranges: defaultdict[int, list[tuple[int, int, int]]] = defaultdict(list)
         for tri in mesh.loop_triangles:
             poly = mesh.polygons[tri.polygon_index]
             mat = mesh.materials[poly.material_index] if poly.material_index < len(mesh.materials) else None
             global_mat_index = self.material_indexer.get_index(mat)
 
-            material_ranges[global_mat_index].append([
-                tri.loops[2],
-                tri.loops[1],
-                tri.loops[0]
-            ])
+            def get_loop_index(idx: int) -> int: return tri.loops[0] # pyright: ignore[reportIndexIssue]
+
+            loops: tuple[int, int, int] = (tri.loops[2], tri.loops[1], tri.loops[0]) # pyright: ignore[reportIndexIssue]
+            material_ranges[global_mat_index].append(loops)
 
         
-        indices_list = []
+        indices_list: list[int] = []
         for mat_index in material_ranges:
             matrange = material_ranges[mat_index]
             indices_list.extend(matrange)
@@ -262,7 +277,7 @@ class CdaeMeshBuilder:
             ('elements_count', np.int32),
             ('material_index', np.int32),
         ])
-        npmesh.draw_regions = np.array(draw_regions, dtype=DrawRegion)
+        npmesh.draw_regions = np.array(draw_regions, dtype=DrawRegion).astype(np.int32)
 
 
         mesh_out = CdaeV31.Mesh()
@@ -315,17 +330,23 @@ class CdaeMeshBuilder:
         if obj is None or not ObjectProperties.has_mesh(obj):
             null = CdaeV31.Mesh()
             return null
-        
-        print(self.eval_mode)
-        use_depsgraph = self.eval_mode == MeshDataEvalMode.Depsgraph
 
-        if use_depsgraph:
-            eval_obj: bpy.types.Object = obj.evaluated_get(self.depsgraph)
+        assert isinstance(obj.data, bpy.types.Mesh)
+            
+        if self.eval_mode == MeshDataEvalMode.Depsgraph:
+            
+            eval_obj = obj.evaluated_get(self.depsgraph)
             mesh = eval_obj.to_mesh()
+            try:
+                return self.build_from_mesh(mesh)
+            finally: 
+                eval_obj.to_mesh_clear() 
 
         else:
+
             temp_obj: bpy.types.Object = obj.copy()
             mesh = temp_obj.data = obj.data.copy()
+
             bpy.context.collection.objects.link(temp_obj)
 
             active = bpy.context.view_layer.objects.active
@@ -349,13 +370,9 @@ class CdaeMeshBuilder:
             bpy.data.objects.remove(temp_obj, do_unlink=True)
             bpy.context.view_layer.objects.active = active
 
-        try:
-            return self.build_from_mesh(mesh)
-        
-        finally:
-            if use_depsgraph:
-                eval_obj.to_mesh_clear()
-            else:
+            try:
+                return self.build_from_mesh(mesh)
+            finally:
                 bpy.data.meshes.remove(mesh)
 
 

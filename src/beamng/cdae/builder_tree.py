@@ -6,7 +6,7 @@ import numpy as np
 from numpy.typing import NDArray
 from enum import Enum
 from dataclasses import dataclass
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional, Tuple, cast
 from collections import defaultdict
 
 from .v31 import *
@@ -49,7 +49,7 @@ class CdaeNodeList:
         for key in split_path:
             node = node.get_child_node(key)
 
-        return node
+        return cast(CdaeTree.Node, node)
     
 
     def print_nodes_recursive(self, indent = 0):
@@ -86,7 +86,7 @@ class TempTreeNode:
 class CdaeTree:
 
     class Mesh:
-        def __init__(self, obj: bpy.types.Object):
+        def __init__(self, obj: bpy.types.Object | None):
             self.bpy_mesh_obj = obj
 
 
@@ -118,14 +118,14 @@ class CdaeTree:
         def __init__(self, name: str, nodes: 'list[CdaeTree.Node]', objects: 'list[CdaeTree.Object]'):
 
             super().__init__(nodes)
-            self.bpy_sample_obj: bpy.types.Object = None
+            self.bpy_sample_obj: bpy.types.Object | None = None
             self.name = name
             self.objects = objects
             self.transforms: Transforms = Transforms()
             self.keyframes: list[Transforms] = []
 
 
-        def get_object(self, name: str = None):
+        def get_object(self, name: str | None = None):
             if name is None:
                 name = self.name
             for obj in self.objects:
@@ -161,7 +161,7 @@ class CdaeTree:
     
     class Detail:
 
-        def __init__(self, shape: 'CdaeTree.SubShape' = None, mesh_index: int = 0):
+        def __init__(self, shape: 'CdaeTree.SubShape | None' = None, mesh_index: int = 0):
             self.shape = shape
             self.template = CdaeV31.Detail()
             self.template.objectDetailNum = mesh_index

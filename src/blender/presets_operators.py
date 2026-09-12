@@ -3,7 +3,7 @@ import bpy
 
 from bpy.types import Operator
 from bpy.props import BoolProperty, IntProperty, FloatProperty, EnumProperty, StringProperty
-from typing import Protocol
+from typing import Protocol, cast
 
 from .local_storage import LocalStorage
 
@@ -93,6 +93,8 @@ class OT_SelectPreset(bpy.types.Operator):
 
 
     def execute(self, context):
+        assert context is not None
+
         active_op = OpPresetsUtils.get_operator(context)
         active_op.temp_presets_selection = self.preset_name
         presets = LocalStorage.get_presets(active_op.temp_presets_file)
@@ -109,33 +111,36 @@ class MT_PresetsMenu(bpy.types.Menu):
 
 
     def draw(self, context):
-        layout = self.layout
+        assert self.layout is not None
+        assert context is not None
+
         active_op = OpPresetsUtils.get_operator(context)
         presets = LocalStorage.get_presets(active_op.temp_presets_file)
         for name in presets.presets:
             icon = "SOLO_ON" if name == presets.default_key else "NONE"
-            op: OT_SelectPreset = layout.operator(OT_SelectPreset.bl_idname, text=name, icon=icon)
+            op = cast(OT_SelectPreset, self.layout.operator(OT_SelectPreset.bl_idname, text=name, icon=icon))
             op.preset_name = name
 
 
 
-class POperator(Protocol):
-    layout: bpy.types.UILayout
-    temp_presets_initalized: bool
-    temp_presets_file: str
-    temp_presets_selection: str
+class PresetOperator(Operator):
+    temp_presets_initalized: BoolProperty(default=False)
+    temp_presets_file: StringProperty(default="export")
+    temp_presets_selection: StringProperty()
 
 
 
 class OpPresetsUtils:
 
     @staticmethod
-    def draw(self: POperator, context: bpy.types.Context):
+    def draw(operator: PresetOperator, context: bpy.types.Context):
+        assert operator.layout is not None
+
         active_op = OpPresetsUtils.get_operator(context)
         presets = LocalStorage.get_presets(active_op.temp_presets_file)
     
-        row = self.layout.row(align=True)
-        row.menu(MT_PresetsMenu.bl_idname, text=self.temp_presets_selection)
+        row = operator.layout.row(align=True)
+        row.menu(MT_PresetsMenu.bl_idname, text=operator.temp_presets_selection)
         row.operator(OT_SavePreset.bl_idname, text="", icon='FILE_TICK')
         sub = row.row(align=True)
         sub.enabled = len(presets.presets) > 1
@@ -144,16 +149,16 @@ class OpPresetsUtils:
 
 
     @staticmethod
-    def setup(self: POperator):
-        if not self.temp_presets_initalized:
-            presets = LocalStorage.setup_presets(self.temp_presets_file, self)
-            self.temp_presets_selection = presets.default_key
-            self.temp_presets_initalized = True
+    def setup(operator: PresetOperator):
+        if not operator.temp_presets_initalized:
+            presets = LocalStorage.setup_presets(operator.temp_presets_file, operator)
+            operator.temp_presets_selection = presets.default_key
+            operator.temp_presets_initalized = True
 
 
     @staticmethod
-    def get_operator(context: bpy.types.Context) -> POperator:
-        return context.active_operator
+    def get_operator(context: bpy.types.Context):
+        return cast(PresetOperator, context.active_operator)
 
 
     @staticmethod

@@ -2,6 +2,7 @@ import struct
 import msgpack
 import zstandard
 
+from typing import Any
 from io import BufferedReader
 
 from ...numerics import *
@@ -25,7 +26,7 @@ class MsgpackReader:
         return MsgpackReader.from_bytes(stream.read())
     
 
-    def read_next(self) -> any:
+    def read_next(self) -> Any:
         try:
             return next(self.unpacker)
         except StopIteration:
@@ -40,7 +41,7 @@ class MsgpackReader:
         return self.read_next()
         
 
-    def read_dict(self) -> dict[str, any]:
+    def read_dict(self) -> dict[str, Any]:
         return self.read_next()
         
 

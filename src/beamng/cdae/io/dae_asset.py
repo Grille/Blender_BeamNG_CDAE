@@ -14,8 +14,8 @@ class Imposter:
     dimension: int = 256
     equatorSteps: int = 16
     includePoles: bool = False
-    polarAngle: int = 0
-    polarSteps: int = 0,
+    polarAngle: float = 0
+    polarSteps: int = 0
     size: int = 25
 
     def apply_detail(self, detail: CdaeV31.Detail):

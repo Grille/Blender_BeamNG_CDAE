@@ -1,6 +1,7 @@
 import bpy
-import numpy as np
+#import numpy as np
 
+from typing import cast
 from numpy.typing import NDArray 
 from dataclasses import dataclass
 
@@ -188,14 +189,14 @@ class CdaeParser:
             layer.data.foreach_set("uv", loop_tverts.ravel())
 
         if info.colors.element_count:
-            layer: bpy.types.MeshLoopColorLayer = mesh.color_attributes.new(name="Color", domain='CORNER', type='FLOAT_COLOR')
-            loop_colors = shape_loop_data(info.colors.to_numpy_array(np.ubyte).astype(np.float32) / 255, 4)
+            layer = cast(bpy.types.MeshLoopColorLayer, mesh.color_attributes.new(name="Color", domain='CORNER', type='FLOAT_COLOR'))
+            loop_colors = shape_loop_data(info.colors.to_numpy_array(np.ubyte).astype(np.float32) / np.float32(255), 4)
             layer.data.foreach_set("color", loop_colors.ravel())
 
         if info.norms.element_count:
             loop_normals = shape_loop_data(info.norms.to_numpy_array(np.float32), 3)
             loop_normals[:, 0:2] *= -1
-            mesh.normals_split_custom_set(loop_normals)
+            mesh.normals_split_custom_set(loop_normals) # pyright: ignore[reportArgumentType]
 
         if self.validate:
             mesh.validate(verbose=self.debug)

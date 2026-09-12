@@ -17,7 +17,7 @@ class Presets:
         self.presets = presets
 
 
-    def store_annotations(self, preset_key: str, obj: bpy.types.Struct):
+    def store_annotations(self, preset_key: str, obj: bpy.types.Operator):
         preset = {}
         for key in obj.__annotations__:
             if key.startswith("temp_"):
@@ -26,7 +26,7 @@ class Presets:
         self.presets[preset_key] = preset
 
 
-    def apply_annotations(self, preset_key: str, obj: bpy.types.Struct):
+    def apply_annotations(self, preset_key: str, obj: bpy.types.Operator):
         if not preset_key in self.presets:
             return
         preset = self.presets[preset_key]
@@ -37,7 +37,7 @@ class Presets:
                 print(e)
 
 
-    def setup_default(self, obj: bpy.types.Struct) -> bool:
+    def setup_default(self, obj: bpy.types.Operator) -> bool:
 
         if (len(self.presets) > 0):
             if self.default_key not in self.presets:
@@ -109,7 +109,7 @@ class LocalStorage:
 
 
     @staticmethod
-    def setup_presets(key: str, obj: bpy.types.Struct):
+    def setup_presets(key: str, obj: bpy.types.Operator):
             presets = LocalStorage.get_presets(key)
             if presets.setup_default(obj):
                 LocalStorage.set_presets(key, presets)
