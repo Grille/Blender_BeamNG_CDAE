@@ -1,31 +1,29 @@
+from __future__ import annotations
+
 import bpy
 import json
 
 from dataclasses import dataclass, asdict
 from functools import singledispatchmethod
 
-from typing import NamedTuple, Any, Callable, Generic, TypeVar, Protocol, overload, cast
+from typing import NamedTuple, Any, Callable, Protocol, Sequence, Self, overload, cast
 from .enums import *
 from .node_walker import NodeWalker
-from .enums import *
+from .node_utils import *
 
 
-type TupleF3 = tuple[float, float, float]
-type TupleF4 = tuple[float, float, float, float]
-type SocketAccessor = str | int
-type SocketValue = bool | float | int | TupleF3 | TupleF4 | str
-type LinkSource = 'NodeTreeBuilder.LinkBuilder | SocketValue'
+
+type LinkBuilderAny = 'NodeTreeBuilder.LinkBuilderBase'
+type LinkSource = 'LinkBuilderAny | SocketValue'
 type NTB = 'NodeTreeBuilder'
 
-T_STR = TypeVar('T_STR', bound=str, contravariant=True)
-TNODE = TypeVar('TNODE', bound='bpy.types.Node')
 
 
 def _get_input_type(src: LinkSource) -> SocketType:
     if isinstance(src, float): return SocketType.Float
     if isinstance(src, int): return SocketType.Integer
     if isinstance(src, tuple): return SocketType.Color if len(src) == 4 else SocketType.Vector
-    if isinstance(src, str): return SocketType.Menu
+    if isinstance(src, str): return SocketType.Menu 
     if isinstance(src, NodeTreeBuilder.LinkBuilder):
         return SocketType.from_data_type(src.get_output().type)
     else:
@@ -38,6 +36,10 @@ def _get_input_type_tuple(*src: LinkSource):
 
 def _get_input_type_by_precedence(*src: LinkSource):
     return SocketType.select_by_max_precedence(*_get_input_type_tuple(*src))
+
+
+def _set_default_value(socket: bpy.types.NodeSocket | bpy.types.NodeTreeInterfaceSocket, value: SocketValue):
+    socket.default_value = value # pyright: ignore[reportAttributeAccessIssue]
 
 
 
@@ -54,8 +56,8 @@ class _NodeSignatureSocket(NamedTuple):
 
 
 
-class _PSocketCollection(Protocol[T_STR]):
-    def new(self, socket_type: T_STR, name: str) -> _PSocketItem: ...
+class _PSocketCollection[T: str](Protocol):
+    def new(self, socket_type: T, name: str) -> _PSocketItem: ...
 
 
 
@@ -76,20 +78,19 @@ class NodeSignature(tuple[_NodeSignatureSocket, ...]):
         return super().__new__(cls, sockets)
 
 
-    def apply_to_collection(self, collection: _PSocketCollection):
+    def apply_to_collection[T:str](self, collection: _PSocketCollection[T]):
         for socket in self:
-            item = collection.new(socket.get_socket_type(), socket.name)
+            item = collection.new(cast(T, socket.get_socket_type()), socket.name)
             if item.name != socket.name: raise Exception(f"Invalid Socket Name '{socket.name}' converted to '{item.name}'")
 
 
-    def forward(self, src: 'NodeTreeBuilder.LinkBuilder', dst: 'NodeTreeBuilder.LinkBuilder', exclude: tuple[str, ...] | None = None):
+    def forward(self, src: LinkBuilderAny, dst: LinkBuilderAny, exclude: Sequence[str] | None = None):
         for socket in self:
             name = socket.name
             if exclude is not None and name in exclude: continue
             src[name] >> dst[name]
 
 
- 
 class NodeTreeBuilder:
 
     class NodeCreator:
@@ -99,11 +100,11 @@ class NodeTreeBuilder:
 
 
         @overload
-        def node(self, node_type: str, *values: LinkSource | None, **dict) -> 'NTB.LinkBuilder[bpy.types.Node]': ...
+        def node(self, node_type: str, *values: LinkSource | None, **dict: object) -> 'NTB.LinkBuilder[bpy.types.Node]': ...
         @overload
-        def node(self, node_type: type[TNODE], *values: LinkSource | None, **dict) -> 'NTB.LinkBuilder[TNODE]': ...
+        def node[T: bpy.types.Node](self, node_type: type[T], *values: LinkSource | None, **dict: object) -> 'NTB.LinkBuilder[T]': ...
 
-        def node(self, node_type: str | type, *values: LinkSource | None, **dict):
+        def node[T: bpy.types.Node](self, node_type: str | type[T], *values: LinkSource | None, **dict: object):
             node = self._ntb.create_node(node_type, **dict)
             lb = NodeTreeBuilder.LinkBuilder(self._ntb, node)
             for index, value in enumerate(values):
@@ -145,10 +146,10 @@ class NodeTreeBuilder:
 
             def mix_node(data_type: SocketType):
                 mix = self.node(bpy.types.ShaderNodeMix)
-                mix.input_node.data_type = data_type.data_type # type: ignore
-                mix.input_node.blend_type = op # type: ignore
-                mix.input_node.clamp_factor = clamp_factor
-                mix.input_node.clamp_result = clamp_result
+                mix.node.data_type = data_type.data_type # type: ignore
+                mix.node.blend_type = op # type: ignore
+                mix.node.clamp_factor = clamp_factor
+                mix.node.clamp_result = clamp_result
                 return mix
 
             socket_type = _get_input_type_by_precedence(a, b).simplify_value() if socket_type is None else socket_type
@@ -167,8 +168,11 @@ class NodeTreeBuilder:
                         case SocketType.Float:
                             factor >> mix[SocketIndex.MixFactor]
                         case SocketType.Vector:
-                            mix.input_node.factor_mode = "NON_UNIFORM"
+                            mix.node.factor_mode = "NON_UNIFORM"
                             factor >> mix[SocketIndex.MixFactorNU]
+                        case _:
+                            raise TypeError()
+                        
                     a >> mix[SocketIndex.MixVectorIn0]
                     b >> mix[SocketIndex.MixVectorIn1]
                     return mix[SocketIndex.MixVectorOut]
@@ -196,50 +200,50 @@ class NodeTreeBuilder:
 
 
         def closure(self, signatures: 'NodeSignature.IO'):
-            input = self._ntb.create_node(bpy.types.NodeClosureInput)
-            output = self._ntb.create_node(bpy.types.NodeClosureOutput)
-            input.pair_with_output(output)
-            output.define_signature = True
-            signatures.inputs.apply_to_collection(output.input_items)
-            signatures.outputs.apply_to_collection(output.output_items)
-            return NodeTreeBuilder.ClosureLinkBuilder(self._ntb, input, output)
+            input = self.node(bpy.types.NodeClosureInput)
+            output = self.node(bpy.types.NodeClosureOutput)
+            input.node.pair_with_output(output.node)
+            output.node.define_signature = True
+            signatures.inputs.apply_to_collection(output.node.input_items)
+            signatures.outputs.apply_to_collection(output.node.output_items)
+            return NodeTreeBuilder.LinkBuilderPair(self._ntb, input, output, True)
 
 
-        def eval_closure(self, signatures: 'NodeSignature.IO', closure: 'NodeTreeBuilder.LinkBuilder | None' = None):
+        def eval_closure(self, signatures: 'NodeSignature.IO', closure: LinkBuilderAny | None = None):
             lb = self.node(bpy.types.NodeEvaluateClosure)
-            lb.input_node.define_signature = True
-            signatures.inputs.apply_to_collection(lb.input_node.input_items)
-            signatures.outputs.apply_to_collection(lb.input_node.output_items)
+            lb.node.define_signature = True
+            signatures.inputs.apply_to_collection(lb.node.input_items)
+            signatures.outputs.apply_to_collection(lb.node.output_items)
             if closure is not None: closure >> lb
             return lb
 
 
         def menu_switch(self, type: SocketType, *items: str, menu: LinkSource | None = None):
             lb = self.node(bpy.types.GeometryNodeMenuSwitch)
-            lb.input_node.data_type = type.data_type # type: ignore
-            lb.input_node.enum_items.clear()
-            for item in items: lb.input_node.enum_items.new(item)
+            lb.node.data_type = type.data_type # type: ignore
+            lb.node.enum_items.clear()
+            for item in items: lb.node.enum_items.new(item)
             if menu is not None: menu >> lb
             return lb
 
 
-        def combine_bundle(self, signature: 'NodeSignature', *input_sockets: 'LinkSource', output: 'NodeTreeBuilder.LinkBuilder | None' = None):
+        def combine_bundle(self, signature: 'NodeSignature', *input_sockets: 'LinkSource', output: LinkBuilderAny | None = None):
             lb = self.node(bpy.types.NodeCombineBundle, define_signature = True)
-            signature.apply_to_collection(lb.input_node.bundle_items)
+            signature.apply_to_collection(lb.node.bundle_items)
             for index, socket in enumerate(input_sockets): socket >> lb[index]
             if output is not None: lb[0] >> output
             return lb
         
 
-        def seperate_bundle(self, signature: 'NodeSignature', input: 'NodeTreeBuilder.LinkBuilder | None' = None, *output_sockets: 'NodeTreeBuilder.LinkBuilder'):
+        def seperate_bundle(self, signature: 'NodeSignature', input: LinkBuilderAny | None = None, *output_sockets: LinkBuilderAny):
             lb = self.node(bpy.types.NodeSeparateBundle, define_signature = True)
-            signature.apply_to_collection(lb.input_node.bundle_items)
+            signature.apply_to_collection(lb.node.bundle_items)
             for index, socket in enumerate(output_sockets): lb[index] >> socket
             if input is not None: input >> lb[0]
             return lb
 
 
-        def mix_bundle(self, signature: 'NodeSignature', factor: LinkSource, a: 'NodeTreeBuilder.LinkBuilder', b: 'NodeTreeBuilder.LinkBuilder'):
+        def mix_bundle(self, signature: 'NodeSignature', factor: LinkSource, a: LinkBuilderAny, b: LinkBuilderAny):
             a = self.seperate_bundle(signature, a)
             b = self.seperate_bundle(signature, b)
             result = self.combine_bundle(signature)
@@ -250,31 +254,18 @@ class NodeTreeBuilder:
 
 
 
-    class LinkBuilder(Generic[TNODE]):
+    class LinkBuilderBase:
 
-        def __init__(self, ntb: 'NodeTreeBuilder', input_node: TNODE, input_key: SocketAccessor = 0, output_node: TNODE | None = None, output_key: SocketAccessor | None = None):
+        def __init__(self, ntb: 'NodeTreeBuilder'):
             self.ntb = ntb
-            self.input_node = input_node
-            self.output_node = input_node if output_node is None else output_node
-            self.input_key = input_key
-            self.output_key = input_key if output_key is None else output_key
 
-
-        def __getitem__(self, key: SocketAccessor):
-            return NodeTreeBuilder.LinkBuilder(self.ntb, self.input_node, key, self.output_node, key)
-
-
-        @property
-        def node(self):
-            return self.input_node
-
-
-        def get_input(self): return self.input_node.inputs[self.input_key]
-        def get_output(self): return self.output_node.outputs[self.output_key]
+        def __getitem__(self, key: SocketAccessor) -> Self:...
+        def get_input(self) -> bpy.types.NodeSocket:...
+        def get_output(self) -> bpy.types.NodeSocket:...
 
 
         def set_default_value(self, value: SocketValue):
-            input = self.input_node.inputs[self.input_key]
+            input = self.get_input()
             input_type = SocketType.from_data_type(input.type)
             value_type = _get_input_type(value).simplify_value()
 
@@ -282,19 +273,18 @@ class NodeTreeBuilder:
                 if not isinstance(value, (float, int)): raise TypeError(type(value))
                 value = (value, value, value)
 
-            self.input_node.inputs[self.input_key].default_value = value # type: ignore
+            set_default_value(input, value)
 
 
-        def link_from(self, src: LinkSource):
-            if isinstance(src, NodeTreeBuilder.LinkBuilder):
-                self.ntb.link(src.output_node, src.output_key, self.input_node, self.input_key)
+        def link_from(self, src: LinkSource) -> None:
+            if isinstance(src, NodeTreeBuilder.LinkBuilderBase):
+                self.ntb.tree.links.new(src.get_output(), self.get_input())
             else:
                 self.set_default_value(src)
-            return self[0]
 
 
-        def link_to(self, dst: 'NodeTreeBuilder.LinkBuilder'):
-            return dst.link_from(self)
+        def link_to(self, dst: LinkBuilderAny):
+            dst.link_from(self)
 
 
         def mix(self, other: LinkSource, factor: LinkSource):
@@ -308,81 +298,87 @@ class NodeTreeBuilder:
         def is_false(self): return self < 0.5
 
 
-        def __rshift__(self, other: 'NodeTreeBuilder.LinkBuilder') -> None: self.link_to(other)
+        def __rshift__(self, other: LinkBuilderAny) -> None: self.link_to(other)
         def __rrshift__(self, other: LinkSource) -> None: self.link_from(other)
-        def __rlshift__(self, other: 'NodeTreeBuilder.LinkBuilder') -> None: self.link_to(other)
+        def __rlshift__(self, other: LinkBuilderAny) -> None: self.link_to(other)
         def __lshift__(self, other: LinkSource) -> None: self.link_from(other)
 
-        def __add__(self, other): return self.ntb.nc.add(self, other)
-        def __radd__(self, other): return self.ntb.nc.add(other, self)
+        def __add__(self, other: LinkSource): return self.ntb.nc.add(self, other)
+        def __radd__(self, other: LinkSource): return self.ntb.nc.add(other, self)
 
-        def __sub__(self, other): return self.ntb.nc.sub(self, other)
-        def __rsub__(self, other): return self.ntb.nc.sub(other, self)
+        def __sub__(self, other: LinkSource): return self.ntb.nc.sub(self, other)
+        def __rsub__(self, other: LinkSource): return self.ntb.nc.sub(other, self)
 
-        def __mul__(self, other): return self.ntb.nc.mul(self, other)
-        def __rmul__(self, other): return self.ntb.nc.mul(other, self)
+        def __mul__(self, other: LinkSource): return self.ntb.nc.mul(self, other)
+        def __rmul__(self, other: LinkSource): return self.ntb.nc.mul(other, self)
 
-        def __div__(self, other): return self.ntb.nc.div(self, other)
-        def __rdiv__(self, other): return self.ntb.nc.div(other, self)
+        def __div__(self, other: LinkSource): return self.ntb.nc.div(self, other)
+        def __rdiv__(self, other: LinkSource): return self.ntb.nc.div(other, self)
 
-        def __and__(self, other): return self.ntb.nc.math(Operation.MINIMUM, self, other)
-        def __rand__(self, other): return self.ntb.nc.math(Operation.MINIMUM, other, self)
+        def __and__(self, other: LinkSource): return self.ntb.nc.math(Operation.MINIMUM, self, other)
+        def __rand__(self, other: LinkSource): return self.ntb.nc.math(Operation.MINIMUM, other, self)
 
-        def __or__(self, other): return self.ntb.nc.math(Operation.MAXIMUM, self, other)
-        def __ror__(self, other): return self.ntb.nc.math(Operation.MAXIMUM, other, self)
+        def __or__(self, other: LinkSource): return self.ntb.nc.math(Operation.MAXIMUM, self, other)
+        def __ror__(self, other: LinkSource): return self.ntb.nc.math(Operation.MAXIMUM, other, self)
 
-        def __lt__(self, other): return self.ntb.nc.math(Operation.LESS_THAN, self, other)
-        def __gt__(self, other): return self.ntb.nc.math(Operation.GREATER_THAN, self, other)
+        def __lt__(self, other: LinkSource): return self.ntb.nc.math(Operation.LESS_THAN, self, other)
+        def __gt__(self, other: LinkSource): return self.ntb.nc.math(Operation.GREATER_THAN, self, other)
 
 
 
-    class ClosureLinkBuilder(LinkBuilder[bpy.types.NodeClosureInput|bpy.types.NodeClosureOutput]):
+    class LinkBuilder[T: bpy.types.Node](LinkBuilderBase):
 
-        def __init__(self, ntb: NodeTreeBuilder, input_node: bpy.types.NodeClosureInput, output_node: bpy.types.NodeClosureOutput):
-            super().__init__(ntb, output_node, 0, input_node, 0)
-            self.input = NodeTreeBuilder.LinkBuilder(ntb, input_node, 0)
-            self.output = NodeTreeBuilder.LinkBuilder(ntb, output_node, 0)
+        def __init__(self, ntb: 'NodeTreeBuilder', node: T, key: SocketAccessor = 0):
+            self.ntb = ntb
+            self.node = node
+            self.key = key
+
+
+        def __getitem__(self, key: SocketAccessor):
+            return NodeTreeBuilder.LinkBuilder(self.ntb, self.node, key)
+
+
+        def get_input(self): return self.node.inputs[self.key]
+        def get_output(self): return self.node.outputs[self.key]
+
+
+
+    class LinkBuilderPair[TIn: bpy.types.Node, TOut: bpy.types.Node](LinkBuilderBase):
+
+        def __init__(self, ntb: NodeTreeBuilder, input: NodeTreeBuilder.LinkBuilder[TIn], output: NodeTreeBuilder.LinkBuilder[TOut], swap_io = False):
+            super().__init__(ntb)
+            self.input = input
+            self.output = output
+            self.swap_io = swap_io
+
+        def __getitem__(self, key: SocketAccessor,  output_key: SocketAccessor | None = None):
+            if output_key is None: output_key = key
+            return NodeTreeBuilder.LinkBuilderPair(self.ntb, self.input[key], self.output[output_key], self.swap_io)
+
+        def get_input(self): return (self.output if self.swap_io else self.input).get_input()
+        def get_output(self): return (self.input if self.swap_io else self.output).get_output()
 
 
     
     def __init__(self, tree: bpy.types.ShaderNodeTree):
         self.tree = tree
+        assert self.tree.interface is not None
         self.interface = self.tree.interface
         self.nc = NodeTreeBuilder.NodeCreator(self)
 
 
-    def _get_node_type_idname(self, node_type: str | type) -> str:
-        if isinstance(node_type, str):
-            return node_type
-        elif isinstance(node_type, type):
-            if issubclass(node_type, bpy.types.Node):
-                if hasattr(node_type, "bl_idname"):
-                    return node_type.bl_idname
-                else: 
-                    return node_type.bl_rna.identifier # type: ignore
-            else:
-                raise TypeError("node_type not subclass of 'bpy.types.Node'.")
-        else:
-            raise TypeError(f"node_type must be str or type.")
-
-        
     @overload
-    def create_node(self, node_type: str, default_values: list | None = None, **dict) -> bpy.types.Node: ...
+    def create_node(self, node_type: str, **dict: object) -> bpy.types.Node: ...
     @overload
-    def create_node(self, node_type: type[TNODE], default_values: list | None = None, **dict) -> TNODE: ...
-        
-    def create_node(self, node_type: str | type, default_values: list | None = None, **dict):
+    def create_node[T:bpy.types.Node](self, node_type: type[T], **dict: object) -> T: ...
 
-        idname = self._get_node_type_idname(node_type)
+    def create_node(self, node_type: str | type, **dict: object):
+
+        idname = get_node_type_idname(node_type)
         node = self.tree.nodes.new(idname)
 
         for key, value in dict.items():
             setattr(node, key, value)
-
-        if default_values is not None:
-            for idx, value in enumerate(default_values):
-                if value is not None:
-                    node.inputs[idx].default_value = value # type: ignore
 
         return node
 
@@ -414,7 +410,7 @@ class NodeTreeBuilder:
         # Find depth of each node by walking backwards through inputs
         depths: dict[bpy.types.Node, int] = {}
 
-        def get_depth(node: bpy.types.Node):
+        def get_depth(node: bpy.types.Node) -> int:
             if node in depths:
                 return depths[node]
 
@@ -424,7 +420,8 @@ class NodeTreeBuilder:
                     if inp.links is None: continue
                     for link in inp.links:
                         if link.from_node is None: continue
-                        depth = max(depth, get_depth(link.from_node) + 1)
+                        other = get_depth(link.from_node)
+                        depth = max(depth, other + 1)
 
             depths[node] = depth
             return depth
@@ -457,7 +454,7 @@ class SocketCreateInfo:
     COLOR: 'SocketCreateInfo'
     SHADER: 'SocketCreateInfo'
 
-    def __init__(self, type = SocketType.Float, shape = SocketShape.CIRCLE, hide_value = False, hide_socket = False, **kwargs):
+    def __init__(self, type = SocketType.Float, shape = SocketShape.CIRCLE, hide_value = False, hide_socket = False, **kwargs: Any):
         self.type = type
         self.shape = shape
         self.hide_value = hide_value
@@ -485,7 +482,7 @@ SocketCreateInfo.SHADER = SocketCreateInfo(SocketType.Shader)
 
 
 
-def _apply_kwargs(obj, **kwargs):
+def _apply_kwargs(obj: object, **kwargs: object):
     for key in kwargs:
         setattr(obj, key, kwargs[key])
 
@@ -502,7 +499,7 @@ class NodeGroupData:
 
 
         def serialize(self):
-            data = {
+            data: dict[str, object] = {
                 "shape": self.shape,
                 "hide": self.hide,
             }
@@ -519,7 +516,7 @@ class NodeGroupData:
         def apply(self, dst: bpy.types.NodeSocket):
             dst.display_shape = self.shape # type: ignore
             dst.hide = self.hide
-            if self.default_value is not None: dst.default_value = self.default_value # type: ignore
+            if self.default_value is not None: _set_default_value(dst, self.default_value)
 
 
 
@@ -533,13 +530,13 @@ class NodeGroupData:
 
 
         def serialize(self):
-            dict = {}
+            dict: dict[str, object] = {}
             for key in self:
                 dict[key] = self[key].serialize()
             return dict
 
 
-        def deserialize(self, data: dict[str, dict[str, Any]]):
+        def deserialize(self, data: dict[str, dict[str, object]]):
             for key in data: self.get_new(key).deserialize(data[key])
 
 
@@ -568,7 +565,7 @@ class NodeGroupData:
         }
 
 
-    def deserialize(self, data: dict):
+    def deserialize(self, data: dict[str, dict[str, dict[str, object]]]):
         self.inputs.deserialize(data["inputs"])
         self.outputs.deserialize(data["outputs"])
 
@@ -610,9 +607,8 @@ class NodeGroupBuilder(NodeTreeBuilder):
 
 
     def _create_io(self):
-        if self.output_node is not None: return (self.inputs_node, self.output_node)
-        self.inputs_node = self.create_node(bpy.types.NodeGroupInput)
-        self.output_node = self.create_node(bpy.types.NodeGroupOutput)
+        if self.inputs_node is None: self.inputs_node = self.create_node(bpy.types.NodeGroupInput)
+        if self.output_node is None: self.output_node = self.create_node(bpy.types.NodeGroupOutput)
         return (self.inputs_node, self.output_node)
 
 
@@ -631,7 +627,7 @@ class NodeGroupBuilder(NodeTreeBuilder):
 
         create_info = SocketCreateInfo.cast(create_info)
 
-        socket = self.interface.new_socket(name, in_out=in_out.value, socket_type=create_info.type.full_name)
+        socket = self.interface.new_socket(name, in_out=in_out.value, socket_type=create_info.type.full_name) # pyright: ignore[reportArgumentType]
 
         ngdata_target = self.ngdata.inputs if in_out == SocketIOType.INPUT else self.ngdata.outputs
         item = ngdata_target.get_new(name)
@@ -644,89 +640,6 @@ class NodeGroupBuilder(NodeTreeBuilder):
 
         self._move_to_panel(socket)
         
-        if default_value is not None: socket.default_value = default_value
+        if default_value is not None: _set_default_value(socket, default_value)
 
         return socket
-
-
-    def create_any_input(self, name: str, type: SocketType, hide_value: bool = False, default_value = None, subtype: str = None):
-        input: bpy.types.NodeSocket = self.interface.new_socket(name, in_out=SocketIOType.INPUT, socket_type=type.full_name)
-        input.hide_value = hide_value
-        if default_value is not None:
-            input.default_value = default_value
-        if subtype is not None:
-            input.subtype = subtype
-
-        self._move_to_panel(input)
-
-        return input
-    
-
-    def create_bool_input(self, name: str, hide_value = False, default_value = False):
-        input = self.create_any_input(name, SocketType.Bool, hide_value, default_value)
-        return input
-    
-
-    def create_float_input(self, name: str, hide_value = False, default_value: float = 1.0, subtype = "FACTOR", range: tuple[float,float] = (0.0, 1.0)):
-        input: bpy.types.NodeSocketFloat = self.create_any_input(name, SocketType.Float, hide_value, default_value, subtype)
-        if range is not None:
-            input.min_value = range[0]
-            input.max_value = range[1]
-        return input
-    
-
-    def create_vector_input(self, name: str, hide_value = False, default_value: float = (0.0,0.0,0.0), subtype: str = None, dimensions: int = 3):
-        input: bpy.types.NodeSocketVector = self.create_any_input(name, SocketType.Vector, hide_value, default_value, subtype)
-        if hasattr(input, "dimensions"): input.dimensions = dimensions
-        return input
-    
-
-    def create_color_input(self, name: str, hide_value = False, default_value = (1.0,1.0,1.0,1.0)):
-        input = self.create_any_input(name, SocketType.Color, hide_value, default_value)
-        return input
-    
-
-    def create_shader_input(self, name: str):
-        return self.create_any_input(name, SocketType.Shader)
-    
-
-    def create_bundle_input(self, name: str) -> bpy.types.NodeSocketBundle:
-        return self.create_any_input(name, SocketType.Bundle)
-
-
-    def create_closure_input(self, name: str) -> bpy.types.NodeSocketClosure:
-        return self.create_any_input(name, SocketType.Closure)
-
-
-    def create_menu_input(self, name: str) -> bpy.types.NodeSocketMenu:
-        return self.create_any_input(name, SocketType.Menu)
-    
-
-    def create_any_output(self, name: str, type: SocketType):
-        output: bpy.types.NodeSocket = self.interface.new_socket(name, in_out=SocketIOType.OUTPUT, socket_type=f"NodeSocket{type.value}")
-        self._move_to_panel(output)
-        return output
-    
-
-    def create_float_output(self, name: str):
-        return self.create_any_output(name, SocketType.Float)
-    
-
-    def create_vector_output(self, name: str):
-        return self.create_any_output(name, SocketType.Vector)
-    
-
-    def create_color_output(self, name: str):
-        return self.create_any_output(name, SocketType.Color)
-    
-
-    def create_shader_output(self, name: str):
-        return self.create_any_output(name, SocketType.Shader)
-    
-
-    def create_bundle_output(self, name: str):
-        return self.create_any_output(name, SocketType.Bundle)
-
-
-    def create_closure_output(self, name: str):
-        return self.create_any_output(name, SocketType.Closure)

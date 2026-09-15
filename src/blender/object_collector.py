@@ -1,4 +1,5 @@
 import bpy
+import typing
 
 class ObjectCollector:
 
@@ -17,7 +18,8 @@ class ObjectCollector:
             self.add_objects(obj.children)
 
 
-    def add_objects(self, objects: list[bpy.types.Object]):
+    def add_objects(self, objects: typing.Sequence[bpy.types.Object] | None):
+        if objects is None: return
         for obj in objects:
             self.add_object(obj)
 

@@ -4,6 +4,7 @@ from .material_properties import *
 from .material_operators import *
 
 # pyright: reportInvalidTypeForm=false
+# pyright: reportIncompatibleMethodOverride=none
 
 
 class MaterialPanel(bpy.types.Panel):
@@ -16,11 +17,13 @@ class MaterialPanel(bpy.types.Panel):
 
 
     @classmethod
-    def poll(cls, context):
+    def poll(cls, context: bpy.types.Context):
         return context.material is not None
 
 
-    def draw(self, context):
+    def draw(self, context: bpy.types.Context):
+        assert self.layout is not None
+
         layout = self.layout
 
         layout.use_property_split = True

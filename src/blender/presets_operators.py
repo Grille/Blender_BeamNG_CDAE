@@ -1,24 +1,21 @@
 import os
 import bpy
 
-from bpy.types import Operator
-from bpy.props import BoolProperty, IntProperty, FloatProperty, EnumProperty, StringProperty
-from typing import Protocol, cast
+from typing import cast
 
 from .local_storage import LocalStorage
+from .stubs import Operator, Menu
 
-# pyright: reportInvalidTypeForm=false
+# pyright: reportIncompatibleMethodOverride=information
+
+
 
 class OT_SavePreset(Operator):
     bl_idname = "grille.presets_save"
     bl_label = "Save Preset"
     bl_description = "Save current settings as a preset"
 
-    preset_name: bpy.props.StringProperty(
-        name="Preset Name",
-        description="Name for the new preset",
-        default=""
-    )
+    preset_name: str
 
     def invoke(self, context, event):
         active_op = OpPresetsUtils.get_operator(context)
@@ -40,6 +37,10 @@ class OT_SavePreset(Operator):
 
         return {'FINISHED'}
 
+OT_SavePreset.__annotations__.update(
+    preset_name = bpy.props.StringProperty(name="Preset Name", description="Name for the new preset", default="")
+)
+
 
 
 class OT_LoadPreset(Operator):
@@ -60,7 +61,7 @@ class OT_RemovePreset(Operator):
     bl_label = "Remove Preset"
     bl_description = "Delete the selected preset"
 
-    def execute(self, context):
+    def execute(self, context: bpy.types.Context):
         active_op = OpPresetsUtils.get_operator(context)
         presets = LocalStorage.get_presets(active_op.temp_presets_file)
         presets.presets.pop(active_op.temp_presets_selection, None)
@@ -76,7 +77,7 @@ class OT_SetDefaultPreset(Operator):
     bl_label = "Set Default Preset"
     bl_description = "Set the selected preset as default"
 
-    def execute(self, context):
+    def execute(self, context: bpy.types.Context):
         active_op = OpPresetsUtils.get_operator(context)
         presets = LocalStorage.get_presets(active_op.temp_presets_file)
         presets.default_key = active_op.temp_presets_selection
@@ -85,11 +86,11 @@ class OT_SetDefaultPreset(Operator):
     
 
 
-class OT_SelectPreset(bpy.types.Operator):
+class OT_SelectPreset(Operator):
     bl_idname = "grille.presets_select"
     bl_label = "Select Preset"
 
-    preset_name: bpy.props.StringProperty()
+    preset_name: str
 
 
     def execute(self, context):
@@ -100,14 +101,18 @@ class OT_SelectPreset(bpy.types.Operator):
         presets = LocalStorage.get_presets(active_op.temp_presets_file)
         presets.apply_annotations(active_op.temp_presets_selection, active_op)
         return {'FINISHED'}
-    
+
+OT_SelectPreset.__annotations__.update(
+    preset_name = bpy.props.StringProperty()
+) 
 
 
-class MT_PresetsMenu(bpy.types.Menu):
+
+class MT_PresetsMenu(Menu):
     bl_label = "Presets"
     bl_idname = "GRILLE_MT_presets_menu"
 
-    new_preset_name: bpy.props.StringProperty()
+    new_preset_name: str
 
 
     def draw(self, context):
@@ -121,12 +126,22 @@ class MT_PresetsMenu(bpy.types.Menu):
             op = cast(OT_SelectPreset, self.layout.operator(OT_SelectPreset.bl_idname, text=name, icon=icon))
             op.preset_name = name
 
+MT_PresetsMenu.__annotations__.update(
+    new_preset_name = bpy.props.StringProperty()
+)
+
 
 
 class PresetOperator(Operator):
-    temp_presets_initalized: BoolProperty(default=False)
-    temp_presets_file: StringProperty(default="export")
-    temp_presets_selection: StringProperty()
+    temp_presets_initalized: bool
+    temp_presets_file: str
+    temp_presets_selection: str
+
+PresetOperator.__annotations__.update(
+    temp_presets_initalized = bpy.props.BoolProperty(default=False),
+    temp_presets_file = bpy.props.StringProperty(default="export"),
+    temp_presets_selection = bpy.props.StringProperty(),
+)
 
 
 

@@ -7,7 +7,7 @@ from enum import Enum
 from io import BufferedReader, BufferedWriter
 
 from ..v31 import CdaeV31
-from ..packed_vector import PackedVector
+from ..packed_vector import PPackedVector
 from .msgpack_reader import MsgpackReader
 from ...numerics import *
 
@@ -44,38 +44,37 @@ def read_v31_from_stream(f: BufferedReader) -> CdaeV31:
     cdae.center = body.read_vec3f()
     cdae.bounds = body.read_box6f()
 
-    def read_vector():
-        vec = PackedVector()
+    def read_vector(vec : PPackedVector):
+        element_size = body.read_int32()
+        if vec.element_size != element_size: raise Exception()
         vec.element_count = body.read_int32()
-        vec.element_size = body.read_int32()
         vec.data = body.read_bytes()
-        return vec
     
 
-    cdae.nodes = read_vector()
-    cdae.objects = read_vector()
+    read_vector(cdae.nodes)
+    read_vector(cdae.objects)
 
-    cdae.subShapeFirstNode = read_vector()
-    cdae.subShapeFirstObject = read_vector()
-    cdae.subShapeNumNodes = read_vector()
-    cdae.subShapeNumObjects = read_vector()
+    read_vector(cdae.subShapeFirstNode)
+    read_vector(cdae.subShapeFirstObject)
+    read_vector(cdae.subShapeNumNodes)
+    read_vector(cdae.subShapeNumObjects)
 
-    cdae.defaultRotations = read_vector()
-    cdae.defaultTranslations = read_vector()
-    cdae.nodeRotations = read_vector()
-    cdae.nodeTranslations = read_vector()
+    read_vector(cdae.defaultRotations)
+    read_vector(cdae.defaultTranslations)
+    read_vector(cdae.nodeRotations)
+    read_vector(cdae.nodeTranslations)
 
-    cdae.nodeUniformScales = read_vector()
-    cdae.nodeAlignedScales = read_vector()
-    cdae.nodeArbitraryScaleFactors = read_vector()
-    cdae.nodeArbitraryScaleRots = read_vector()
+    read_vector(cdae.nodeUniformScales)
+    read_vector(cdae.nodeAlignedScales)
+    read_vector(cdae.nodeArbitraryScaleFactors)
+    read_vector(cdae.nodeArbitraryScaleRots)
 
-    cdae.groundTranslations = read_vector()
-    cdae.groundRotations = read_vector()
+    read_vector(cdae.groundTranslations)
+    read_vector(cdae.groundRotations)
 
-    cdae.objectStates = read_vector()
-    cdae.triggers = read_vector()
-    cdae.details = read_vector()
+    read_vector(cdae.objectStates)
+    read_vector(cdae.triggers)
+    read_vector(cdae.details)
 
 
     names_count = body.read_int32()
@@ -101,15 +100,15 @@ def read_v31_from_stream(f: BufferedReader) -> CdaeV31:
         mesh.center = body.read_vec3f()
         mesh.radius = body.read_float()
 
-        mesh.verts = read_vector()
-        mesh.tverts0 = read_vector()
-        mesh.tverts1 = read_vector()
-        mesh.colors = read_vector()
-        mesh.norms = read_vector()
-        mesh.encoded_norms = read_vector()
-        mesh.draw_regions = read_vector()
-        mesh.indices = read_vector()
-        mesh.tangents = read_vector()
+        read_vector(mesh.verts)
+        read_vector(mesh.tverts0)
+        read_vector(mesh.tverts1)
+        read_vector(mesh.colors)
+        read_vector(mesh.norms)
+        read_vector(mesh.encoded_norms)
+        read_vector(mesh.draw_regions)
+        read_vector(mesh.indices)
+        read_vector(mesh.tangents)
 
         mesh.vertsPerFrame = body.read_int32()
         mesh.flags = body.read_int32()

@@ -6,7 +6,7 @@ import numpy as np
 from numpy.typing import NDArray
 from enum import Enum
 from dataclasses import dataclass
-from typing import List, Dict, Optional, Tuple, cast
+from typing import List, Dict, Optional, Tuple, cast, Generator
 from collections import defaultdict
 
 from .v31 import *
@@ -136,7 +136,7 @@ class CdaeTree:
             return obj
         
 
-        def iter_meshes(self):
+        def iter_meshes(self) -> Generator['CdaeTree.Mesh']:
 
             for obj in self.objects:
                 for mesh in obj.meshes:
@@ -153,7 +153,7 @@ class CdaeTree:
             super().__init__([])
 
 
-        def iter_meshes(self):
+        def iter_meshes(self) -> Generator['CdaeTree.Mesh']:
             for node in self.nodes:
                 yield from node.iter_meshes()
 
@@ -197,7 +197,7 @@ class CdaeTree:
         return name.replace(".", "_")
     
 
-    def iter_meshes(self):
+    def iter_meshes(self) -> Generator['CdaeTree.Mesh']:
         for shape in self.shapes.values():
             yield from shape.iter_meshes()
 

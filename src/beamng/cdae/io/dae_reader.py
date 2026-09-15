@@ -17,10 +17,6 @@ import xml.etree.cElementTree as ET
 
 
 
-_T = TypeVar('_T')
-
-
-
 def _strip_namespaces(elem: ET.Element):
     if "}" in elem.tag:
         elem.tag = elem.tag.split("}", 1)[1]
@@ -63,6 +59,14 @@ class XmlReader:
         for name in path:
             element = element.find(name)
             if element is None: raise self._layout_error()
+        return XmlReader(element)
+
+
+    def find_optional(self, *path: str):
+        element = self.element
+        for name in path:
+            element = element.find(name)
+            if element is None: return None
         return XmlReader(element)
 
 
@@ -161,16 +165,16 @@ def parse_node(xml: XmlReader) -> Node:
     res = Node()
     res.name = xml.get("name")
 
-    geometry = xml.find(DaeTag.instance_geometry)
+    geometry = xml.find_optional(DaeTag.instance_geometry)
     if geometry is not None:
         url = geometry.get("url")[1:]
         materials = geometry.find(DaeTag.bind_material, DaeTag.technique_common).findall(DaeTag.instance_material)
         matdict = {mat.get("symbol"): mat.get("target", "")[1:] for mat in materials}
         res.geometry_instance = GeometryInstance(url, matdict)
 
-    matrix = xml.find(DaeTag.matrix).parse_array()
+    matrix = xml.find_optional(DaeTag.matrix)
     if matrix is not None:
-        res.matrix = DaeMatrix(matrix)
+        res.matrix = DaeMatrix(matrix.parse_array())
     else:
         res.matrix = None
 

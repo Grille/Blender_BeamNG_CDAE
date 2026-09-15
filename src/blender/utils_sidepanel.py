@@ -4,12 +4,17 @@ from bpy.props import BoolProperty, EnumProperty
 
 from ..beamng.material.material import MaterialVersion
 from ..beamng.material.material_parser import MaterialParser
+from .stubs import Operator, Panel
 
 # pyright: reportInvalidTypeForm=false
 
 class UtilsPanelPropertyGroup(PropertyGroup):
+    matconv_version: str
+    matconv_aclip: bool
+    matconv_force: bool
 
-    matconv_version: EnumProperty(
+UtilsPanelPropertyGroup.__annotations__.update(
+    matconv_version = EnumProperty(
         name="Material Version",
         description="BeamNG material conversion version",
         items=[
@@ -17,23 +22,22 @@ class UtilsPanelPropertyGroup(PropertyGroup):
             ("1.5", "V1.5 (PBR)", ""),
         ],
         default="1.0",
-    )
-
-    matconv_aclip: BoolProperty(
+    ),
+    matconv_aclip = BoolProperty(
         name="Enable Alpha Clip",
         description="",
         default=True,
-    )
-
-    matconv_force: BoolProperty(
+    ),
+    matconv_force = BoolProperty(
         name="Force Conversion",
         description="Force conversion even if materials already seem valid",
         default=False,
     )
+)
 
 
 
-class OT_convert_materials(bpy.types.Operator):
+class OT_convert_materials(Operator):
     bl_idname = "grille_beamng_cdae_utilspanel.convert_materials"
     bl_label = "Convert Materials"
     bl_description = "Convert materials to BeamNG format"
@@ -51,7 +55,7 @@ class OT_convert_materials(bpy.types.Operator):
     
 
 
-class PT_materials_panel(bpy.types.Panel):
+class PT_materials_panel(Panel):
     bl_label = "Materials"
     bl_idname = "GRILLE_PT_beamng_cdae_utilspanel"
     bl_space_type = 'VIEW_3D'
@@ -75,6 +79,7 @@ class PT_materials_panel(bpy.types.Panel):
         )
 
 
+
 class UtilsSidepanel:
 
     classes = (
@@ -86,18 +91,18 @@ class UtilsSidepanel:
 
     @staticmethod
     def properties_from_scene(scene: bpy.types.Scene) -> UtilsPanelPropertyGroup:
-        return scene.beamngcdae_utils_panel_properties
+        return scene.beamngcdae_utils_panel_properties # type: ignore
         
 
     @staticmethod
     def register():
         for cls in UtilsSidepanel.classes:
             bpy.utils.register_class(cls)
-        bpy.types.Scene.beamngcdae_utils_panel_properties = bpy.props.PointerProperty(type=UtilsPanelPropertyGroup)
+        bpy.types.Scene.beamngcdae_utils_panel_properties = bpy.props.PointerProperty(type=UtilsPanelPropertyGroup) # type: ignore
 
 
     @staticmethod
     def unregister():
         for cls in reversed(UtilsSidepanel.classes):
             bpy.utils.unregister_class(cls)
-        del bpy.types.Scene.beamngcdae_utils_panel_properties
+        del bpy.types.Scene.beamngcdae_utils_panel_properties # type: ignore

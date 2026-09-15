@@ -95,9 +95,9 @@ class CdaeParser:
         scene = CdaeParser.Scene()
         scene.build_scene(cdae)
 
-        translations = cdae.defaultTranslations.unpack_list(Vec3F)
-        rotations = cdae.defaultRotations.unpack_list(Quat4I16)
-        aligned_scales = cdae.defaultAlignedScales.unpack_list(Vec3F)
+        translations = cdae.defaultTranslations.unpack_list()
+        rotations = cdae.defaultRotations.unpack_list()
+        aligned_scales = cdae.defaultAlignedScales.unpack_list()
 
         for index, node_info in enumerate(scene.nodes):
             obj = node_info.object
@@ -119,11 +119,11 @@ class CdaeParser:
 
     def get_clean_data(self, info: CdaeV31.Mesh):
 
-        all_indices = info.indices.to_numpy_array(np.int32).reshape(-1, 3)
-        positions = info.verts.to_numpy_array(np.float32).reshape(-1, 3)
+        all_indices = info.indices.to_numpy_array().reshape(-1, 3)
+        positions = info.verts.to_numpy_array().reshape(-1, 3)
 
         # Collect filtered triangles and material mapping
-        region_triangles = []
+        region_triangles: list[int] = []
         region_materials = []
 
         for region in info.unpack_regions():

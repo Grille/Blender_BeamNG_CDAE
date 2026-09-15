@@ -41,7 +41,7 @@ class DaeAsset:
 
 
     def to_dict(self):
-        json_imposters = []
+        json_imposters: list[dict[str, object]] = []
         for imp in self.imposters:
             json_imposters.append(asdict(imp))
         json_body = {

@@ -5,11 +5,25 @@ import numpy as np
 
 from typing import Sequence
 
+
+type Tuple2F = tuple[float, float]
+type Tuple3F = tuple[float, float, float]
+type Tuple4F = tuple[float, float, float, float]
+
+
+
 class Vec2F:
+    __slots__ = "x", "y"
     
     def __init__(self, x: float = 0.0, y: float = 0.0):
         self.x = x
         self.y = y
+
+
+    @classmethod
+    def from_list2(cls, list: Sequence[float]):
+        self = cls(*list[:2])
+        return self
 
 
     def unpack(self, data: bytes):
@@ -25,7 +39,7 @@ class Vec2F:
         return (self.x, self.y)
     
 
-    def __eq__(self, value):
+    def __eq__(self, value: object):
         if not isinstance(value, Vec2F):
             return False
         return self.x == value.x and self.y == value.y
@@ -42,6 +56,7 @@ class Vec2F:
 
 
 class Vec3F(Vec2F):
+    __slots__ = "z"
 
     ZERO: 'Vec3F'
     ONE: 'Vec3F'
@@ -109,6 +124,7 @@ class Vec3F(Vec2F):
 
 
 class Vec4F(Vec3F):
+    __slots__ = "w"
 
     def __init__(self, x: float = 0.0, y: float = 0.0, z: float = 0.0, w: float = 0.0):
         super().__init__(x, y, z)
@@ -135,7 +151,7 @@ class Vec4F(Vec3F):
         
 
     @property
-    def list4(self):
+    def list4(self) -> list[float]:
         return [self.x, self.y, self.z, self.w]
     
 
@@ -143,7 +159,7 @@ class Vec4F(Vec3F):
         return f"<{self.__class__.__name__} (x={self.x:.2f}, y={self.y:.2f}, z={self.z:.2f}, w={self.w:.2f})>"
     
     
-    def __eq__(self, value):
+    def __eq__(self, value: object):
         if not isinstance(value, Vec4F):
             return False
         return self.x == value.x and self.y == value.y and self.z == value.z and self.w == value.w
@@ -151,9 +167,10 @@ class Vec4F(Vec3F):
 
 
 class Quat4F(Vec4F):
-    
+    __slots__ = ()
+
     @classmethod
-    def from_blender_quaternion(cls, quat: mathutils.Quaternion | tuple):
+    def from_blender_quaternion(cls, quat: mathutils.Quaternion | Tuple4F):
         if isinstance(quat, tuple): quat = mathutils.Quaternion(quat)
         self = cls()
         self.x = quat.x
@@ -164,7 +181,7 @@ class Quat4F(Vec4F):
     
 
     @classmethod
-    def from_collada_quaternion(cls, quat: mathutils.Quaternion | tuple):
+    def from_collada_quaternion(cls, quat: mathutils.Quaternion | Tuple4F):
         if isinstance(quat, tuple): quat = mathutils.Quaternion(quat)
         self = cls()
         self.x = -quat.w
@@ -189,6 +206,7 @@ class Quat4F(Vec4F):
     
 
 class Quat4I16(Quat4F):
+    __slots__ = ()
 
     FP_SCALE = 32767.0
 
@@ -210,6 +228,7 @@ class Quat4I16(Quat4F):
 
 
 class Box6F:
+    __slots__ = "min", "max"
 
     def __init__(self, minx = 0.0, miny = 0.0, minz = 0.0, maxx = 0.0, maxy = 0.0, maxz = 0.0):
         self.min = Vec3F(minx, miny, minz)
@@ -243,6 +262,7 @@ class Box6F:
 
 
 class Color4F(Vec4F):
+    __slots__ = ()
 
     def __init__(self, r = 0.0, g = 0.0, b = 0.0, a = 0.0):
         self.r = r
@@ -296,24 +316,24 @@ class Color4F(Vec4F):
 
 
 class Transforms:
-
+    __slots__ = "translation", "scale", "rotation"
     IDENTITY: 'Transforms'
 
-    def __init__(self, position: Vec3F| None = None, scale: Vec3F | None = None, rotation: Quat4I16 | None = None):
-        self.translation = Vec3F.ZERO if position is None else position
+    def __init__(self, translation: Vec3F| None = None, scale: Vec3F | None = None, rotation: Quat4I16 | None = None):
+        self.translation = Vec3F.ZERO if translation is None else translation
         self.scale = Vec3F.ONE if scale is None else scale
         self.rotation = Quat4I16.create_identity() if rotation is None else rotation
 
 
     @classmethod
     def from_blender_matrix(cls, matrix: mathutils.Matrix):
-        position = Vec3F.from_list3(matrix.to_translation())
+        translation = Vec3F.from_list3(matrix.to_translation())
         rotation = Quat4I16.from_blender_quaternion(matrix.to_quaternion())
         scale = Vec3F.from_list3(matrix.to_scale())
-        return cls(position, scale, rotation)
+        return cls(translation, scale, rotation)
     
 
-    def __eq__(self, value):
+    def __eq__(self, value: object):
         if not isinstance(value, Transforms):
             return False
         return self.translation == value.translation and self.scale == value.scale and self.rotation == value.rotation

@@ -4,6 +4,7 @@ import json
 import bpy
 
 from enum import Enum
+from typing import cast
 
 from ...blender.material_properties import MaterialProperties
 from .material import Material
@@ -32,7 +33,7 @@ class MaterialLibary:
         if (not isinstance(data, dict)):
             raise Exception(f"Unexpected json data type.")
         
-        rawdict: dict[str, dict[str, any]] = data
+        rawdict = cast(dict[str, dict[str, object]], data)
 
         for key, value in rawdict.items():
             self.materials[key] = Material(value)
@@ -41,7 +42,7 @@ class MaterialLibary:
     def save(self, filepath: str):
         rawdict = {}
         for key, material in self.materials.items():
-            rawdict[key] = material._dict
+            rawdict[key] = material.value_dict
         
         with open(filepath, 'w') as f:
             json.dump(rawdict, f, indent=4)
@@ -52,5 +53,7 @@ class MaterialLibary:
     
 
     def set_material(self, mat: Material):
-        self.materials[mat.name] = mat
+        name = mat.name
+        if name is None: raise ValueError()
+        self.materials[name] = mat
         self.new_materials.append(mat)

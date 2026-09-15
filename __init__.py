@@ -2,12 +2,15 @@ import os
 import sys
 
 addon_dir = os.path.dirname(__file__)
-modules_dir = os.path.join(addon_dir, "modules")
 
-if modules_dir not in sys.path:
-    sys.path.insert(0, modules_dir)
+def add_path(path: str):
+    dir = os.path.join(addon_dir, path)
+    if dir not in sys.path: sys.path.insert(0, dir)
 
-bl_info = {
+add_path("modules")
+add_path("src")
+
+bl_info: dict[str, object] = {
     "name": "BeamNG CDAE",
     "author": "Paul Hirch",
     "version": (0, 10),
@@ -18,4 +21,4 @@ bl_info = {
 }
 
 from .src.blender import register, unregister
-
+__all__ = "bl_info", "register", "unregister"

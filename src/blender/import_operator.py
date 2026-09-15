@@ -9,11 +9,12 @@ from bpy.types import Operator
 from bpy_extras.io_utils import ImportHelper
 from bpy.props import StringProperty, BoolProperty, EnumProperty
 
+from .stubs import Menu
 from ..beamng.cdae.io import *
 from ..beamng.cdae.parser import CdaeParser
 from .local_storage import LocalStorage
 
-from .presets_operators import OpPresetsUtils
+from .presets_operators import OpPresetsUtils, PresetOperator
 
 
 # pyright: reportInvalidTypeForm=false
@@ -24,7 +25,7 @@ class FileFormat(str, Enum):
     DTS = ".dts"
 
 
-class ImportCdae(Operator, ImportHelper):
+class ImportCdae(PresetOperator, ImportHelper):
     
     bl_idname = "grille.import_beamng_cdae"
     bl_label = "Import BeamNG"
@@ -35,11 +36,6 @@ class ImportCdae(Operator, ImportHelper):
     validate_meshes: BoolProperty(name="Validate Meshes", default=True)
     debug_dump: BoolProperty(name="Debug Info Enabled", default=False)
     debug_dump_key: StringProperty(name="Key", default="debug_cdae")
-
-    temp_presets_initalized: BoolProperty(default=False)
-    temp_presets_file: StringProperty(default="import")
-    temp_presets_selection: StringProperty()
-
 
     def invoke(self, context, event):
         OpPresetsUtils.setup(self)
@@ -73,11 +69,6 @@ class ImportCdae(Operator, ImportHelper):
         return {'FINISHED'}
     
 
-    @staticmethod
-    def menu_func(self: 'ImportCdae', context: bpy.types.Context):
-        self.layout.operator(ImportCdae.bl_idname, text="BeamNG (.dae/.cdae)")
-
-
     def draw(self, context):
 
         layout = self.layout
@@ -90,3 +81,25 @@ class ImportCdae(Operator, ImportHelper):
         layout.prop(self, "debug_dump")
         if self.debug_dump:
             layout.prop(self, "debug_dump_key")
+
+
+
+class ImportRegistry:
+    __slots__ = ()
+
+
+    @staticmethod
+    def menu_func(menu: Menu, context: bpy.types.Context):
+        menu.layout.operator(ImportCdae.bl_idname, text="BeamNG (.dae/.cdae)")
+
+
+    @staticmethod
+    def register():
+        bpy.utils.register_class(ImportCdae)
+        bpy.types.TOPBAR_MT_file_import.append(ImportRegistry.menu_func) # pyright: ignore[reportArgumentType]
+
+
+    @staticmethod
+    def unregister():
+        bpy.types.TOPBAR_MT_file_import.remove(ImportRegistry.menu_func) # pyright: ignore[reportArgumentType]
+        bpy.utils.unregister_class(ImportCdae)

@@ -15,14 +15,19 @@ from ..beamng.cdae.io.dae_asset import DaeAsset
 from ..beamng.cdae.builder_tree import CdaeTreeBuildMode
 from ..beamng.cdae.builder import CdeaBuilder, MeshDataEvalMode
 from ..beamng.cdae.v31 import CdaeV31
-from ..beamng.material.material_libary import MaterialLibary
-from ..beamng.material.material_builder import MaterialBuilder
+from ..beamng.material import MaterialBuilder, MaterialLibary, MaterialVersion
 from .local_storage import LocalStorage
 from .presets_operators import OpPresetsUtils, PresetOperator
 from ..beamng.cdae.io import *
 from .enums import *
+from .stubs import Menu
+
+
+from grille import blender
+
 
 # pyright: reportInvalidTypeForm=false
+# pyright: reportIncompatibleMethodOverride=information
 
 class WriteMode(str, Enum):
     NONE = "NONE"
@@ -45,17 +50,17 @@ class UvMode(str, Enum):
     STRING = "STRING"
 
 
-def update_fps(self: 'ExportBase', ctx):
+
+def _ExportBase_update_fps(self: 'ExportBase', ctx: bpy.types.Context):
     fps = self.anim_samples / self.anim_duration
     if self.anim_fps != fps:
         self.anim_fps = fps
 
 
-def update_samples(self: 'ExportBase', ctx):
+def _ExportBase_update_samples(self: 'ExportBase', ctx: bpy.types.Context):
     samples = round(self.anim_duration * self.anim_fps)
     if self.anim_samples != samples:
         self.anim_samples = samples
-
 
 
 class ExportBase(PresetOperator, ExportHelper):
@@ -181,9 +186,9 @@ class ExportBase(PresetOperator, ExportHelper):
     write_animations: BoolProperty(name="Enabled", default=False)
     anim_frame_start: IntProperty(name="Start Frame")
     anim_frame_end: IntProperty(name="End Frame", default=100)
-    anim_samples: IntProperty(name="Samples", default=100, min=2, update=update_fps)
-    anim_duration: FloatProperty(name="Duration (Seconds)", default=100, min=0.01, update=update_fps)
-    anim_fps: FloatProperty(name="FPS", default=1, min=0, update=update_samples)
+    anim_samples: IntProperty(name="Samples", default=100, min=2, update=_ExportBase_update_fps)
+    anim_duration: FloatProperty(name="Duration (Seconds)", default=100, min=0.01, update=_ExportBase_update_fps)
+    anim_fps: FloatProperty(name="FPS", default=1, min=0, update=_ExportBase_update_samples)
 
     filter_glob: StringProperty(default="*.dae;*.cdae;*.json", options={'HIDDEN'})
 
@@ -266,10 +271,10 @@ class ExportBase(PresetOperator, ExportHelper):
         self.export_materials(dirpath, builder.materials)
         log("misc")
 
-        return {OperatorResult.FINISHED}
+        return {OperatorResult.FINISHED.value}
     
 
-    def check(self, context):
+    def check(self, context): 
         format: FileFormat = self.file_format
         path: str = self.filepath
         filename, ext = os.path.splitext(path)
@@ -277,6 +282,8 @@ class ExportBase(PresetOperator, ExportHelper):
         if format != FileFormat.NONE and format != ext:
             self.filepath = f"{filename}{format}"
             return True
+
+        return False
     
 
     def export_textures(self, dirpath: str, libary: MaterialLibary, mode: WriteMode):
@@ -326,7 +333,7 @@ class ExportBase(PresetOperator, ExportHelper):
                 continue
 
             builder = MaterialBuilder()
-            builder.default_version = float(self.material_default)
+            builder.default_version = MaterialVersion(self.material_default)
             builder.uv1_hint = self.material_uv1
             builder.build_from_bmat(bmat)
             libary.set_material(builder.material)
@@ -343,9 +350,6 @@ class ExportBase(PresetOperator, ExportHelper):
 
 
     def draw(self, context):
-
-        assert context is not None
-        assert self.layout is not None
 
         layout = self.layout
         layout.use_property_split = True
@@ -423,21 +427,26 @@ class ExportBase(PresetOperator, ExportHelper):
                 box.prop(self, "texture_path")
 
 
-    @staticmethod
-    def menu_func(self: 'ExportBase', context: bpy.types.Context):
-        self.layout.operator(ExportBase.bl_idname, text="BeamNG (.dae/.cdae)")
+
 
 
 
 class ExportRegistry:
+    __slots__ = ()
+
+
+    @staticmethod
+    def menu_func(menu: Menu, context: bpy.types.Context):
+        menu.layout.operator(ExportBase.bl_idname, text="BeamNG (.dae/.cdae)")
+
 
     @staticmethod
     def register():
         bpy.utils.register_class(ExportBase)
-        bpy.types.TOPBAR_MT_file_export.append(ExportBase.menu_func)
+        bpy.types.TOPBAR_MT_file_export.append(ExportRegistry.menu_func) # pyright: ignore[reportArgumentType]
 
 
     @staticmethod
     def unregister():
-        bpy.types.TOPBAR_MT_file_export.remove(ExportBase.menu_func)
+        bpy.types.TOPBAR_MT_file_export.remove(ExportRegistry.menu_func) # pyright: ignore[reportArgumentType]
         bpy.utils.unregister_class(ExportBase)

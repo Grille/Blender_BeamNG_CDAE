@@ -1,10 +1,10 @@
 import bpy
 
 from .object_properties import ObjectProperties, ObjectRole
-
+from .stubs import Panel
 
 # Define the panel
-class ObjectPanel(bpy.types.Panel):
+class ObjectPanel(Panel):
 
     bl_label = "BeamNG CDAE"
     bl_idname = "OBJECT_PT_grille_beamng_cdae_objpanel"
@@ -24,6 +24,8 @@ class ObjectPanel(bpy.types.Panel):
         layout.use_property_split = True
 
         obj = context.object
+        if obj is None: raise ValueError()
+
         has_mesh = ObjectProperties.has_mesh(obj)
 
         layout.prop(obj, ObjectProperties.ROLE)

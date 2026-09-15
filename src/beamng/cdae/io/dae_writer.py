@@ -31,7 +31,7 @@ def format_float_list(values: Float32Sequence) -> str:
     return " ".join(map(format_float, values))
 
 
-def make_id(name, suffix):
+def make_id(name: str, suffix: str):
         return f"{name}_{suffix}"
 
 
@@ -81,10 +81,10 @@ def write_geometry(mesh: CdaeV31.Mesh, lib_geometries: ET.Element, mesh_index: i
         uv[:, 1] = 1.0 - uv[:, 1]           # invert V
         return try_write_src(uv.ravel(), name, Accessors.VEC2)
 
-    positions_id = try_write_src(mesh.verts.to_numpy_array(np.float32), "position", Accessors.VEC3)
-    normals_id = try_write_src(mesh.norms.to_numpy_array(np.float32), "normals", Accessors.VEC3)
-    uv0s_id = try_write_src_uv(mesh.tverts0.to_numpy_array(np.float32), "uv0s")
-    uv1s_id = try_write_src_uv(mesh.tverts1.to_numpy_array(np.float32), "uv1s")
+    positions_id = try_write_src(mesh.verts.to_numpy_array(), "position", Accessors.VEC3)
+    normals_id = try_write_src(mesh.norms.to_numpy_array(), "normals", Accessors.VEC3)
+    uv0s_id = try_write_src_uv(mesh.tverts0.to_numpy_array(), "uv0s")
+    uv1s_id = try_write_src_uv(mesh.tverts1.to_numpy_array(), "uv1s")
     color_id = try_write_src(mesh.get_vec4f_colors(), "colors", Accessors.VEC4)
 
     assert positions_id is not None
@@ -96,7 +96,7 @@ def write_geometry(mesh: CdaeV31.Mesh, lib_geometries: ET.Element, mesh_index: i
     ET.SubElement(vertices, DaeTag.input, {"semantic": Semantic.POSITION, "source": f"#{positions_id}"})
 
     # Triangles by draw region
-    indices = mesh.indices.to_numpy_array(np.uint32)
+    indices = mesh.indices.to_numpy_array()
     indices = indices.reshape(-1, 3)[:, [2, 1, 0]].ravel()
     draw_regions = mesh.unpack_regions()
     for reg in draw_regions:
@@ -190,15 +190,15 @@ def write_to_tree(cdae: CdaeV31, dae: ET.Element):
     mesh_mat_names: list[list[str]] = []
     for mesh_index, mesh in enumerate(cdae.meshes):
         mesh_name = cdae_tree.get_mesh_name(mesh_index)
-        mesh_mat_names_2 = []
+        mesh_mat_names_2: list[str] = []
         write_geometry(mesh, lib_geometries, mesh_index, cdae.materials, mesh_mat_names_2, mesh_name)
         mesh_mat_names.append(mesh_mat_names_2)
 
-    default_translations = cdae.defaultTranslations.unpack_list(Vec3F)
-    default_rotation = cdae.defaultRotations.unpack_list(Quat4I16)
+    default_translations = cdae.defaultTranslations.unpack_list()
+    default_rotation = cdae.defaultRotations.unpack_list()
 
     # Build tree: recursively walk nodes and objects
-    def process_node(node_index: int, node: CdaeV31.Node, parent_xml_node):
+    def process_node(node_index: int, node: CdaeV31.Node, parent_xml_node: ET.Element):
         node_name = cdae.names[node.nameIndex]
         xml_node = ET.SubElement(parent_xml_node, DaeTag.node, {"id": node_name, "name": node_name, "type": "NODE"})
 
@@ -242,8 +242,8 @@ def write_to_tree(cdae: CdaeV31, dae: ET.Element):
         lib_animations = ET.SubElement(collada, DaeTag.library_animations)
 
         num_keyframes = seq.numKeyframes
-        node_translations = cdae.nodeTranslations.unpack_list(Vec3F)
-        node_rotation = cdae.nodeRotations.unpack_list(Quat4I16)
+        node_translations = cdae.nodeTranslations.unpack_list()
+        node_rotation = cdae.nodeRotations.unpack_list()
 
         keyframes_node_index = 0
 

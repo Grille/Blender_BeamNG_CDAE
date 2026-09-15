@@ -1,44 +1,45 @@
+from __future__ import annotations
+
 import numpy as np
 
-from typing import Type, TypeVar, Protocol, Self
-
-
-T = TypeVar('T', bound=_PPackable)
+from typing import Protocol
 
 
 class _PPackable(Protocol):
     def unpack(self, data: bytes): ...
     def pack(self) -> bytes: ...
+
+
+
+class _PackDisabled(_PPackable): ...
+
+
+class PPackedVector(Protocol):
+    element_count: int
+    element_size: int
+    data: bytes
+
+
+class PackedVector[TNumpy: np.generic, TPack: _PPackable]:
+
+    def __init__(self, tnumpy: type[TNumpy] = np.float32, tpack: type[TPack] = _PackDisabled, element_size = 4):
+        self._t_numpy = tnumpy
+        self._t_pack = tpack
+        self.element_count: int = 0
+        self.element_size: int = element_size
+        self.data = bytes()
     
 
-
-class PackedVector:
-
-    def __init__(self):
-        self.element_count: int
-        self.element_size: int
-        self.data: bytes
-
-
-    @classmethod
-    def create_empty(cls, size: int):
-        self = cls()
-        self.element_count = 0
-        self.element_size = size
-        self.data = bytes(bytearray(0))
-        return self
-    
-
-    def unpack_list(self, cls: type[T]) -> list[T]:
-        unpacked = []
+    def unpack_list(self) -> list[TPack]:
+        unpacked: list[TPack] = []
         for chunk in self:
-            node = cls()
+            node = self._t_pack()
             node.unpack(chunk)
             unpacked.append(node)
         return unpacked
     
 
-    def pack_list(self, list: list[T]):
+    def pack_list(self, list: list[TPack]):
         data_array = bytearray()
         for obj in list:
             chunk = obj.pack()
@@ -53,28 +54,28 @@ class PackedVector:
             yield self[i]
 
 
-    def __getitem__(self, index):
+    def __getitem__(self, index: int):
         start = index * self.element_size
         end = start + self.element_size
         return self.data[start:end]
     
 
-    def alloc(self, element_count):
+    def alloc(self, element_count: int):
         self.element_count = element_count
         self.data = bytes(bytearray(self.element_count * self.element_size))
     
 
-    def to_numpy_array(self, dtype: np.typing.DTypeLike) -> np.ndarray:
-        size = (len(self.data) // self.element_count) // np.dtype(dtype).itemsize if self.element_count != 0 else 0
-        return np.frombuffer(self.data, dtype, self.element_count * size)
+    def to_numpy_array(self) -> np.typing.NDArray[TNumpy]:
+        size = (len(self.data) // self.element_count) // np.dtype(self._t_numpy).itemsize if self.element_count != 0 else 0
+        return np.frombuffer(self.data, self._t_numpy, self.element_count * size)
     
 
-    def set_numpy_array(self, array: np.ndarray):
+    def set_numpy_array(self, array: np.typing.NDArray[TNumpy]):
         self.data = array.tobytes()
         self.element_count = len(self.data) // self.element_size
 
 
-    def __eq__(self, other) -> bool:
+    def __eq__(self, other: object) -> bool:
         if self is other:
             return True
         if not isinstance(other, PackedVector):
@@ -91,3 +92,4 @@ class PackedVector:
         
 
 
+vec = PackedVector()

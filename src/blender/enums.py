@@ -157,6 +157,7 @@ class SocketIOType(StrEnum):
     OUTPUT = "OUTPUT"
 
 
+
 class SocketType(StrEnum):
     Error = "Error"
     Bool = "Bool"
@@ -170,7 +171,7 @@ class SocketType(StrEnum):
     Closure = "Closure"
 
     @staticmethod
-    def from_data_type(value):
+    def from_data_type(value: str):
         return _SOCKET_DATA_TYPE_INVERTED[value]
 
     @staticmethod
@@ -199,6 +200,18 @@ class SocketType(StrEnum):
         if all_equal: return type0
         if exclusive: return SocketType.Error
         return max_type
+
+    @staticmethod
+    def from_instance(obj: object):
+        if isinstance(obj, tuple):
+            length = len(obj) # pyright: ignore[reportUnknownArgumentType]
+            if length == 3: return SocketType.Vector
+            if length == 4: return SocketType.Color
+            raise ValueError(f"Unexcpected tuple size {length}")
+        if isinstance(obj, bool): return SocketType.Bool
+        if isinstance(obj, int): return SocketType.Integer
+        if isinstance(obj, float): return SocketType.Float
+        raise TypeError(f"")
 
     @property
     def full_name(self):

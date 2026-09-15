@@ -5,7 +5,11 @@ from typing import Any, cast
 
 from ..beamng.numerics import *
 from .enums import *
-from . node_utils import get_node_type_idname
+from . node_utils import get_node_type_idname, get_default_value, SocketValue
+
+
+
+type _InputKey = str | int | bpy.types.NodeSocket
 
 class NodeLayoutError(Exception):
 
@@ -22,7 +26,7 @@ class NodeWalker():
         self.raise_layout_errors = True
         self.last_socket_name: str = ""
         self.last_socket_index: int = 0
-        self.last_socket_value: Any = None
+        self.last_socket_value: SocketValue | None = None
 
 
     def is_node_idname(self, ntype: str | type):
@@ -43,7 +47,7 @@ class NodeWalker():
         return self.current is not None
 
 
-    def get_input(self, input_key: str | int, throw: bool = True) -> bpy.types.NodeSocket | None:
+    def get_input(self, input_key: _InputKey, throw: bool = True) -> bpy.types.NodeSocket | None:
 
         if isinstance(input_key, bpy.types.NodeSocket):
             return input_key
@@ -64,7 +68,7 @@ class NodeWalker():
         return self.get_input(input_key, False) is not None
         
         
-    def get_node(self, input_key: str | int, throw = True) -> bpy.types.Node | None:
+    def get_node(self, input_key: _InputKey, throw = True) -> bpy.types.Node | None:
         
         input = self.get_input(input_key, throw=throw)
 
@@ -125,24 +129,24 @@ class NodeWalker():
         return from_node
     
 
-    def try_follow(self, input_key: str | int):
+    def try_follow(self, input_key: _InputKey):
         self.current = self.get_node(input_key, False)
         return self.current is not None
     
 
-    def follow(self, input_key: str | int):
+    def follow(self, input_key: _InputKey):
         if not self.try_follow(input_key):
             raise NodeLayoutError(f"Next node on {input_key} is None.")
         
 
-    def fork(self, input_key: str | int = None):
+    def fork(self, input_key: _InputKey | None = None):
         walk = type(self)(self.current, stack=self.group_stack)
         if (input_key is not None):
             walk.follow(input_key)
         return walk
     
 
-    def _get_any_value(self, input_key: str | int, idname: str | None):
+    def _get_any_value(self, input_key: _InputKey, idname: str | None):
         input = self.get_input(input_key, throw = False)
         if input is None:
             return None
@@ -152,9 +156,9 @@ class NodeWalker():
             if node is None:
                 if self.last_socket_value is not None:
                     return self.last_socket_value
-                return input.default_value
+                return get_default_value(input)
             elif node.bl_idname == idname:
-                return node.outputs[0].default_value
+                return get_default_value(node.outputs[0])
             return None
         finally:
             self.group_stack = stack
@@ -201,7 +205,7 @@ class NodeWalker():
 
     def get_image(self) -> bpy.types.Image:
         if type(self.current) is bpy.types.ShaderNodeTexImage:
-            return  self.current.image
+            return self.current.image
         raise Exception(f"{type(self.current)} is not a valid image node.")
     
 

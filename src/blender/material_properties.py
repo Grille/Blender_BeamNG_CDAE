@@ -66,7 +66,7 @@ class MaterialProperties(str, Enum):
 
     @staticmethod
     def register():
-        def _set(key, property): setattr(bpy.types.Material, key, property)
+        def _set(key: str, property: object): setattr(bpy.types.Material, key, property)
 
         groundmodels_items = [(item, item, "") for item in GROUNDMODELS]
 
@@ -84,7 +84,7 @@ class MaterialProperties(str, Enum):
 
     @staticmethod
     def unregister():
-        def _del(key): delattr(bpy.types.Material, key)
+        def _del(key: str): delattr(bpy.types.Material, key)
         
         _del(MaterialProperties.GROUND_TYPE_SELECT)
         _del(MaterialProperties.GROUND_TYPE)

@@ -1,17 +1,21 @@
 import struct
-import msgpack
+
 import zstandard
 
-from typing import Any
+from typing import Any, cast
 from io import BufferedWriter, BytesIO
 
 from ...numerics import *
+import msgpack
+
+
+# pyright: reportUnknownMemberType=information
 
 
 class MsgpackWriter:
 
     def __init__(self):
-        self.packer = msgpack.Packer()
+        self.packer = cast(Any, msgpack.Packer())
         self.buffer = BytesIO()
 
 
@@ -40,7 +44,7 @@ class MsgpackWriter:
         self.write(value)
 
 
-    def write_dict(self, value: dict):
+    def write_dict(self, value: dict[str, object]):
         self.write(value)
 
 

@@ -54,7 +54,7 @@ class ObjectProperties(str, Enum):
 
     @staticmethod
     def register():
-        def _set(key, property): setattr(bpy.types.Object, key, property)
+        def _set(key: str, property: object): setattr(bpy.types.Object, key, property)
 
         _set(ObjectProperties.PATH, bpy.props.StringProperty(
             name="Node Path",
@@ -98,6 +98,6 @@ class ObjectProperties(str, Enum):
 
     @staticmethod
     def unregister():
-        def _del(key): delattr(bpy.types.Object, key)
+        def _del(key: str): delattr(bpy.types.Object, key)
         
         _del(ObjectProperties.PATH)

@@ -1,4 +1,4 @@
-import numpy as np
+#import numpy as np
 from .numerics import *
 
 U8_NORMAL_TABLE = [
@@ -265,7 +265,7 @@ U8_NORMAL_TABLE_NP = np.array(U8_NORMAL_TABLE)
 class U8NormalTable:
 
     @staticmethod
-    def encode_normal(normal: Vec3F | tuple):
+    def encode_normal(normal: Vec3F | Tuple3F):
 
         if isinstance(normal, Vec3F):
             normal = normal.tuple3

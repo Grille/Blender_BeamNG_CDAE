@@ -2,21 +2,24 @@ import struct
 import msgpack
 import zstandard
 
-from typing import Any
+from typing import Any, cast
 from io import BufferedReader
 
 from ...numerics import *
 
 
+# pyright: reportUnknownMemberType=information
+
+
 class MsgpackReader:
 
-    def __init__(self, unpacker: msgpack.Unpacker):
+    def __init__(self, unpacker: Any):
         self.unpacker = unpacker
 
 
     @staticmethod
     def from_bytes(data: bytes) -> 'MsgpackReader':
-        unpacker = msgpack.Unpacker(max_buffer_size=0)
+        unpacker = cast(Any, msgpack.Unpacker(max_buffer_size=0))
         unpacker.feed(data)
         return MsgpackReader(unpacker)
         
@@ -74,10 +77,11 @@ class MsgpackReader:
 
         if not isinstance(value, list):
             raise Exception()
+        value = cast(list[int], value)
         
         bits: list[bool] = []
         chunk_count: int = value[0]
-        chunks: list[int] = value[1]
+        chunks: list[int] = value
 
         if chunk_count != len(chunks):
             raise Exception(f"expected: {chunk_count}, actual: {len(chunks)}")
@@ -93,6 +97,7 @@ class MsgpackReader:
         value = self.read_next()
 
         if isinstance(value, list):
+            value = cast(list[float], value)
             if (len(value) != size):
                 raise Exception()
             return value

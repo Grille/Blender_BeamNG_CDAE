@@ -26,6 +26,8 @@ class MaterialParser:
 
     def parse_to_bmat(self, src: Material, dst: bpy.types.Material):
 
+        assert dst.node_tree is not None
+
         tree = NodeTreeBuilder(dst.node_tree)
         tree.clear()
 

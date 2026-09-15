@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 import struct
 
 from dataclasses import dataclass, asdict
-from typing import Protocol, Sequence, TypeVar
+from typing import Protocol, Sequence
 from enum import Enum, IntFlag
 from numpy.typing import NDArray
 
@@ -12,7 +14,6 @@ from ..numerics import *
 
 class _PHasNameIndex(Protocol):
     nameIndex: int
-T_NAMEINDEX = TypeVar('T_NAMEINDEX', bound=_PHasNameIndex)
 
 
 
@@ -133,7 +134,7 @@ class CdaeV31:
             return (obj_index, obj)
         
 
-        def _get_item_from_list(self, key: str, target: 'list[T_NAMEINDEX]'):
+        def _get_item_from_list[T:_PHasNameIndex](self, key: str, target: list[T]):
             for item in target:
                 if self.cdae.names[item.nameIndex] == key:
                     return item
@@ -394,27 +395,26 @@ class CdaeV31:
             self.center: Vec3F = Vec3F()
             self.radius: float = 0.0
 
-            create_empty = PackedVector.create_empty
-            self.verts = create_empty(12) #vtx vec3
-            self.tverts0 = create_empty(8) #vtx vec2
-            self.tverts1 = create_empty(8) #vtx vec2
-            self.colors = create_empty(4) #vtx int/rgba
-            self.norms = create_empty(12) #vtx vec3
-            self.encoded_norms = create_empty(1) #vtx byte
-            self.draw_regions = create_empty(12) #start: int, count: int, material_index: int (DrawRegion)
-            self.indices = create_empty(4) #int
-            self.tangents = create_empty(16) #vtx vec4
+            self.verts = PackedVector(np.float32, Vec3F, 12) #vtx vec3
+            self.tverts0 = PackedVector(np.float32, Vec2F, 8) #vtx vec2
+            self.tverts1 = PackedVector(np.float32, Vec2F, 8) #vtx vec2
+            self.colors = PackedVector(np.ubyte, element_size=4) #vtx int/rgba
+            self.norms = PackedVector(np.float32, Vec3F, 12) #vtx vec3
+            self.encoded_norms = PackedVector(np.ubyte, element_size=1) #vtx byte
+            self.draw_regions = PackedVector(np.int32, CdaeV31.Mesh.DrawRegion, 12) #start: int, count: int, material_index: int (DrawRegion)
+            self.indices = PackedVector(np.int32, element_size=4) #int
+            self.tangents = PackedVector(np.float32, Vec4F, 16) #vtx vec4
 
             self.vertsPerFrame: int = 0
             self.flags: int = 0
 
 
         def unpack_regions(self):
-            return self.draw_regions.unpack_list(CdaeV31.Mesh.DrawRegion)
+            return self.draw_regions.unpack_list()
 
 
         def get_vec4f_colors(self):
-            byte_array = self.colors.to_numpy_array(np.ubyte)
+            byte_array = self.colors.to_numpy_array()
             float_array = byte_array.astype(np.float32) / 255.0
             return float_array
         
@@ -491,33 +491,31 @@ class CdaeV31:
         self.center: Vec3F = Vec3F()
         self.bounds: Box6F = Box6F(-2,-2,-2, 2, 2, 2)
 
-        create_empty = PackedVector.create_empty
+        self.nodes = PackedVector(np.ubyte, CdaeV31.Node, 20) #Node
+        self.objects = PackedVector(np.ubyte, CdaeV31.Object, 24) #Object
 
-        self.nodes = create_empty(20) #Node
-        self.objects = create_empty(24) #Object
+        self.subShapeFirstNode = PackedVector(np.int32) #int
+        self.subShapeFirstObject = PackedVector(np.int32) #int
+        self.subShapeNumNodes = PackedVector(np.int32) #int
+        self.subShapeNumObjects = PackedVector(np.int32) #int
 
-        self.subShapeFirstNode = create_empty(4) #int
-        self.subShapeFirstObject = create_empty(4) #int
-        self.subShapeNumNodes = create_empty(4) #int
-        self.subShapeNumObjects = create_empty(4) #int
+        self.defaultRotations = PackedVector(np.int16, Quat4I16, 8) #quat4h
+        self.defaultTranslations = PackedVector(np.float32, Vec3F, 12) #vec3f
+        self.defaultAlignedScales = PackedVector(np.float32, Vec3F, 12) #vec3f virtual!
+        self.nodeRotations = PackedVector(np.int16, Quat4I16, 8) #quat4h
+        self.nodeTranslations = PackedVector(np.float32, Vec3F, 12) #vec3f
 
-        self.defaultRotations = create_empty(8) #quat4h
-        self.defaultTranslations = create_empty(12) #vec3f
-        self.defaultAlignedScales = create_empty(12) #vec3f virtual!
-        self.nodeRotations = create_empty(8) #quat4h
-        self.nodeTranslations = create_empty(12) #vec3f
+        self.nodeUniformScales = PackedVector(np.float32) #float
+        self.nodeAlignedScales = PackedVector(np.float32, Vec3F, 12) #vec3f
+        self.nodeArbitraryScaleFactors = PackedVector(np.float32, Vec3F, 12) #vec3f
+        self.nodeArbitraryScaleRots = PackedVector(np.int16, Quat4I16, 8) #quat4h
 
-        self.nodeUniformScales = create_empty(4) #float
-        self.nodeAlignedScales = create_empty(12) #vec3f
-        self.nodeArbitraryScaleFactors = create_empty(12) #vec3f
-        self.nodeArbitraryScaleRots = create_empty(8) #quat4h
+        self.groundTranslations = PackedVector(np.float32, Vec3F, 12) #vec3f
+        self.groundRotations = PackedVector(np.int16, Quat4I16, 8) #quat4h
 
-        self.groundTranslations = create_empty(12) #vec3f
-        self.groundRotations = create_empty(8) #quat4h
-
-        self.objectStates = create_empty(12) #CdaeV31.ObjectState
-        self.triggers = create_empty(8) #CdaeV31.Trigger
-        self.details = create_empty(52) #CdaeV31.Detail
+        self.objectStates = PackedVector(np.ubyte, CdaeV31.ObjectState, 12) #CdaeV31.ObjectState
+        self.triggers = PackedVector(np.ubyte, CdaeV31.Trigger, 8) #CdaeV31.Trigger
+        self.details = PackedVector(np.ubyte, CdaeV31.Detail, 52) #CdaeV31.Detail
 
         self.names: list[str] = []
 
@@ -545,28 +543,28 @@ class CdaeV31:
 
 
     def unpack_nodes(self):
-        return self.nodes.unpack_list(CdaeV31.Node)
+        return self.nodes.unpack_list()
 
 
     def unpack_objects(self):
-        return self.objects.unpack_list(CdaeV31.Object)
+        return self.objects.unpack_list()
     
 
     def unpack_tree(self):
         return CdaeV31.Tree(
             self, self.unpack_nodes(), 
             self.unpack_objects(), 
-            self.defaultTranslations.unpack_list(Vec3F), 
-            self.defaultRotations.unpack_list(Quat4I16),
-            self.defaultAlignedScales.unpack_list(Vec3F)
+            self.defaultTranslations.unpack_list(), 
+            self.defaultRotations.unpack_list(),
+            self.defaultAlignedScales.unpack_list()
         )
     
 
     def unpack_subshapes(self):
-        fn = self.subShapeFirstNode.to_numpy_array(np.uint32)
-        nn = self.subShapeNumNodes.to_numpy_array(np.uint32)
-        fo = self.subShapeFirstObject.to_numpy_array(np.uint32)
-        no = self.subShapeNumObjects.to_numpy_array(np.uint32)
+        fn = self.subShapeFirstNode.to_numpy_array()
+        nn = self.subShapeNumNodes.to_numpy_array()
+        fo = self.subShapeFirstObject.to_numpy_array()
+        no = self.subShapeNumObjects.to_numpy_array()
 
         count = fn.size
         assert all(arr.size == count for arr in (nn, fo, no)), "Subshape buffers must have the same length"
@@ -584,18 +582,18 @@ class CdaeV31:
     
 
     def unpack_details(self):
-        return self.details.unpack_list(CdaeV31.Detail)
+        return self.details.unpack_list()
     
 
     def unpack_triggers(self):
-        return self.triggers.unpack_list(CdaeV31.Trigger)
+        return self.triggers.unpack_list()
     
 
     def unpack_states(self):
-        return self.objectStates.unpack_list(CdaeV31.ObjectState)
+        return self.objectStates.unpack_list()
     
 
-    def pack_nodes(self, list):
+    def pack_nodes(self, list: list[CdaeV31.Node]):
         return self.nodes.pack_list(list)
 
 

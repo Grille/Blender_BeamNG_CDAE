@@ -3,13 +3,14 @@ import shutil
 import sys
 import subprocess
 
+
 python_exe = sys.executable
 addon_dir = os.path.dirname(__file__)
 modules_dir = os.path.join(addon_dir, "modules")
 bpy_dir = os.path.join(addon_dir, "bpy")
 
 
-def install_package(modules_dir, package_name):
+def install_package(modules_dir: str, package_name: str):
     try:
         print(f"Install {package_name} in {modules_dir}")
         subprocess.check_call([
@@ -21,7 +22,7 @@ def install_package(modules_dir, package_name):
         print("Failed to install", package_name, e)
 
 
-def cleanup_dir(dir):
+def cleanup_dir(dir: str):
     print(f"cleanup {dir}")
     shutil.rmtree(dir)
     os.mkdir(dir)

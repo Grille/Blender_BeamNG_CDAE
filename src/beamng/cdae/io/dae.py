@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import mathutils
 import xml.etree.cElementTree as ET
 #import numpy as np
@@ -76,7 +78,7 @@ class Geometry:
 
     @dataclass
     class Source:
-        array: NDArray
+        array: NDArray[np.float32]
         element_count: int
         stride: int
 
@@ -92,7 +94,7 @@ class Geometry:
         triangle_count: int
         material_name: str
         indices: NDArray[np.int32]
-        inputs: list['Geometry.Triangles.Input']
+        inputs: list[Geometry.Triangles.Input]
 
 
         @dataclass
@@ -138,8 +140,8 @@ class Geometry:
 
     def __init__(self):
         self.name: str
-        self.sources: dict[str, 'Geometry.Source'] = {}
-        self.triangles: list['Geometry.Triangles'] = []
+        self.sources: dict[str, Geometry.Source] = {}
+        self.triangles: list[Geometry.Triangles] = []
 
 
 

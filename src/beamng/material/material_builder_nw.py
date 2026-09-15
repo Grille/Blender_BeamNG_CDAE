@@ -1,7 +1,7 @@
 import bpy
 import os
 
-from typing import TypeVar, Generic, Optional, cast
+from typing import cast
 from dataclasses import dataclass
 
 from ...blender.node_walker import NodeWalker
@@ -174,7 +174,7 @@ class MaterialNodeWalker(NodeWalker):
         return False
         
 
-    def get_any_socket(self, keys: list[str|int]):
+    def get_any_socket(self, keys: str | list[str|int]):
         if not isinstance(keys, list):
             return self.get_socket(keys)
         if len(keys) == 0:
@@ -183,7 +183,7 @@ class MaterialNodeWalker(NodeWalker):
             socket = self.get_socket(key)
             if socket.exists:
                 return socket
-        return socket
+        raise KeyError()
 
 
     def parse_stages_recursively(self, stages: list['MaterialNodeWalker.MatStageInfo'] = None):

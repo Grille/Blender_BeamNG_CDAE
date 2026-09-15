@@ -1,12 +1,11 @@
 import os
 
-from typing import TypeVar, Generic
+from typing import cast
 
 from ..numerics import *
 from ...blender.enums import *
 
 
-TDICT = TypeVar('TDICT', bound='_BaseDict')
 
 type Tuple4 = tuple[float, float, float, float]
 type Tuple3 = tuple[float, float, float]
@@ -15,22 +14,24 @@ type Tuple2 = tuple[float, float]
 
 
 class _BaseDict:
+    __slots__ = "value_dict"
 
-    def __init__(self, dict: dict[str], **kwargs):
-        self._dict = dict
+    def __init__(self, dict: dict[str, object], **kwargs: object):
+        self.value_dict = dict
 
 
     def get_key(self, key: str) -> str | None: return key
 
 
-    def new(self, type: type[TDICT], **kwargs):
-        return type(self._dict, **kwargs)
+    def new[T: '_BaseDict'](self, type: type[T], **kwargs: object):
+        return type(self.value_dict, **kwargs)
 
 
 
 class _KeyPtrDict(_BaseDict):
+    __slots__ = "_key_dict"
 
-    def __init__(self, dict: dict[str], **kwargs: str):
+    def __init__(self, dict: dict[str, object], **kwargs: str):
         super().__init__(dict)
         self._key_dict = kwargs
 
@@ -39,8 +40,8 @@ class _KeyPtrDict(_BaseDict):
 
 
 
-T = TypeVar('T')
-class DictProperty(Generic[T]):
+class DictProperty[T]():
+    __slots__ = "key", "default"
 
     def __init__(self, key: str, default: T | None = None):
         self.key = key
@@ -51,24 +52,24 @@ class DictProperty(Generic[T]):
         return instance.get_key(self.key)
 
 
-    def __get__(self, instance: _BaseDict, owner) -> T | None:
+    def __get__(self, instance: _BaseDict, owner: object) -> T | None:
         key = self._get_full_key(instance)
         if key is None: return None
-        return instance._dict.get(self._get_full_key(instance), self.default)
+        return cast(T, instance.value_dict.get(key, self.default))
 
 
     def __set__(self, instance: _BaseDict, value: T | None):
         key = self._get_full_key(instance)
         if key is None: raise KeyError(f"{self.key} not valid in this context")
         if value is None or value == self.default:
-            instance._dict.pop(key, None)
+            instance.value_dict.pop(key, None)
         else:
-            instance._dict[key] = value
+            instance.value_dict[key] = value
 
 
 
 class _TextureSocket(_KeyPtrDict):
-    map = DictProperty[float]("map")
+    map = DictProperty[str]("map")
     uv = DictProperty[int]("uv")
 
 class _TexStrengthSocket(_TextureSocket):
@@ -87,7 +88,7 @@ class _TexPaletteSocket(_TextureSocket):
     clear_coat = DictProperty[bool]("paletteClearCoat")
     clear_coat_roughness = DictProperty[bool]("paletteClearCoatRoughness")
 
-class _TexColorSocket(Generic[T], _TextureSocket):
+class _TexColorSocket[T](_TextureSocket):
     factor = DictProperty[T]("value")
     vertex_enabled = DictProperty[bool]("vertex")
     instance_enabled = DictProperty[bool]("instance")
@@ -102,7 +103,6 @@ class _TexSpecularSocket(_TextureSocket):
 
 class _TexCCSocket(_TexFactorSocket):
     roughness = DictProperty[float]("clearCoatRoughnessFactor")
-
 
 
 class AnimationFlags(IntEnum):
@@ -128,9 +128,9 @@ class MaterialStage(_BaseDict):
         scale = DictProperty[Tuple2]("detailScale")
 
         def __init__(self, parent: 'MaterialStage'):
-            super().__init__(parent._dict) 
+            super().__init__(parent.value_dict) 
 
-            def new(map, value, uv):
+            def new(map: str, value: str, uv: str | None):
                 return parent.new_socket(_TexStrengthSocket, map=map, value=value, uv=uv)
 
             self.color = new("detailMap", "detailBaseColorMapStrength", "detailMapUseUV")
@@ -168,7 +168,7 @@ class MaterialStage(_BaseDict):
     use_anisotropic = DictProperty[bool]("useAnisotropic")
 
 
-    def __init__(self, dict: dict[str] | None):
+    def __init__(self, dict: dict[str, object]):
         super().__init__(dict)
 
         self._sockets: list[_TextureSocket] = []
@@ -177,13 +177,13 @@ class MaterialStage(_BaseDict):
         self.legacy_light = self.new(MaterialStage._LegacyLight)
         self.animation = self.new(MaterialStage._Animation)
 
-        def newvs(map, value, uv, type: type[TDICT] = _TexFactorSocket, **kwargs):
+        def newvs[T:_TextureSocket](map: str, value: str | None, uv: str | None, type: type[T] = _TexFactorSocket, **kwargs: object):
             return self.new_socket(type, map=map, value=value, uv=uv, **kwargs)
 
-        def newcs(map, value, uv, instance, vertex, type: type[TDICT] = _TexColorSocket[Tuple4]):
+        def newcs[T:_TextureSocket](map: str, value: str, uv: str, instance: str, vertex: str, type: type[T] = _TexColorSocket[Tuple4]):
             return newvs(map, value, uv, type, instance=instance, vertex=vertex)
 
-        def newos(map, value, uv, instance):
+        def newos(map: str, value: str, uv: str, instance: str):
             return self.new_socket(_TexOpacitySocket, map=map, value=value, uv=uv, instance=instance)
         
         self.color = newcs("baseColorMap", "baseColorFactor", "diffuseMapUseUV", "instanceDiffuse", "vertColor")
@@ -201,7 +201,7 @@ class MaterialStage(_BaseDict):
         self.clear_coat_normal = newvs("clearCoatBottomNormalMap", "clearCoatBottomNormalMapStrength", None, _TexStrengthSocket)
 
 
-    def new_socket(self, type: type[TDICT], **kwargs):
+    def new_socket[T:_TextureSocket](self, type: type[T], **kwargs: object):
         socket = self.new(type, **kwargs)
         self._sockets.append(socket)
         return socket
@@ -212,7 +212,7 @@ class MaterialStage(_BaseDict):
             if socket.map is not None: target.add(socket.map)
 
 
-    def add_relpath(self, relpath):
+    def add_relpath(self, relpath: str):
         for socket in self._sockets:
             if socket.map is not None and relpath != ".":
                 socket.map = os.path.join(relpath, socket.map)
@@ -223,6 +223,10 @@ class MaterialVersion(FloatEnum):
     NONE = 0.0
     V1 = 1.0
     V1_5 = 1.5
+
+
+
+type _RawStages = list[dict[str, object]]
 
 
 
@@ -238,7 +242,7 @@ class Material(_BaseDict):
         enabled = DictProperty[bool]("subSurface")
         intensity = DictProperty[float]("subSurfaceIntensity")
 
-    _raw_stages = DictProperty[dict[str]]("Stages")
+    _raw_stages = DictProperty[_RawStages]("Stages")
 
     name = DictProperty[str]("name")
     class_name = DictProperty[str]("class")
@@ -261,15 +265,15 @@ class Material(_BaseDict):
         super().__init__(dict, **kwargs)
 
         if self._raw_stages is None:
-            self._raw_stages = [{},{},{},{}]
+            self._raw_stages = cast(_RawStages, [{},{},{},{}])
 
         raw_stages = self._raw_stages
         while len(raw_stages) < 4: raw_stages.append({})
 
         self.stages = [MaterialStage(raw_stages[0]), MaterialStage(raw_stages[1]), MaterialStage(raw_stages[2]), MaterialStage(raw_stages[3])]
 
-        self.translucent = Material._Translucent(self._dict)
-        self.subsurface = Material._Subsurface(self._dict)
+        self.translucent = Material._Translucent(self.value_dict)
+        self.subsurface = Material._Subsurface(self.value_dict)
 
 
     def add_texture_names_to(self, target: set[str]):
@@ -277,6 +281,6 @@ class Material(_BaseDict):
             stage.add_texture_names_to(target)
 
 
-    def add_relpath(self, relpath):
+    def add_relpath(self, relpath: str):
         for stage in self.stages:
             stage.add_relpath(relpath)

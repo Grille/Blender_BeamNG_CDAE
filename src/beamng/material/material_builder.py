@@ -20,7 +20,7 @@ class SocketParserSettings:
 class MaterialBuilder:
 
     def __init__(self, default_version = MaterialVersion.V1_5):
-        self.material = Material()
+        self.material = Material({})
         self.default_version = default_version
         self.uv1_hint = "1"
 
@@ -61,7 +61,7 @@ class MaterialBuilder:
         self.material.version = ctx.try_get_version_hint()
         self.material.dynamic_cubemap = ctx.try_get_reflect_hint()
 
-        def parse_socket(socket, socket_name: str | list[str], settings: SocketParserSettings, detail = None):
+        def parse_socket(socket, socket_name: str | list[str | int], settings: SocketParserSettings, detail = None):
             nw_socket = ctx.get_any_socket(socket_name)
             self.parse_socket(socket, nw_socket, settings)
             if detail and nw_socket.child:

@@ -7,7 +7,7 @@ from enum import Enum
 from io import BufferedReader, BufferedWriter
 
 from ..v31 import CdaeV31
-from ..packed_vector import PackedVector
+from ..packed_vector import PPackedVector
 from .msgpack_reader import MsgpackReader
 from .msgpack_writer import MsgpackWriter
 from ...numerics import *
@@ -17,7 +17,7 @@ def get_body_bytes(cdae: CdaeV31) -> bytes:
 
     body = MsgpackWriter()
 
-    def write_vector(pvec: PackedVector):
+    def write_vector(pvec: PPackedVector):
         body.write_int32(pvec.element_count)
         body.write_int32(pvec.element_size)
         body.write_bytes(pvec.data)
@@ -130,7 +130,7 @@ def get_body_bytes(cdae: CdaeV31) -> bytes:
 
 
 def get_object_names(cdae: CdaeV31) -> list[str]:
-    list = []
+    list: list[str] = []
     for obj in cdae.unpack_objects():
         list.append(cdae.names[obj.nameIndex])
     return list
@@ -148,7 +148,7 @@ class CdaeWriter:
             body_bytes = z.compress(body_bytes)
 
         head = MsgpackWriter()
-        head_dict = {
+        head_dict: dict[str, object] = {
             "info": "\r\n\r\n\r\nWelcome! This is a binary file :D\r\nPlease read the docs at https://go.beamng.com/shapeMessagepackFileformat\r\n\r\n\r\n",
             "compression": compress,
             "bodysize": len(body_bytes),

@@ -1,26 +1,30 @@
 import os
 import bpy
 
-from bpy.types import Operator
-from bpy.props import BoolProperty, IntProperty, FloatProperty, EnumProperty, StringProperty
-
-from ..beamng.material.material_parser import MaterialParser
+from ..beamng.material.material_parser import MaterialParser, MaterialVersion
+from .stubs import Operator
 
 # pyright: reportInvalidTypeForm=false
+# pyright: reportIncompatibleMethodOverride=none
 
 class OT_CreateBeamNgMaterial(Operator):
     bl_idname = "grille.create_beamng_material"
     bl_label = "Create BeamNG Material"
     bl_description = "Save current settings as a preset"
 
-    version: bpy.props.FloatProperty(name="version", default=1.0)
+    version: float
 
     def execute(self, context):
-        parser = MaterialParser(self.version)
+        parser = MaterialParser(MaterialVersion(self.version))
         parser.force_alpha_clip = True
+        assert context.material is not None
         parser.convert_bmat(context.material)
 
         return {'FINISHED'}
+
+OT_CreateBeamNgMaterial.__annotations__.update( 
+    version = bpy.props.FloatProperty(name="version", default=1.0)
+)
 
 
 

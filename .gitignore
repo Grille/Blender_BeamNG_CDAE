@@ -2,6 +2,5 @@
 /modules
 /config
 /bpy
-/.vscode
 
 __pycache__/

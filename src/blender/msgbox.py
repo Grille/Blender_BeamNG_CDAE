@@ -1,10 +1,11 @@
 import bpy
 
 from .enums import *
+from .stubs import Operator
 
 # pyright: reportInvalidTypeForm=false
 
-class MessageBox(bpy.types.Operator):
+class MessageBox(Operator):
     bl_idname = "grille_beamng_cdae.msgbox"
     bl_label = "My Message Box"
 
@@ -12,6 +13,8 @@ class MessageBox(bpy.types.Operator):
 
     def execute(self, context):
         print("YES clicked")
+
+        return {'FINISHED'}
 
     def cancel(self, context):
         print("NO clicked")

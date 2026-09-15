@@ -5,39 +5,43 @@ import numpy as np
 from io import TextIOWrapper
 from dataclasses import asdict
 
-from typing import Any
-from ..packed_vector import PackedVector
+from typing import Any, cast, Sequence
+from ..packed_vector import PPackedVector
 from ..v31 import CdaeV31
+
+
+
+type _DictList = list[dict[str, object]]
 
 
 class DebugWriter:
     
     @staticmethod
-    def vec_to_dbg(vector: PackedVector):
+    def vec_to_dbg(vector: PPackedVector):
         return f"count:{vector.element_count}*size:{vector.element_size}=={len(vector.data)}"
 
     @staticmethod 
     def to_dict(cdae: CdaeV31):
 
-        def add_debug_fields(json: dict[str, Any]):
+        def add_debug_fields(json: dict[str, object]):
             nameIndex = json.get("nameIndex", None)
             if nameIndex is not None:
-                 json["__NAME"] = cdae.names[nameIndex]
+                 json["__NAME"] = cdae.names[cast(int, nameIndex)]
             return json
         
-        def get_dict_list(items):
-            dict_list = []
+        def get_dict_list(items: Sequence[Any]):
+            dict_list: _DictList = []
             for item in items:
                 dict_list.append(add_debug_fields(asdict(item)))
             return dict_list
         
-        json_mesh_list = []
+        json_mesh_list: _DictList = []
         for mesh in cdae.meshes:
 
-            indices = mesh.indices.to_numpy_array(np.int32)
+            indices = mesh.indices.to_numpy_array()
             regions = mesh.unpack_regions()
 
-            primitives = []
+            primitives: _DictList = []
             for region in regions:
 
                 region_indices = indices[region.get_indices_range()]
@@ -76,14 +80,14 @@ class DebugWriter:
                 }
             })
 
-        json_mat_list = []
+        json_mat_list: _DictList = []
         for mat in cdae.materials:
             json_mat_list.append({
                 "name": mat.name,
                 "flags": mat.flags,
             })
 
-        json_seq_list = []
+        json_seq_list: _DictList = []
         for seq in cdae.sequences:
             json_seq_list.append(add_debug_fields({
                 "nameIndex": seq.nameIndex,
@@ -109,7 +113,7 @@ class DebugWriter:
                 "matFrameMatters": seq.matFrameMatters,
             }))
 
-        json = {
+        json: dict[str, object] = {
             "info": {
                 "smallest_visible_size": cdae.smallest_visible_size,
                 "smallest_visible_dl": cdae.smallest_visible_dl,

@@ -1,0 +1,23 @@
+{
+    "python.analysis.extraPaths": [
+        "${workspaceFolder}/bpy",
+        "${workspaceFolder}/modules",
+        "${workspaceFolder}/src",
+    ],
+    "python.analysis.typeCheckingMode": "strict",
+    "python.analysis.diagnosticSeverityOverrides": {
+        "reportMissingModuleSource": "none",
+        "reportUnusedExpression": "none",
+        "reportOptionalMemberAccess": "warning",
+        "reportOptionalSubscript": "warning",
+        "reportOptionalIterable": "warning",
+        "reportImportCycles": "warning",
+        "reportMissingParameterType": "none",
+        "reportUnnecessaryComparison": "information",
+        "reportUnnecessaryIsInstance": "information",
+        "reportUnnecessaryCast": "information",
+        "reportUnusedVariable": "information",
+        "reportUnusedImport": "information",
+        "reportUnusedFunction": "information",
+    },
+}

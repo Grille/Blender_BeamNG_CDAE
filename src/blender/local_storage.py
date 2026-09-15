@@ -2,7 +2,7 @@ import os
 import bpy
 import json
 
-from typing import Any
+from typing import cast
 
 DEFAULT = "default"
 PRESETS = "presets"
@@ -10,9 +10,14 @@ CONFIG_DIR_PATH = "addons/grille_beamng_cdae/config"
 
 
 
+type _ObjDict = dict[str, object]
+type _DictDict = dict[str, _ObjDict]
+
+
+
 class Presets:
 
-    def __init__(self, default_key: str, presets: dict[str, dict[str, Any]]):
+    def __init__(self, default_key: str, presets: _DictDict):
         self.default_key = default_key
         self.presets = presets
 
@@ -54,7 +59,7 @@ class Presets:
 
 class LocalStorage:
 
-    cache: dict[str, Any] = {}
+    cache: _DictDict = {}
 
     @staticmethod
     def _get_file_path(key: str):
@@ -63,11 +68,12 @@ class LocalStorage:
 
 
     @staticmethod
-    def get(key: str) ->  dict[str, Any]:
+    def get(key: str) -> _ObjDict:
 
         if key in LocalStorage.cache:
             return LocalStorage.cache[key]
-        
+
+        data: _ObjDict
         filepath = LocalStorage._get_file_path(key)
         try:
             with open(filepath, 'r') as f:
@@ -81,12 +87,14 @@ class LocalStorage:
 
 
     @staticmethod
-    def set(key: str, data: dict[str, Any]):
+    def set(key: str, data: _ObjDict | None):
         filepath = LocalStorage._get_file_path(key)
         if (data is None or len(data) == 0) and os.path.isfile(filepath):
             LocalStorage.cache[key] = {}
             os.remove(filepath)
             return
+
+        assert data is not None
         
         LocalStorage.cache[key] = data
         with open(filepath, 'w') as f:
@@ -96,12 +104,16 @@ class LocalStorage:
     @staticmethod
     def get_presets(key: str):
         data = LocalStorage.get(key)
-        return Presets(data.get(DEFAULT, ""), data.get(PRESETS, {}))
+        default = data.get(DEFAULT)
+        if not isinstance(default, str): raise TypeError()
+        presets = data.get(PRESETS)
+        if not isinstance(presets, dict): raise TypeError()
+        return Presets(default, cast(_DictDict, presets))
     
 
     @staticmethod
     def set_presets(key: str, presets: Presets):
-        data = {
+        data: dict[str, object] = {
             DEFAULT: presets.default_key,
             PRESETS: presets.presets,
         }

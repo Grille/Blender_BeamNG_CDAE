@@ -1,7 +1,6 @@
 import bpy
 from .enums import *
 from .node_walker import NodeWalker
-from .enums import *
 
 
 
