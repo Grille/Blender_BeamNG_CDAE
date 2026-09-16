@@ -10,7 +10,6 @@ from typing import NamedTuple, Any, Callable, Protocol, Sequence, Self, overload
 from grille_cdae.enums import *
 
 from .node_walker import NodeWalker
-from .node_utils import *
 
 
 
@@ -274,7 +273,7 @@ class NodeTreeBuilder:
                 if not isinstance(value, (float, int)): raise TypeError(type(value))
                 value = (value, value, value)
 
-            set_default_value(input, value)
+            butils.set_default_value(input, value)
 
 
         def link_from(self, src: LinkSource) -> None:
@@ -369,13 +368,13 @@ class NodeTreeBuilder:
 
 
     @overload
-    def create_node(self, node_type: str, **dict: object) -> bpy.types.Node: ...
+    def create_node(self, node_type: str, **dict: object) -> types.Node: ...
     @overload
-    def create_node[T:bpy.types.Node](self, node_type: type[T], **dict: object) -> T: ...
+    def create_node[T:types.Node](self, node_type: type[T], **dict: object) -> T: ...
 
-    def create_node(self, node_type: str | type, **dict: object):
+    def create_node[T:types.Node](self, node_type: str | type[T], **dict: object) -> T | types.Node:
 
-        idname = get_node_type_idname(node_type)
+        idname = butils.get_idname(node_type)
         node = self.tree.nodes.new(idname)
 
         for key, value in dict.items():

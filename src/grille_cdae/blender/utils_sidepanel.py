@@ -1,5 +1,5 @@
 from grille_cdae.common import *
-from grille_cdae.common.bpyt import PropertyGroup, Operator, Panel
+from grille_cdae.common.basetypes import PropertyGroup, Operator, Panel
 
 from ..beamng.material.material import MaterialVersion
 from ..beamng.material.material_parser import MaterialParser
@@ -11,8 +11,8 @@ class UtilsPanelPropertyGroup(PropertyGroup):
     matconv_aclip: bool
     matconv_force: bool
 
-bpyp.anotate_properties(UtilsPanelPropertyGroup,
-    matconv_version = bpyp.Enum(
+props.anotate_properties(UtilsPanelPropertyGroup,
+    matconv_version = props.Enum(
         name="Material Version",
         description="BeamNG material conversion version",
         items=[
@@ -21,12 +21,12 @@ bpyp.anotate_properties(UtilsPanelPropertyGroup,
         ],
         default="1.0",
     ),
-    matconv_aclip = bpyp.Bool(
+    matconv_aclip = props.Bool(
         name="Enable Alpha Clip",
         description="",
         default=True,
     ),
-    matconv_force = bpyp.Bool(
+    matconv_force = props.Bool(
         name="Force Conversion",
         description="Force conversion even if materials already seem valid",
         default=False,

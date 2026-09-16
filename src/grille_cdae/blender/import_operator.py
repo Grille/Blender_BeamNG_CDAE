@@ -73,11 +73,11 @@ class ImportCdae(PresetOperator, ImportHelper):
         if self.debug_dump:
             layout.prop(self, "debug_dump_key")
 
-bpyp.anotate_properties(ImportCdae,
-    filter_glob = bpyp.String(default="*.dae;*.cdae;*.json", options={'HIDDEN'}),
-    validate_meshes = bpyp.Bool(name="Validate Meshes", default=True),
-    debug_dump = bpyp.Bool(name="Debug Info Enabled", default=False),
-    debug_dump_key = bpyp.String(name="Key", default="debug_cdae"),
+ImportCdae.anotate(
+    filter_glob = props.String(default="*.dae;*.cdae;*.json", options={'HIDDEN'}),
+    validate_meshes = props.Bool(name="Validate Meshes", default=True),
+    debug_dump = props.Bool(name="Debug Info Enabled", default=False),
+    debug_dump_key = props.String(name="Key", default="debug_cdae"),
 )
 
 
@@ -87,7 +87,7 @@ class ImportRegistry:
 
 
     @staticmethod
-    def menu_func(menu: bpyt.Menu, context: bpy.types.Context):
+    def menu_func(menu: basetypes.Menu, context: bpy.types.Context):
         menu.layout.operator(ImportCdae.bl_idname, text="BeamNG (.dae/.cdae)")
 
 

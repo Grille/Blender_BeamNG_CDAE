@@ -4,7 +4,7 @@ from ..beamng.material.material_parser import MaterialParser, MaterialVersion
 
 
 
-class OT_CreateBeamNgMaterial(bpyt.Operator):
+class OT_CreateBeamNgMaterial(basetypes.Operator):
     bl_idname = "grille.create_beamng_material"
     bl_label = "Create BeamNG Material"
     bl_description = "Save current settings as a preset"
@@ -19,7 +19,7 @@ class OT_CreateBeamNgMaterial(bpyt.Operator):
 
         return {'FINISHED'}
 
-bpyp.anotate_properties(OT_CreateBeamNgMaterial,
+props.anotate_properties(OT_CreateBeamNgMaterial,
     version = bpy.props.FloatProperty(name="version", default=1.0)
 )
 

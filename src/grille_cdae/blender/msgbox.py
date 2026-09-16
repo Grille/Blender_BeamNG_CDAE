@@ -2,7 +2,7 @@ from grille_cdae.common import *
 
 # pyright: reportInvalidTypeForm=false
 
-class MessageBox(bpyt.Operator):
+class MessageBox(basetypes.Operator):
     bl_idname = "grille_beamng_cdae.msgbox"
     bl_label = "My Message Box"
 
@@ -27,4 +27,4 @@ class MessageBox(bpyt.Operator):
     def show_dialog():
         bpy.ops.grille_beamng_cdae.msgbox('INVOKE_DEFAULT', message="Do you want to continue?") # type: ignore
 
-bpyp.anotate_properties(MessageBox, message = bpy.props.StringProperty(default="Are you sure?"))
+MessageBox.anotate(message = bpy.props.StringProperty(default="Are you sure?"))

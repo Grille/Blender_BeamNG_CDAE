@@ -59,6 +59,7 @@ class DictProperty[T]():
 
 
 class _TextureSocket(_KeyPtrDict):
+    __slots__=()
     map = DictProperty[str]("map")
     uv = DictProperty[int]("uv")
 

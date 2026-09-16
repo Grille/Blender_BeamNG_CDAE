@@ -336,7 +336,7 @@ class ExportBase(PresetOperator, ExportHelper):
             if self.save_textures != WriteMode.NONE:
                 box.prop(self, "texture_path")
 
-bpyp.anotate_properties(ExportBase,
+ExportBase.anotate(
     selection_only = BoolProperty(name="Selection Only", default=False, description="Use selected Objects."),
     include_children = BoolProperty(name="Include Children", default=False, description="Include all Children of selected Objects."),
     include_hidden = BoolProperty(name="Include Hidden", default=False, description="Include Objects that are hidden in Viewport."),
@@ -462,16 +462,12 @@ bpyp.anotate_properties(ExportBase,
 
 
 
-
-
-
-
 class ExportRegistry:
     __slots__ = ()
 
 
     @staticmethod
-    def menu_func(menu: bpyt.Menu, context: bpy.types.Context):
+    def menu_func(menu: basetypes.Menu, context: bpy.types.Context):
         menu.layout.operator(ExportBase.bl_idname, text="BeamNG (.dae/.cdae)")
 
 

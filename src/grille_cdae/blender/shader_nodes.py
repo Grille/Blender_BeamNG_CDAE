@@ -1,17 +1,15 @@
 
 from grille_cdae.common import *
-from grille_cdae.common.bpyt import ShaderNodeCustomGroup, Menu
+from grille_cdae.common.basetypes import ShaderNodeCustomGroup, Menu
 
 from grille_cdae.enums import *
 
 from .material_properties import *
-from .node_utils import *
 from .shader_nodes_utils import *
 from .shader_node_builder import NodeGroupBuilder, SocketCreateInfo, NodeGroupData, NodeSignature, LinkSource, LinkBuilderAny
 _SCI = SocketCreateInfo
-#_NS = NodeGroupBuilder.NodeSocket
 
-# pyright: reportInvalidTypeForm=false
+
 
 NODE_GROUP_JSON_KEY = "grille_beamng_cdae_ngjson"
 NODE_GROUP_VERSION_MAYOR_KEY = "grille_beamng_cdae_mayor_version"
@@ -208,11 +206,6 @@ class BaseShaderNode(ShaderNodeCustomGroup):
     def poll(cls, node_tree):
         if node_tree is None: return False
         return node_tree.bl_idname == NodeName.ShaderNodeTree
-
-
-    @classmethod
-    def anotate(cls, **kwargs: bpyp.PropertyDeferred):
-        bpyp.anotate_properties(cls, **kwargs)
     
 
     def get_validator(self):
@@ -300,7 +293,7 @@ class BeamImageTex(BaseShaderNode):
 
 
     # Custom properties
-    image: bpy.types.Image
+    image: bpy.types.Image | None
     image_type: ImageType
 
 
@@ -342,7 +335,7 @@ class BeamImageTex(BaseShaderNode):
         #layout.label(text=f"UV Map Index: {1 if uv1hint in self.uv_map else 0}")
 
 BeamImageTex.anotate(
-    image = bpyp.Pointer(name="Image", type=bpy.types.Image, update=_BaseShaderNode_init),
+    image = props.Pointer(name="Image", type=bpy.types.Image, update=_BaseShaderNode_init),
     image_type = BeamImageTex.ImageType.to_bpy_enum("Type", default=BeamImageTex.ImageType.COLOR_RGBA, update=_BaseShaderNode_init)
 )
 
@@ -738,8 +731,8 @@ class BaseBeamRGBA(BaseShaderNode):
 
 
     def post_init(self):
-        set_default_value(self.inputs_rgb, self.color_value)
-        set_default_value(self.input_a, self.color_value[3])
+        butils.set_default_value(self.inputs_rgb, self.color_value)
+        butils.set_default_value(self.input_a, self.color_value[3])
         self.inputs_rgb.hide = True
         self.input_a.hide = True
 
@@ -1436,11 +1429,11 @@ _ENUM_INT_DICT: dict[ReflectionMode, int] = {
 
 
 def _BeamMaterial_update_reflection_mode(self: 'BeamMaterial', ctx: bpy.types.Context):
-    set_default_value(self.inputs[SocketName.ReflectionMode], _ENUM_INT_DICT.get(self.reflection_mode, 0))
+    butils.set_default_value(self.inputs[SocketName.ReflectionMode], _ENUM_INT_DICT.get(self.reflection_mode, 0))
 
 
 def _BeamMaterial_update_blend_mode(self: 'BeamMaterial', ctx: bpy.types.Context):
-    set_default_value(self.inputs[SocketName.AlphaBlendMode], int(self.blend_mode != AlphaBlendMode.NONE))
+    butils.set_default_value(self.inputs[SocketName.AlphaBlendMode], int(self.blend_mode != AlphaBlendMode.NONE))
 
     
 class BeamMaterial(BaseShaderNode):

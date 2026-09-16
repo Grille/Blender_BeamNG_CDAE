@@ -1,4 +1,5 @@
 
+from grille_cdae.common import *
 from grille_cdae.enums import *
 
 from .node_walker import NodeWalker
@@ -7,7 +8,7 @@ from .node_walker import NodeWalker
 
 class NodeLayoutValidator(NodeWalker):
     
-    def __init__(self, node = None, stack = None, messages: list[str] | None = None):
+    def __init__(self, node: types.Node | None = None, stack: list[types.NodeGroup] | None = None, messages: list[str] | None = None):
         super().__init__(node, stack)
         self.raise_layout_errors = False
         self.messages = messages

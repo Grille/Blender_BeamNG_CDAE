@@ -66,13 +66,13 @@ class MaterialProperties(StrEnum):
 
         groundmodels_items = [(item, item, "") for item in GROUNDMODELS]
 
-        _set(MaterialProperties.GROUND_TYPE_SELECT, bpyp.Enum(
+        _set(MaterialProperties.GROUND_TYPE_SELECT, props.Enum(
             name="Ground Type",
             items=groundmodels_items,
             default=GROUNDMODELS[0],
         ))
 
-        _set(MaterialProperties.GROUND_TYPE, bpyp.String(
+        _set(MaterialProperties.GROUND_TYPE, props.String(
             name="",
             default=""
         ))

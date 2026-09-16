@@ -417,10 +417,10 @@ class CdaeKeyframeSampler:
         return seq
 
 
-    def sample(self, obj: bpy.types.Object | None):
+    def sample(self, obj: types.Object | None):
         transforms_enabled = obj is not None and self.sample_transforms_enabled
         keyframes_enabled = obj is not None and self.sample_keyframes_enabled
-        obj = cast(bpyt.Object, obj)
+        obj = cast(types.Object, obj)
         transforms = self.sample_current(obj) if transforms_enabled else Transforms()
         if keyframes_enabled:
             self.sample_keyframes(obj)

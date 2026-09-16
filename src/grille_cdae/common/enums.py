@@ -2,6 +2,7 @@ from grille_cdae.common.imports import *
 import enum as _enum
 
 
+
 class StrEnum(_enum.StrEnum):
     def __str__(self):
         return self.value
@@ -11,7 +12,7 @@ class StrEnum(_enum.StrEnum):
         return [(enum, enum, "") for enum in cls]
 
     @classmethod
-    def to_bpy_enum[T:bpyt.bpy_struct](cls, name: str, *, default: Self, update: Callable[[T, bpyt.Context], None] | None = None):
+    def to_bpy_enum[T:types.bpy_struct](cls, name: str, *, default: Self, update: Callable[[T, types.Context], None] | None = None):
         return bpy.props.EnumProperty(name=name, items=cls.to_bpy_items(), default=default, update=update)
 
 

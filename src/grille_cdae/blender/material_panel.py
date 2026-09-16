@@ -5,7 +5,7 @@ from .material_operators import *
 
 
 
-class MaterialPanel(bpyt.Panel):
+class MaterialPanel(basetypes.Panel):
 
     bl_label = "BeamNG CDAE"
     bl_idname = "MATERIAL_PT_beamng_cdae_matpanel"

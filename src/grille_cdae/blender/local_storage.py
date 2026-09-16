@@ -8,8 +8,8 @@ CONFIG_DIR_PATH = "addons/grille_beamng_cdae/config"
 
 
 
-type _ObjDict = dict[str, object]
-type _DictDict = dict[str, _ObjDict]
+type _ObjDict = SDict[object]
+type _DictDict = SDict[_ObjDict]
 
 
 

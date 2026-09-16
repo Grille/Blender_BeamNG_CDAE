@@ -1,5 +1,5 @@
 from grille_cdae.common import *
-from grille_cdae.common.bpyt import Panel
+from grille_cdae.common.basetypes import Panel
 
 from .object_properties import ObjectProperties, ObjectRole
 

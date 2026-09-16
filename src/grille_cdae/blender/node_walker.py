@@ -1,11 +1,9 @@
 from grille_cdae.common import *
 from grille_cdae.enums import *
 
-from .node_utils import get_node_type_idname, get_default_value, SocketValue
 
 
-
-type _InputKey = str | int | bpy.types.NodeSocket
+type _InputKey = SocketAccessor | bpy.types.NodeSocket
 
 class NodeLayoutError(Exception):
 
@@ -25,11 +23,12 @@ class NodeWalker():
         self.last_socket_value: SocketValue | None = None
 
 
-    def is_node_idname(self, ntype: str | type):
-        return self.current.bl_idname == get_node_type_idname(ntype)
+    def is_node_idname(self, ntype: str | type[types.Node]):
+        assert self.current is not None
+        return butils.get_idname(self.current) == butils.get_idname(ntype)
     
 
-    def is_node_any_idname(self, *ntypes: str | type):
+    def is_node_any_idname(self, *ntypes: str | type[types.Node]):
         for ntype in ntypes:
             if self.is_node_idname(ntype): return True
         return False
@@ -117,7 +116,7 @@ class NodeWalker():
                 outer_input = outer_node.inputs[from_socket_index()]
 
                 if not outer_input.is_linked:
-                    self.last_socket_value = outer_input.default_value
+                    self.last_socket_value = butils.get_default_value(outer_input)
                     return None
                 
                 return self.walk_link_recursively(outer_input.links[0])
@@ -152,9 +151,9 @@ class NodeWalker():
             if node is None:
                 if self.last_socket_value is not None:
                     return self.last_socket_value
-                return get_default_value(input)
+                return butils.get_default_value(input)
             elif node.bl_idname == idname:
-                return get_default_value(node.outputs[0])
+                return butils.get_default_value(node.outputs[0])
             return None
         finally:
             self.group_stack = stack

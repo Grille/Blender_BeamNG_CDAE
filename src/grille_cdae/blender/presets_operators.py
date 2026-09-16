@@ -1,5 +1,5 @@
 from grille_cdae.common import *
-from grille_cdae.common.bpyt import Operator, Menu
+from grille_cdae.common.basetypes import Operator, Menu
 
 from .local_storage import LocalStorage
 
