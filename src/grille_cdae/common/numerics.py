@@ -5,6 +5,11 @@ from grille_cdae.common.types import *
 
 
 
+type _Number = float | int
+type _ValueSequence = Sequence[float | int] | mathutils.Vector | mathutils.Quaternion
+
+
+
 class Vec2F:
     __slots__ = "x", "y"
     
@@ -14,9 +19,19 @@ class Vec2F:
 
 
     @classmethod
-    def from_list2(cls, list: Sequence[float]):
-        self = cls(*list[:2])
-        return self
+    def from_list(cls, list: _ValueSequence):
+        if len(list) >= 2: return cls(list[0], list[1])
+        raise ValueError()
+
+
+    @classmethod
+    def from_value(cls, value: _Number): return cls(value, value)
+
+
+    @classmethod
+    def from_obj(cls, obj: _Number | _ValueSequence):
+        if isinstance(obj, float | int): return cls.from_value(obj)
+        return cls.from_list(obj)
 
 
     def unpack(self, data: bytes):
@@ -55,15 +70,19 @@ class Vec3F(Vec2F):
     ONE: 'Vec3F'
 
     def __init__(self, x: float = 0.0, y: float = 0.0, z: float = 0.0):
-        self.x = float(x)
-        self.y = float(y)
-        self.z = float(z)
+        self.x = x
+        self.y = y
+        self.z = z
 
 
     @classmethod
-    def from_list3(cls, list: Sequence[float] | mathutils.Vector):
-        self = cls(*list[:3])
-        return self
+    def from_list(cls, list: _ValueSequence):
+        if len(list) >= 3: return cls(list[0], list[1], list[2])
+        return super().from_list(list)
+
+
+    @classmethod
+    def from_value(cls, value: _Number): return cls(value, value, value)
     
 
     @property
@@ -125,9 +144,13 @@ class Vec4F(Vec3F):
 
 
     @classmethod
-    def from_list4(cls, list: Sequence[float]):
-        self = cls(*list[:4])
-        return self
+    def from_list(cls, list: _ValueSequence):
+        if len(list) >= 4: return cls(list[0], list[1], list[2], list[3])
+        return super().from_list(list)
+
+
+    @classmethod
+    def from_value(cls, value: _Number): return cls(value, value, value, value)
 
 
     def unpack(self, data: bytes):
@@ -144,7 +167,7 @@ class Vec4F(Vec3F):
         
 
     @property
-    def list4(self) -> list[float]:
+    def list4(self):
         return [self.x, self.y, self.z, self.w]
     
 
@@ -318,9 +341,9 @@ class Transforms:
 
     @classmethod
     def from_blender_matrix(cls, matrix: mathutils.Matrix):
-        translation = Vec3F.from_list3(matrix.to_translation())
+        translation = Vec3F.from_list(matrix.to_translation())
         rotation = Quat4I16.from_blender_quaternion(matrix.to_quaternion())
-        scale = Vec3F.from_list3(matrix.to_scale())
+        scale = Vec3F.from_list(matrix.to_scale())
         return cls(translation, scale, rotation)
     
 

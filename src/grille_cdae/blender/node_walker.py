@@ -5,22 +5,47 @@ from grille_cdae.enums import *
 
 type _InputKey = SocketAccessor | bpy.types.NodeSocket
 
+
+
+def _get_link0(socket: types.NodeSocket | None):
+    if socket is None: return None
+    if not socket.is_linked: return None
+    assert socket.links is not None
+    return socket.links[0]
+
+
+def _find_node[T:types.Node](tree: types.ShaderNodeTree | None, btype: type[T]):
+    if tree is None: return None
+
+    for node in tree.nodes:
+        if isinstance(node, btype):
+            return node
+
+    return None
+
+
+
 class NodeLayoutError(Exception):
 
     def __init__(self, *args):
         super().__init__(*args)
 
 
+
 class NodeWalker():
 
-    def __init__(self, node: bpy.types.Node | None = None, stack: list[bpy.types.NodeGroup] | None = None):
+    def __init__(self, node: bpy.types.Node | None = None, stack: list[types.ShaderNodeGroup] | None = None):
         self.current = node
         self.group_stack = [] if stack is None else list(stack)
         self.skip_groups = True
         self.raise_layout_errors = True
         self.last_socket_name: str = ""
-        self.last_socket_index: int = 0
         self.last_socket_value: SocketValue | None = None
+
+
+    def _raise_layout_error(self, msg: str):
+        if self.raise_layout_errors: raise NodeLayoutError(msg)
+        return None
 
 
     def is_node_idname(self, ntype: str | type[types.Node]):
@@ -46,6 +71,8 @@ class NodeWalker():
 
         if isinstance(input_key, bpy.types.NodeSocket):
             return input_key
+
+        assert self.current is not None
         
         if isinstance(input_key, str):
             get = self.current.inputs.get
@@ -59,67 +86,57 @@ class NodeWalker():
         raise TypeError(input_key)
 
 
-    def has_input(self, input_key: str | int):
+    def has_input(self, input_key: _InputKey):
         return self.get_input(input_key, False) is not None
         
         
     def get_node(self, input_key: _InputKey, throw = True) -> bpy.types.Node | None:
         
         input = self.get_input(input_key, throw=throw)
-
-        if not input or not input.is_linked:
-            return None
-        
-        return self.walk_link_recursively(input.links[0])
+        link0 = _get_link0(input)
+        if link0 is None: return None
+        return self.walk_link_recursively(link0)
 
 
     def walk_link_recursively(self, link: bpy.types.NodeLink) -> bpy.types.Node | None:
 
-        from_node: bpy.types.Node = link.from_node
-        from_socket: bpy.types.NodeSocket = link.from_socket
-        from_socket_index = lambda : list(from_node.outputs).index(from_socket)
+        assert link.from_node is not None
+        assert link.from_socket is not None
+
+        from_node = link.from_node
+        from_socket = link.from_socket
+        def from_socket_index(): return list(from_node.outputs).index(from_socket)
 
         self.last_socket_name = from_socket.name
-        self.last_socket_index = from_socket_index
         self.last_socket_value = None
 
         if self.skip_groups:
 
-            if from_node.bl_idname == NodeName.Group:
-                from_node = cast(bpy.types.NodeGroup, from_node)
+            if isinstance(from_node, types.ShaderNodeGroup):
 
-                group_output_node = None
-                for node in from_node.node_tree.nodes:
-                    if node.bl_idname == NodeName.GroupOutput:
-                        group_output_node = node
-                        break
-
-                if group_output_node is None:
-                    return None
+                group_output_node = _find_node(from_node.node_tree, types.NodeGroupOutput)
+                if group_output_node is None: return None
 
                 inner_output_input = group_output_node.inputs[from_socket_index()]
-                if not inner_output_input.is_linked:
-                    return None
-                
+                link0 = _get_link0(inner_output_input)
+                if link0 is None: return None
                 self.group_stack.append(from_node)
-                return self.walk_link_recursively(inner_output_input.links[0])
+                return self.walk_link_recursively(link0)
 
-            elif from_node.bl_idname == NodeName.GroupInput:
-                from_node = cast(bpy.types.NodeGroupInput, from_node)
+            elif isinstance(from_node, types.NodeGroupInput):
 
                 if len(self.group_stack) == 0:
-                    if self.raise_layout_errors:
-                        raise NodeLayoutError("Group input found, but stack is empty.")
-                    return None
+                    return self._raise_layout_error("Group input found, but stack is empty.")
                 
                 outer_node = self.group_stack.pop()
                 outer_input = outer_node.inputs[from_socket_index()]
+                link0 = _get_link0(outer_input)
 
-                if not outer_input.is_linked:
+                if link0 is None:
                     self.last_socket_value = butils.get_default_value(outer_input)
                     return None
-                
-                return self.walk_link_recursively(outer_input.links[0])
+
+                return self.walk_link_recursively(link0)
 
         return from_node
     
@@ -141,7 +158,7 @@ class NodeWalker():
         return walk
     
 
-    def _get_any_value(self, input_key: _InputKey, idname: str | None):
+    def _get_any_value(self, input_key: _InputKey):
         input = self.get_input(input_key, throw = False)
         if input is None:
             return None
@@ -152,58 +169,49 @@ class NodeWalker():
                 if self.last_socket_value is not None:
                     return self.last_socket_value
                 return butils.get_default_value(input)
-            elif node.bl_idname == idname:
-                return butils.get_default_value(node.outputs[0])
-            return None
+            return butils.get_default_value(node.outputs[0])
         finally:
             self.group_stack = stack
 
 
-    def get_float_value(self, input_key: str | int) -> float | None:
+    def get_cast_value[T](self, input_key: _InputKey, cast: Callable[[Any], T]):
         try:
-            value = self._get_any_value(input_key, NodeName.Value)
-            return float(value)
-        except:
+            return cast(self._get_any_value(input_key))
+        except: 
             return None
+
+
+    def get_float_value(self, input_key: _InputKey):
+        return self.get_cast_value(input_key, float)
         
 
-    def get_bool_value(self, input_key: str | int) -> bool | None:
-        try:
-            value = self._get_any_value(input_key, NodeName.Value)
-            return bool(value)
-        except:
-            return None
+    def get_bool_value(self, input_key: _InputKey):
+        return self.get_cast_value(input_key, bool)
     
 
-    def get_color_value(self, input_key: str | int) -> Color4F | None:
-        try:
-            value = self._get_any_value(input_key, NodeName.RGB)
-            return Color4F.from_list4(value)
-        except:
-            return None
+    def get_color_value(self, input_key: _InputKey):
+        return self.get_cast_value(input_key, Color4F.from_obj)
         
 
-    def get_vector_value(self, input_key: str | int) -> Vec3F | None:
-        try:
-            value = self._get_any_value(input_key, None)
-            return Vec3F.from_list3(value)
-        except:
-            return None
+    def get_vector_value(self, input_key: _InputKey):
+        return self.get_cast_value(input_key, Vec3F.from_obj)
         
 
-    def is_linked(self, input_key: str | int) -> bool:
+    def is_linked(self, input_key: _InputKey) -> bool:
         input = self.get_input(input_key)
         if input is None:
             return False
         return input.is_linked
             
 
-    def get_image(self) -> bpy.types.Image:
-        if type(self.current) is bpy.types.ShaderNodeTexImage:
-            return self.current.image
+    def get_image(self) -> types.Image | None:
+        obj = getattr(self.current, "image", None)
+        if obj is None: return None
+        if isinstance(obj, types.Image): return obj
         raise Exception(f"{type(self.current)} is not a valid image node.")
     
 
-    def get_default_value(self, input_key: str | int):
+    def get_default_value(self, input_key: _InputKey):
         input = self.get_input(input_key)
-        return input.default_value
+        if input is None: return None
+        return butils.get_default_value(input)
