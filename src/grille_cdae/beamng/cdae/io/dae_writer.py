@@ -1,18 +1,13 @@
-import struct
+from grille_cdae.common import *
 
-from dataclasses import dataclass
-from enum import Enum
 from io import BufferedReader, TextIOWrapper
 from numpy.typing import NDArray
 from datetime import datetime, timezone
-from typing import Sequence
 
 from .dae import *
 from ..v31 import CdaeV31
-from ....common.numerics import *
 from ....debug_utils import Stopwatch
 
-import numpy as np
 import xml.etree.cElementTree as ET
 
 
@@ -81,10 +76,10 @@ def write_geometry(mesh: CdaeV31.Mesh, lib_geometries: ET.Element, mesh_index: i
         uv[:, 1] = 1.0 - uv[:, 1]           # invert V
         return try_write_src(uv.ravel(), name, Accessors.VEC2)
 
-    positions_id = try_write_src(mesh.verts.to_numpy_array(), "position", Accessors.VEC3)
-    normals_id = try_write_src(mesh.norms.to_numpy_array(), "normals", Accessors.VEC3)
-    uv0s_id = try_write_src_uv(mesh.tverts0.to_numpy_array(), "uv0s")
-    uv1s_id = try_write_src_uv(mesh.tverts1.to_numpy_array(), "uv1s")
+    positions_id = try_write_src(mesh.verts.to_array(), "position", Accessors.VEC3)
+    normals_id = try_write_src(mesh.norms.to_array(), "normals", Accessors.VEC3)
+    uv0s_id = try_write_src_uv(mesh.tverts0.to_array(), "uv0s")
+    uv1s_id = try_write_src_uv(mesh.tverts1.to_array(), "uv1s")
     color_id = try_write_src(mesh.get_vec4f_colors(), "colors", Accessors.VEC4)
 
     assert positions_id is not None
@@ -96,7 +91,7 @@ def write_geometry(mesh: CdaeV31.Mesh, lib_geometries: ET.Element, mesh_index: i
     ET.SubElement(vertices, DaeTag.input, {"semantic": Semantic.POSITION, "source": f"#{positions_id}"})
 
     # Triangles by draw region
-    indices = mesh.indices.to_numpy_array()
+    indices = mesh.indices.to_array()
     indices = indices.reshape(-1, 3)[:, [2, 1, 0]].ravel()
     draw_regions = mesh.unpack_regions()
     for reg in draw_regions:

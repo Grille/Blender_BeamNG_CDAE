@@ -1,14 +1,11 @@
+# pyright: reportUnknownMemberType=information
+
+from grille_cdae.common import *
 import struct
 import msgpack
-import zstandard
 
-from typing import Any, cast
 from io import BufferedReader
 
-from ....common.numerics import *
-
-
-# pyright: reportUnknownMemberType=information
 
 
 class MsgpackReader:
@@ -112,16 +109,13 @@ class MsgpackReader:
         
 
     def read_vec2f(self):
-        values = self._read_float_list(2)
-        return Vec2F(values[0], values[1])
+        return Vec2F.from_list(self._read_float_list(2))
 
 
     def read_vec3f(self):
-        values = self._read_float_list(3)
-        return Vec3F(values[0], values[1], values[2])
+        return Vec3F.from_list(self._read_float_list(3))
     
 
     def read_box6f(self):
-        values = self._read_float_list(6)
-        return Box6F(*values)
+        return Box6F.from_list(self._read_float_list(6))
 

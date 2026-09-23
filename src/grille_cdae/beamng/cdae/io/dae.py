@@ -1,13 +1,8 @@
 from __future__ import annotations
 
-import mathutils
-import xml.etree.cElementTree as ET
-#import numpy as np
-
+from grille_cdae.common import *
 from numpy.typing import NDArray
-from dataclasses import dataclass
-from ....common.enums import StrEnum
-from ....common.numerics import *
+
 
 
 VERSION = "1.4.1"
@@ -225,9 +220,9 @@ class DaeMatrix:
 
 
     @staticmethod
-    def from_cdae(quat: Quat4F, location: Vec3F):
+    def from_cdae(quat: Quat4I16, location: Vec3F):
         matrix = quat.to_collada_quaternion().to_matrix().to_4x4()
-        matrix.translation = location.tuple3
+        matrix.translation = location
         return DaeMatrix.from_matrix(matrix)
 
 

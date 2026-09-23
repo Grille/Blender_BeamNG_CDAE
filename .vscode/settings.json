@@ -20,5 +20,6 @@
         "reportUnusedVariable": "information",
         "reportUnusedImport": "information",
         "reportUnusedFunction": "information",
+        "reportUnusedClass": "information"
     },
 }

@@ -8,8 +8,7 @@ CONFIG_DIR_PATH = "addons/grille_beamng_cdae/config"
 
 
 
-type _ObjDict = SDict[object]
-type _DictDict = SDict[_ObjDict]
+type _DictDict = SDict[SDict]
 
 
 
@@ -66,12 +65,12 @@ class LocalStorage:
 
 
     @staticmethod
-    def get(key: str) -> _ObjDict:
+    def get(key: str) -> SDict:
 
         if key in LocalStorage.cache:
             return LocalStorage.cache[key]
 
-        data: _ObjDict
+        data: SDict
         filepath = LocalStorage._get_file_path(key)
         try:
             with open(filepath, 'r') as f:
@@ -85,7 +84,7 @@ class LocalStorage:
 
 
     @staticmethod
-    def set(key: str, data: _ObjDict | None):
+    def set(key: str, data: SDict | None):
         filepath = LocalStorage._get_file_path(key)
         if (data is None or len(data) == 0) and os.path.isfile(filepath):
             LocalStorage.cache[key] = {}

@@ -1,5 +1,10 @@
-import bpy
-import typing
+from grille_cdae.common import *
+
+
+
+type _ObjectSource = Sequence[types.Object] | types.bpy_prop_collection[types.Object]
+
+
 
 class ObjectCollector:
 
@@ -9,7 +14,7 @@ class ObjectCollector:
         self.include_children: bool = False
 
 
-    def add_object(self, obj: bpy.types.Object):
+    def add_object(self, obj: types.Object):
         if obj.hide_get() and not self.include_hidden:
             return
         
@@ -18,14 +23,14 @@ class ObjectCollector:
             self.add_objects(obj.children)
 
 
-    def add_objects(self, objects: typing.Sequence[bpy.types.Object] | None):
+    def add_objects(self, objects: _ObjectSource | None):
         if objects is None: return
         for obj in objects:
             self.add_object(obj)
 
 
     def collect_scene(self):
-        self.add_objects(bpy.context.scene.objects)
+        self.add_objects(not_none(bpy.context.scene).objects)
 
 
     def collect_selected(self):

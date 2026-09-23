@@ -41,7 +41,7 @@ class OT_convert_materials(Operator):
     bl_description = "Convert materials to BeamNG format"
 
     def execute(self, context):
-        properties = UtilsSidepanel.properties_from_scene(context.scene)
+        properties = UtilsSidepanel.properties_from_ctx(context)
 
         target_version = MaterialVersion(float(properties.matconv_version))
         parser = MaterialParser(target_version)
@@ -62,7 +62,7 @@ class PT_materials_panel(Panel):
 
     def draw(self, context):
         layout = self.layout
-        properties = UtilsSidepanel.properties_from_scene(context.scene)
+        properties = UtilsSidepanel.properties_from_ctx(context)
 
         layout.prop(properties, "matconv_version")
         layout.prop(properties, "matconv_aclip")
@@ -78,6 +78,8 @@ class PT_materials_panel(Panel):
 
 
 
+_pinfo = props.PropertyInfoFactory(types.Scene)
+
 class UtilsSidepanel:
 
     classes = (
@@ -86,21 +88,24 @@ class UtilsSidepanel:
         PT_materials_panel,
     )
 
+    utils_panel_properties = _pinfo.ptr("utils_panel_properties", UtilsPanelPropertyGroup)
+
 
     @staticmethod
-    def properties_from_scene(scene: bpy.types.Scene) -> UtilsPanelPropertyGroup:
-        return scene.beamngcdae_utils_panel_properties # type: ignore
-        
+    def properties_from_ctx(ctx: types.Context):
+        assert ctx.scene is not None
+        return UtilsSidepanel.utils_panel_properties[ctx.scene]
+
 
     @staticmethod
     def register():
         for cls in UtilsSidepanel.classes:
             bpy.utils.register_class(cls)
-        bpy.types.Scene.beamngcdae_utils_panel_properties = bpy.props.PointerProperty(type=UtilsPanelPropertyGroup) # type: ignore
+        _pinfo.register()
 
 
     @staticmethod
     def unregister():
         for cls in reversed(UtilsSidepanel.classes):
             bpy.utils.unregister_class(cls)
-        del bpy.types.Scene.beamngcdae_utils_panel_properties # type: ignore
+        _pinfo.unregister()

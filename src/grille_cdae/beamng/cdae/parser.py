@@ -43,23 +43,26 @@ class CdaeParser:
 
 
         def build_scene(self, cdae: CdaeV31):
+
+            collection = bpy.context.collection
+            assert collection is not None
             
             for cdae_node in cdae.unpack_nodes():
                 name = cdae.names[cdae_node.nameIndex]
                 obj = bpy.data.objects.new(f"node:{name}", None)
-                bpy.context.collection.objects.link(obj)
+                collection.objects.link(obj)
                 self.nodes.append(CdaeParser.Scene.Node(cdae_node, obj))
 
             for cdae_obj in cdae.unpack_objects():
                 name = cdae.names[cdae_obj.nameIndex]
                 obj = bpy.data.objects.new(f"obj:{name}", None)
-                bpy.context.collection.objects.link(obj)
+                collection.objects.link(obj)
                 self.objects.append(CdaeParser.Scene.Object(cdae_obj, obj))
 
             for cdae_mesh in cdae.meshes:
                 mesh = bpy.data.meshes.new("mesh")
                 obj = bpy.data.objects.new("mesh", mesh)
-                bpy.context.collection.objects.link(obj)
+                collection.objects.link(obj)
                 self.meshes.append(CdaeParser.Scene.Mesh(cdae_mesh, obj, mesh))
 
             for node_info in self.nodes:
@@ -98,10 +101,10 @@ class CdaeParser:
 
         for index, node_info in enumerate(scene.nodes):
             obj = node_info.object
-            obj.location = translations[index].tuple3
+            obj.location = translations[index]
             obj.rotation_mode = 'QUATERNION'
             obj.rotation_quaternion = rotations[index].to_blender_quaternion()
-            if len(aligned_scales) > 0: obj.scale = aligned_scales[index].tuple3
+            if len(aligned_scales) > 0: obj.scale = aligned_scales[index]
 
         for mesh_info in scene.meshes:
             self.build_mesh(mesh_info.info, mesh_info.mesh)
@@ -116,12 +119,12 @@ class CdaeParser:
 
     def get_clean_data(self, info: CdaeV31.Mesh):
 
-        all_indices = info.indices.to_numpy_array().reshape(-1, 3)
-        positions = info.verts.to_numpy_array().reshape(-1, 3)
+        all_indices = info.indices.to_array().reshape(-1, 3)
+        positions = info.verts.to_array().reshape(-1, 3)
 
         # Collect filtered triangles and material mapping
-        region_triangles: list[int] = []
-        region_materials = []
+        region_triangles: list[np.ndarray] = []
+        region_materials: list[int] = []
 
         for region in info.unpack_regions():
             tris = all_indices[region.get_triangle_range()]
@@ -177,21 +180,21 @@ class CdaeParser:
 
         if info.tverts0.element_count:
             layer = mesh.uv_layers.new(name="UV0")
-            loop_tverts = shape_loop_data(info.tverts0.to_numpy_array(), 2)
+            loop_tverts = shape_loop_data(info.tverts0.to_array(), 2)
             layer.data.foreach_set("uv", loop_tverts.ravel())
 
         if info.tverts1.element_count:
             layer = mesh.uv_layers.new(name="UV1")
-            loop_tverts = shape_loop_data(info.tverts0.to_numpy_array(), 2)
+            loop_tverts = shape_loop_data(info.tverts0.to_array(), 2)
             layer.data.foreach_set("uv", loop_tverts.ravel())
 
         if info.colors.element_count:
             layer = cast(bpy.types.MeshLoopColorLayer, mesh.color_attributes.new(name="Color", domain='CORNER', type='FLOAT_COLOR'))
-            loop_colors = shape_loop_data(info.colors.to_numpy_array().astype(np.float32) / np.float32(255), 4)
+            loop_colors = shape_loop_data(info.colors.to_array().astype(np.float32) / np.float32(255), 4)
             layer.data.foreach_set("color", loop_colors.ravel())
 
         if info.norms.element_count:
-            loop_normals = shape_loop_data(info.norms.to_numpy_array(), 3)
+            loop_normals = shape_loop_data(info.norms.to_array(), 3)
             loop_normals[:, 0:2] *= -1
             mesh.normals_split_custom_set(loop_normals) # pyright: ignore[reportArgumentType]
 

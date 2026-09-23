@@ -1,18 +1,11 @@
-import struct
+from grille_cdae.common import *
 
-from dataclasses import dataclass
-from enum import Enum
+
 from io import BufferedReader
-from numpy.typing import NDArray
-from typing import TypeVar
 
 from .dae import *
-from ..packed_vector import PackedVector
 from ..v31 import CdaeV31
-from ....common.numerics import *
 
-import numpy as np
-import zstandard as zstd
 import xml.etree.cElementTree as ET
 
 
@@ -283,15 +276,15 @@ def convert_geometry(geo: Geometry, material_dict: dict[str,str], cdae: CdaeV31,
     dst_verts[:, 0:2] *= -1
     dst_norms[:, 0:2] *= -1
 
-    mesh.verts.set_numpy_array(dst_verts * scale)
-    mesh.norms.set_numpy_array(dst_norms)
-    mesh.indices.set_numpy_array(dst_indices)
+    mesh.verts.set_array(dst_verts * scale)
+    mesh.norms.set_array(dst_norms)
+    mesh.indices.set_array(dst_indices)
     mesh.draw_regions.pack_list(regions)
 
     if tverts0_enabled:
-        mesh.tverts0.set_numpy_array(dst_tverts0)
+        mesh.tverts0.set_array(dst_tverts0)
     if tverts1_enabled:
-        mesh.tverts1.set_numpy_array(dst_tverts1)
+        mesh.tverts1.set_array(dst_tverts1)
     if colors_enabled:
         mesh.set_vec4_colors(dst_colors)
 
@@ -322,8 +315,8 @@ def convert(dae: Collada):
 
         if node.matrix is not None:
             matrix = node.matrix.to_matrix()
-            translation = Vec3F.from_list3(matrix.to_translation())
-            scale = Vec3F.from_list3(matrix.to_scale())
+            translation = Vec3F.from_list(matrix.to_translation())
+            scale = Vec3F.from_list(matrix.to_scale())
             rotation = Quat4I16.from_collada_quaternion(matrix.to_quaternion())
             transforms = Transforms(translation, scale, rotation)
         else:

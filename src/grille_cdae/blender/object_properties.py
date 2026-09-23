@@ -1,11 +1,7 @@
-import bpy
-
-from enum import Enum
-from bpy.props import StringProperty, EnumProperty, IntProperty, BoolProperty
-from bpy.types import Object as BObj
+from grille_cdae.common import *
 
 
-class ObjectRole(str, Enum):
+class ObjectRole(StrEnum):
 
     Mesh = "Mesh"
     Collision = "Collision"
@@ -26,78 +22,26 @@ class ObjectRole(str, Enum):
 
 
 
-class ObjectProperties(str, Enum):
+_pinfo = props.PropertyInfoFactory(types.Object)
 
-    PREFIX = "grille_beamng_cdae_"
-    PATH = f"{PREFIX}path"
-    ROLE = f"{PREFIX}role"
-    LOD_SIZE = f"{PREFIX}lod_size"
-    BB_FLAG0 = f"{PREFIX}bb_flag0"
-    BB_DIMENSION = f"{PREFIX}bb_dimension"
-    BB_EQUATOR_STEPS = f"{PREFIX}bb_equator_steps"
+class ObjectProperties:
+
+    path = _pinfo.str("path", "Node Path", "base00.start01.obj", description="Node tree path inside the cdae file")
+    role = _pinfo.enum("role", "Role", ObjectRole.Generic)
+    lod_size = _pinfo.int("lod_size", "LOD Size (PX)")
+    bb_flag0 = _pinfo.int("bb_flag0", "BB Dimension (PX)", 64)
+    bb_dimension = _pinfo.int("bb_dimension", "BB Equator Steps", 16)
+    bb_equator_steps = _pinfo.bool("bb_equator_steps", "BB Equator Steps")
 
 
     @staticmethod
-    def has_mesh(obj: BObj) -> bool:
+    def has_mesh(obj: types.Object) -> bool:
         return obj.type == 'MESH'
     
 
     @staticmethod
-    def get_role(obj: BObj) -> ObjectRole:
-        return ObjectRole(getattr(obj, ObjectProperties.ROLE))
+    def register(): _pinfo.register()
 
 
     @staticmethod
-    def get_lod(obj: BObj) -> int:
-        return getattr(obj, ObjectProperties.LOD_SIZE)
-    
-
-    @staticmethod
-    def register():
-        def _set(key: str, property: object): setattr(bpy.types.Object, key, property)
-
-        _set(ObjectProperties.PATH, bpy.props.StringProperty(
-            name="Node Path",
-            description="Node tree path inside the cdae file",
-            default="base00.start01.obj"
-        ))
-
-        _set(ObjectProperties.ROLE, EnumProperty(
-            name="Role",
-            items=[
-                (ObjectRole.Mesh, "Mesh", ""),
-                (ObjectRole.Collision, "Collision", ""),
-                (ObjectRole.Billboard, "Billboard", ""),
-                (ObjectRole.AutoBillboard, "AutoBillboard", ""),
-                (ObjectRole.NullDetail, "NullDetail", ""),
-                (ObjectRole.Generic, "Generic", ""),
-            ],
-            default=ObjectRole.Generic,
-        ))
-
-        _set(ObjectProperties.LOD_SIZE, IntProperty(
-            name="LOD Size (PX)", 
-            default=0,
-        ))
-
-        _set(ObjectProperties.BB_DIMENSION, IntProperty(
-            name="BB Dimension (PX)", 
-            default=64,
-        ))
-
-        _set(ObjectProperties.BB_EQUATOR_STEPS, IntProperty(
-            name="BB Equator Steps", 
-            default=16,
-        ))
-
-        _set(ObjectProperties.BB_FLAG0, BoolProperty(
-            name="BB Equator Steps", 
-            default=False,
-        ))
-    
-
-    @staticmethod
-    def unregister():
-        def _del(key: str): delattr(bpy.types.Object, key)
-        
-        _del(ObjectProperties.PATH)
+    def unregister(): _pinfo.unregister()

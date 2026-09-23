@@ -1,8 +1,4 @@
-import os
-import json
-
-from io import TextIOWrapper
-from dataclasses import dataclass, asdict
+from grille_cdae.common import *
 
 from ..v31 import CdaeV31
 
@@ -43,7 +39,7 @@ class DaeAsset:
     def to_dict(self):
         json_imposters: list[dict[str, object]] = []
         for imp in self.imposters:
-            json_imposters.append(asdict(imp))
+            json_imposters.append(dataclass_asdict(imp))
         json_body = {
             "imposters": json_imposters,
         }

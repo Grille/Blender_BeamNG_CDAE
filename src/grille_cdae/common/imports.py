@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import bpy
+import json
 import bpy.types as types
 import mathutils
 import numpy as np
 import os
 
-from dataclasses import dataclass
-from typing import Protocol, Sequence, Any, Callable, Self, cast, override, overload
+from dataclasses import dataclass, asdict as dataclass_asdict
+from typing import Protocol, Sequence, Iterable, Any, Callable, Self, NamedTuple, Final, cast, override, overload, TYPE_CHECKING
 
-import grille_cdae.common.basetypes as basetypes
-import grille_cdae.common.props as props
+type Converter[TDst, TSrc = Any] = Callable[[TSrc], TDst]

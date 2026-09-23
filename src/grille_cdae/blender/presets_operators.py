@@ -18,7 +18,7 @@ class OT_SavePreset(Operator):
     def invoke(self, context, event):
         active_op = OpPresetsUtils.get_operator(context)
         self.preset_name = active_op.temp_presets_selection
-        return context.window_manager.invoke_props_dialog(self)
+        return not_none(context.window_manager).invoke_props_dialog(self)
 
 
     def draw(self, context):

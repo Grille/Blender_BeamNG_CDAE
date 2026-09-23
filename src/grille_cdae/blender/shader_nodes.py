@@ -6,7 +6,7 @@ from grille_cdae.enums import *
 
 from .material_properties import *
 from .shader_nodes_utils import *
-from .shader_node_builder import NodeGroupBuilder, SocketCreateInfo, NodeGroupData, NodeSignature, LinkSource, LinkBuilderAny
+from .shader_node_builder import NodeGroupBuilder, SocketCreateInfo, NodeGroupData, NodeSignature, LinkSource, LinkBuilderBase
 _SCI = SocketCreateInfo
 
 
@@ -85,8 +85,8 @@ VALUE_SOCKET_SHAPE = SocketShape.LINE
 TVMIX_SOCKET_SHAPE = SocketShape.SQUARE
 DISPLAY_SOCKET_SHAPE = SocketShape.CIRCLE_DOT
 
-COLOR_WHITE = (1,1,1,1)
-COLOR_BLACK = (0,0,0,1)
+COLOR_WHITE = Color4F.WHITE
+COLOR_BLACK = Color4F.BLACK
 COLOR_GRAY = (0.5,0.5,0.5,1)
 COLOR_NULL = (0,0,0,0)
 COLOR_NULL_HALF = (0.5,0.5,0.5,0.5)
@@ -118,10 +118,10 @@ _VEC3 = _SCI.VEC3
 
 class _Extended_NGB(NodeGroupBuilder):
 
-    def RGBA_seperate(self, value: LinkBuilderAny):
+    def RGBA_seperate(self, value: LinkBuilderBase):
         return self.nc.seperate_bundle(RGBA, value)
 
-    def RGBA_default(self, value: LinkBuilderAny, default_value: LinkSource = COLOR_WHITE):
+    def RGBA_default(self, value: LinkBuilderBase, default_value: LinkSource = COLOR_WHITE):
         return self.nc.node(BeamRGBADefault, value, color=default_value)
 
     def RGBA_input(self, name: str, default_value: Tuple4F | None = None, sci = _RGBA_VALUE):
@@ -1213,7 +1213,7 @@ class BeamBSDF15Detail(BaseShaderNode):
         result[SocketName.Enabled] << True
         normal >> result[SocketName.Normal]
         (color_m * 2 - 1) * (color_s * 2) >> result[SocketName.Color]
-        def value(map: LinkBuilderAny, strength: LinkBuilderAny): return (1 - ((1 - map) * strength)) - 1
+        def value(map: LinkBuilderBase, strength: LinkBuilderBase): return (1 - ((1 - map) * strength)) - 1
         value(m_m, m_s) >> result[SocketName.Metallic]
         value(r_m, r_s) >> result[SocketName.Roughness]
         value(o_m, o_s) >> result[SocketName.Alpha]
@@ -1598,8 +1598,8 @@ class ShaderNodeTree(Menu):
 
 
     @classmethod
-    def poll(cls, context):
-        return context.space_data.tree_type == cls.tree_type
+    def poll(cls, context) -> bool:
+        return context.space_data.tree_type == cls.tree_type # type: ignore
 
 
     def draw(self, context):
@@ -1614,7 +1614,7 @@ class ShaderNodeTree(Menu):
             elif isinstance(item, str):
                 layout.label(text=item, icon="REMOVE")
 
-            elif isinstance(item, BaseShaderNode):
+            elif isinstance(item, type) and issubclass(item, BaseShaderNode):
                 op = layout.operator("node.add_node", text=item.bl_label)
                 op.type = item.bl_idname
                 op.use_transform = True
@@ -1624,7 +1624,7 @@ class ShaderNodeTree(Menu):
 
     @staticmethod
     def addmenu_append(menu: Menu, context: bpy.types.Context):
-        tree_type = context.space_data.tree_type
+        tree_type = context.space_data.tree_type # type: ignore
         if tree_type != ShaderNodeTree.tree_type:
             return
         menu.layout.menu(ShaderNodeTree.bl_idname)
@@ -1633,7 +1633,7 @@ class ShaderNodeTree(Menu):
 
 class ShaderNodeRegistry:
 
-    nodes: list[type] = [
+    nodes: list[type[BaseShaderNode]] = [
         BeamBSDF15, 
         BeamBDSF10Basic,
         BeamBSDFCollision,

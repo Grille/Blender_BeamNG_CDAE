@@ -30,13 +30,13 @@ class MaterialParser:
         tree = NodeTreeBuilder(dst.node_tree)
         tree.clear()
 
-        out = tree.create_node(NodeName.OutputMaterial)
-        mat = tree.create_node(BeamMaterial.bl_idname)
-        tree.link(mat, SocketName.Shader, out, SocketName.Surface)
+        out = tree.nc.node(types.ShaderNodeOutputMaterial)
+        mat = tree.nc.node(BeamMaterial)
+        mat[SocketName.Shader] >> out[SocketName.Surface]
 
         if self.force_alpha_clip:
-            mat.inputs[BeamMaterial.Sockets.CLIP].default_value = True
-            mat.inputs[BeamMaterial.Sockets.CLIP_T].default_value = 0.5
+            mat[BeamMaterial.Sockets.CLIP] << True
+            mat[BeamMaterial.Sockets.CLIP_T] << 0.5
 
         if self.target_version == MaterialVersion.V1:
             bdsf = self._parse_to_tree_10(src, tree)
@@ -45,7 +45,7 @@ class MaterialParser:
         else:
             raise Exception()
         
-        tree.link(bdsf, SocketName.BSDF, mat, SocketName.Shader)
+        bdsf[SocketName.BSDF] >> mat[SocketName.Shader]
 
         tree.arrange_nodes(300, 150)
 
@@ -54,13 +54,13 @@ class MaterialParser:
 
         src0 = src.stages[0]
         
-        color = Color4F.from_list4(src0.color.factor).linear.tuple4
-        bdsf = tree.create_node(BeamBDSF10Basic, [color] )
+        color = Color4F.from_list(src0.color.factor).linear
+        bdsf = tree.nc.node(BeamBDSF10Basic, color)
 
-        if src0.color.map is not None:
-            timg = tree.create_teximage(src0.color.map, ColorSpace.SRGB)
-            tree.link(timg, SocketName.Color, bdsf, SocketName.BaseColor)
-            tree.link(timg, SocketName.Alpha, bdsf, SocketName.BaseAlpha)
+        if src0.color.map:
+            timg = tree.nc.teximage(src0.color.map, ColorSpace.NON_COLOR)
+            timg[SocketName.Color] >> bdsf[SocketName.BaseColor]
+            timg[SocketName.Alpha] >> bdsf[SocketName.BaseAlpha]
 
         return bdsf
     
@@ -69,12 +69,12 @@ class MaterialParser:
 
         src0 = src.stages[0]
 
-        color = Color4F.from_list4(src0.color.factor).linear.tuple4
-        bdsf = tree.create_node(BeamBSDF15.bl_idname, [color] )
+        color = Color4F.from_list(src0.color.factor).linear
+        bdsf = tree.nc.node(BeamBSDF15, color)
 
-        if src0.color.map is not None:
-            timg = tree.create_teximage(src0.color.map, ColorSpace.NON_COLOR)
-            tree.link(timg, SocketName.Color, bdsf, SocketName.BaseColor)
+        if src0.color.map:
+            timg = tree.nc.teximage(src0.color.map, ColorSpace.NON_COLOR)
+            timg[SocketName.Color] >> bdsf[SocketName.BaseColor]
 
         return bdsf
 

@@ -1,4 +1,5 @@
-from grille_cdae.common.types import *
+from grille_cdae.common.type_alias import *
+import bpy as _bpy
 import bpy.types as _types
 
 
@@ -28,6 +29,20 @@ def get_idname(obj: str | type[_types.bpy_struct] | _types.bpy_struct) -> str:
     if identifier is not None: return identifier
 
     return get_identifier(obj)
+
+
+def get_image(image: _types.Image | str | None = None, colorspace: str | None = None):
+    
+    if isinstance(image, str):
+        filepath = image
+        image = _bpy.data.images.get(filepath, None)
+        if image is None:
+            image = _bpy.data.images.load(filepath, check_existing=True)
+
+    if image is not None and colorspace is not None:
+        image.colorspace_settings.name = colorspace # type: ignore
+
+    return image
 
 
 def set_default_value(socket: _types.NodeSocket | _types.NodeTreeInterfaceSocket, value: SocketValue):

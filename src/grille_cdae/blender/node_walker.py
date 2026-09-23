@@ -32,6 +32,20 @@ class NodeLayoutError(Exception):
 
 
 
+class _Result[T]:
+    __slots__ = "value"
+    def __init__(self, value: T | None):
+        self.value = cast(T, value)
+
+    def __bool__(self):
+        return self.value is not None
+
+
+
+_RESULT_NONE = _Result[Any](None)
+
+
+
 class NodeWalker():
 
     def __init__(self, node: bpy.types.Node | None = None, stack: list[types.ShaderNodeGroup] | None = None):
@@ -48,9 +62,12 @@ class NodeWalker():
         return None
 
 
-    def is_node_idname(self, ntype: str | type[types.Node]):
+    def is_node_idname[T:types.Node=types.Node](self, ntype: str | type[T]) -> _Result[T]:
         assert self.current is not None
-        return butils.get_idname(self.current) == butils.get_idname(ntype)
+        if butils.get_idname(self.current) == butils.get_idname(ntype):
+            return _Result(cast(T, self.current))
+        else:
+            return _RESULT_NONE
     
 
     def is_node_any_idname(self, *ntypes: str | type[types.Node]):

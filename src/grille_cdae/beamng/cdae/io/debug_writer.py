@@ -38,7 +38,7 @@ class DebugWriter:
         json_mesh_list: _DictList = []
         for mesh in cdae.meshes:
 
-            indices = mesh.indices.to_numpy_array()
+            indices = mesh.indices.to_array()
             regions = mesh.unpack_regions()
 
             primitives: _DictList = []
@@ -62,7 +62,7 @@ class DebugWriter:
                     "numMatFrames": mesh.numMatFrames,
                     "parentMesh": mesh.parentMesh,
                     "bounds": mesh.bounds.tuple6,
-                    "center": mesh.center.tuple3,
+                    "center": mesh.center,
                     "radius": mesh.radius,
                     "vertsPerFrame": mesh.vertsPerFrame,
                     "flags": mesh.flags,
@@ -119,7 +119,7 @@ class DebugWriter:
                 "smallest_visible_dl": cdae.smallest_visible_dl,
                 "radius": cdae.radius,
                 "tube_radius": cdae.tube_radius,
-                "center": cdae.center.tuple3,
+                "center": cdae.center,
                 "bounds": cdae.bounds.tuple6,
             },
             "vector_elements": {

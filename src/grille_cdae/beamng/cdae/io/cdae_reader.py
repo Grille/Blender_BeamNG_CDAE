@@ -1,22 +1,20 @@
+from grille_cdae.common import *
 import struct
-import numpy as np
 import zstandard as zstd
 
-from dataclasses import dataclass
-from enum import Enum
-from io import BufferedReader, BufferedWriter
+from io import BufferedReader
 
 from ..v31 import CdaeV31
 from ..packed_vector import PPackedVector
 from .msgpack_reader import MsgpackReader
-from ....common.numerics import *
+
 
 
 def read_v31_from_stream(f: BufferedReader) -> CdaeV31:
 
     cdae = CdaeV31()
 
-    (file_version, export_version) = struct.unpack("<HH", f.read(4))
+    (file_version, _) = struct.unpack("<HH", f.read(4))
     if (file_version != 31):
         raise Exception()
     
@@ -84,7 +82,7 @@ def read_v31_from_stream(f: BufferedReader) -> CdaeV31:
 
 
     meshes_count = body.read_int32()
-    for i in range(meshes_count):
+    for _ in range(meshes_count):
         mesh = CdaeV31.Mesh()
         cdae.meshes.append(mesh)
 
@@ -153,7 +151,7 @@ def read_v31_from_stream(f: BufferedReader) -> CdaeV31:
     
 
     mat_count = body.read_int32()
-    for i in range(mat_count):
+    for _ in range(mat_count):
         mat = CdaeV31.Material()
         cdae.materials.append(mat)
 

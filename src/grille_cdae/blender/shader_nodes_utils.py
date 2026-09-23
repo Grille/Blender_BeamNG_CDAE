@@ -24,11 +24,12 @@ class NodeLayoutValidator(NodeWalker):
         
         depth = 0
         while True:
-            if self.is_node_idname(NodeName.TexImage):
-                image = self.current.image
+            res = self.is_node_idname(types.ShaderNodeTexImage)
+            if res:
+                image = res.value.image
                 if image is None:
                     return True
-                return cs.value == image.colorspace_settings.name
+                return cs.value == str(not_none(image.colorspace_settings).name)
             if not self.try_follow(0) or depth > maxdepth:
                 return True
             depth += 1

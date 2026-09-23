@@ -1,21 +1,39 @@
+from __future__ import annotations
+
 import struct as _struct
+from typing_extensions import Self
 
 from grille_cdae.common.imports import *
-from grille_cdae.common.types import *
+from grille_cdae.common.type_alias import *
 
 
 
 type _Number = float | int
-type _ValueSequence = Sequence[float | int] | mathutils.Vector | mathutils.Quaternion
+type _ValueSequence = Sequence[float] | mathutils.Vector | mathutils.Quaternion
 
 
 
-class Vec2F:
-    __slots__ = "x", "y"
-    
-    def __init__(self, x: float = 0.0, y: float = 0.0):
-        self.x = x
-        self.y = y
+def _new_tuple[T:tuple](cls: type[T], iterable: Iterable) -> T: # type: ignore
+    return tuple.__new__(cls, iterable) # type: ignore
+
+
+class _Vec2FMixin:
+    __slots__ = ()
+ 
+    LENGTH = 2
+    STRUCT = "<2f"
+    SIZE: int = 8
+
+    def __getitem__(self, index: int) -> float: raise NotImplementedError
+    def __len__(self) -> int: raise NotImplementedError
+    def __new__(cls, *args: float) -> Self: raise NotImplementedError
+
+    @property
+    def x(self): return self[0]
+
+    @property 
+    def y(self): return self[1]
+
 
 
     @classmethod
@@ -29,50 +47,30 @@ class Vec2F:
 
 
     @classmethod
-    def from_obj(cls, obj: _Number | _ValueSequence):
+    def from_obj(cls, obj: object):
         if isinstance(obj, float | int): return cls.from_value(obj)
-        return cls.from_list(obj)
+        return cls.from_list(cast(_ValueSequence, obj))
+    
 
-
-    def unpack(self, data: bytes):
-        (self.x, self.y) = _struct.unpack("<2f", data)
+    @classmethod
+    def unpack(cls, data: bytes):
+        return cls(*_struct.unpack(cls.STRUCT, data))
     
 
     def pack(self):
-        return _struct.pack("<2f", self.x, self.y)
-    
-
-    @property
-    def tuple2(self):
-        return (self.x, self.y)
-    
-
-    def __eq__(self, value: object):
-        if not isinstance(value, Vec2F):
-            return False
-        return self.x == value.x and self.y == value.y
-    
-
-    def __str__(self):
-        return f"<{self.__class__.__name__} (x={self.x:.2f}, y={self.y:.2f})>"
-    
-
-    def __iter__(self):
-        yield self.x
-        yield self.y
+        return _struct.pack(self.STRUCT, *self)
     
 
 
-class Vec3F(Vec2F):
-    __slots__ = "z"
+class _Vec3FMixin(_Vec2FMixin):
+    __slots__ = ()
 
-    ZERO: 'Vec3F'
-    ONE: 'Vec3F'
+    LENGTH = 3
+    STRUCT = "<3f"
+    SIZE: int = 12
 
-    def __init__(self, x: float = 0.0, y: float = 0.0, z: float = 0.0):
-        self.x = x
-        self.y = y
-        self.z = z
+    @property 
+    def z(self): return self[2]
 
 
     @classmethod
@@ -83,19 +81,56 @@ class Vec3F(Vec2F):
 
     @classmethod
     def from_value(cls, value: _Number): return cls(value, value, value)
+
     
 
-    @property
-    def xy(self): return Vec2F(self.x, self.y)
+class _Vec4FMixin(_Vec3FMixin):
+    __slots__ = ()
+
+    LENGTH = 4
+    STRUCT = "<4f"
+    SIZE: int = 16
+
+    @property 
+    def w(self): return self[3]
+
+
+    @classmethod
+    def from_list(cls, list: _ValueSequence):
+        if len(list) >= 4: return cls(list[0], list[1], list[2], list[3])
+        return super().from_list(list)
+
+
+    @classmethod
+    def from_value(cls, value: _Number): return cls(value, value, value, value)
+
+
     
 
-    def unpack(self, data: bytes):
-        (self.x, self.y, self.z) = _struct.unpack("<3f", data)
-    
+class Vec2F(tuple[float, float], _Vec2FMixin):
+    __slots__ = ()
 
-    def pack(self):
-        return _struct.pack("<3f", self.x, self.y, self.z)
+    def __new__(cls, x: float = 0.0, y: float = 0.0):
+        return _new_tuple(cls, (x, y))
+
+    def __str__(self):
+        return f"<{self.__class__.__name__} (x={self.x:.2f}, y={self.y:.2f})>"
+
+
+    ZERO: Vec2F
+    ONE: Vec2F
+
+Vec2F.ZERO = Vec2F.from_value(0.0)
+Vec2F.ONE = Vec2F.from_value(1.0)
+
     
+    
+class Vec3F(tuple[float, float, float], _Vec3FMixin):
+    __slots__ = ()
+
+    def __new__(cls, x: float = 0.0, y: float = 0.0, z: float = 0.0):
+        return _new_tuple(cls, (x, y, z))
+
 
     def min(self, other: 'Vec3F'):
         return Vec3F(min(self.x, other.x), min(self.y, other.y), min(self.z, other.z))
@@ -113,98 +148,49 @@ class Vec3F(Vec2F):
         return max(self.x, self.y, self.z)
     
 
-    @property
-    def tuple3(self):
-        return (self.x, self.y, self.z)
-    
-
     def __str__(self):
         return f"<{self.__class__.__name__} (x={self.x:.2f}, y={self.y:.2f}, z={self.z:.2f})>"
-    
 
-    def __eq__(self, value):
-        if not isinstance(value, Vec3F):
-            return False
-        return self.x == value.x and self.y == value.y and self.z == value.z
-    
 
-    def __iter__(self):
-        yield self.x
-        yield self.y
-        yield self.z
+    ZERO: Vec3F
+    ONE: Vec3F
+
+Vec3F.ZERO = Vec3F(0.0,0.0,0.0)
+Vec3F.ONE = Vec3F(1.0,1.0,1.0)
+
         
 
-
-class Vec4F(Vec3F):
-    __slots__ = "w"
-
-    def __init__(self, x: float = 0.0, y: float = 0.0, z: float = 0.0, w: float = 0.0):
-        super().__init__(x, y, z)
-        self.w: float = w
+class _Vec4F(tuple[float, float, float, float], _Vec4FMixin):
+    __slots__ = ()
 
 
-    @classmethod
-    def from_list(cls, list: _ValueSequence):
-        if len(list) >= 4: return cls(list[0], list[1], list[2], list[3])
-        return super().from_list(list)
+    def __new__(cls, x: float = 0.0, y: float = 0.0, z: float = 0.0, w: float = 0.0):
+        return _new_tuple(cls, (x, y, z, w))
 
-
-    @classmethod
-    def from_value(cls, value: _Number): return cls(value, value, value, value)
-
-
-    def unpack(self, data: bytes):
-        (self.x, self.y, self.z, self.w) = _struct.unpack("<4f", data)
-    
-
-    def pack(self):
-        return _struct.pack("<4f", self.x, self.y, self.z, self.w)
-    
-
-    @property
-    def tuple4(self):
-        return (self.x, self.y, self.z, self.w)
-        
-
-    @property
-    def list4(self):
-        return [self.x, self.y, self.z, self.w]
-    
 
     def __str__(self):
         return f"<{self.__class__.__name__} (x={self.x:.2f}, y={self.y:.2f}, z={self.z:.2f}, w={self.w:.2f})>"
-    
-    
-    def __eq__(self, value: object):
-        if not isinstance(value, Vec4F):
-            return False
-        return self.x == value.x and self.y == value.y and self.z == value.z and self.w == value.w
-    
 
 
-class Quat4F(Vec4F):
+
+class Vec4F(_Vec4F):
+    __slots__ = ()
+
+
+
+class _Quat4F(_Vec4F):
     __slots__ = ()
 
     @classmethod
     def from_blender_quaternion(cls, quat: mathutils.Quaternion | Tuple4F):
         if isinstance(quat, tuple): quat = mathutils.Quaternion(quat)
-        self = cls()
-        self.x = quat.x
-        self.y = quat.y
-        self.z = quat.z
-        self.w = -quat.w
-        return self
+        return cls(quat.x, quat.y, quat.z, -quat.w)
     
 
     @classmethod
     def from_collada_quaternion(cls, quat: mathutils.Quaternion | Tuple4F):
         if isinstance(quat, tuple): quat = mathutils.Quaternion(quat)
-        self = cls()
-        self.x = -quat.w
-        self.y = quat.x
-        self.z = quat.y
-        self.w = quat.z
-        return self
+        return cls(-quat.w, quat.x, quat.y, quat.z)
     
     
     def to_collada_quaternion(self):
@@ -215,25 +201,31 @@ class Quat4F(Vec4F):
         return mathutils.Quaternion((self.x, self.y, self.z, -self.w))
     
 
-    @classmethod
-    def create_identity(cls):
-        return cls(0.0, 0.0, 0.0, -1.0)
-    
-    
 
-class Quat4I16(Quat4F):
+class Quat4F(_Quat4F):
     __slots__ = ()
-   
+
+    IDENTITY: Quat4F
+
+
+Quat4F.IDENTITY = Quat4F(0.0, 0.0, 0.0, -1.0)
+
+
+    
+class Quat4I16(_Quat4F):
+    __slots__ = ()
+
+    STRUCT = "" 
+    SIZE: int = 8
     FP_SCALE = 32767.0
 
+    IDENTITY: Quat4I16
 
-    def unpack(self, data: bytes):
+    @classmethod
+    def unpack(cls, data: bytes):
         def cast(value: int): return value / Quat4I16.FP_SCALE
         array = np.frombuffer(data, dtype=np.int16, count=4)
-        self.x = cast(array[0])
-        self.y = cast(array[1])
-        self.z = cast(array[2])
-        self.w = cast(array[3])
+        return cls(cast(array[0]), cast(array[1]), cast(array[2]), cast(array[3]))
 
 
     def pack(self):
@@ -242,19 +234,37 @@ class Quat4I16(Quat4F):
         return arr.tobytes()
 
 
-
-class Box6F:
-    __slots__ = "min", "max"
-
-    def __init__(self, minx = 0.0, miny = 0.0, minz = 0.0, maxx = 0.0, maxy = 0.0, maxz = 0.0):
-        self.min = Vec3F(minx, miny, minz)
-        self.max = Vec3F(maxx, maxy, maxz)
+Quat4I16.IDENTITY = Quat4I16(0.0, 0.0, 0.0, -1.0)
 
 
-    def extended(self, other: 'Box6F'):
+
+class Box6F(tuple[Vec3F, Vec3F]):
+    __slots__ = ()
+
+    SIZE: int = 24
+
+    @property
+    def min(self): return self[0]
+
+    @property
+    def max(self): return self[1]
+
+
+
+    def __new__(cls, min = Vec3F.ZERO, max = Vec3F.ZERO):
+        return _new_tuple(cls, (min, max))
+
+
+    @classmethod
+    def from_list(cls, list: _ValueSequence):
+        if len(list) == 6: return cls(Vec3F(list[0], list[1], list[2]), Vec3F(list[3], list[4], list[5]))
+        raise ValueError()
+
+
+    def extended(self, other: Box6F):
         min = self.min.min(other.min)
         max = self.max.max(other.max)
-        return Box6F(*min, *max)
+        return Box6F(min, max)
     
 
     def center(self):
@@ -275,68 +285,78 @@ class Box6F:
         
 
 
-class Color4F(Vec4F):
+class Color4F(_Vec4F):
     __slots__ = ()
 
-    def __init__(self, r = 0.0, g = 0.0, b = 0.0, a = 0.0):
-        self.r = r
-        self.g = g
-        self.b = b
-        self.a = a
+    def __new__(cls, r: float = 0.0, g: float = 0.0, b: float = 0.0, a: float = 1.0):
+        return _new_tuple(cls, (r, g, b, a))
 
 
     @property
-    def linear(self):
-        unit = Color4F.unit_srgb_to_linear
-        return Color4F(unit(self.r), unit(self.g), unit(self.b), self.a)
+    def linear(self): return self.apply_to_rgb(Color4F.unit_srgb_to_linear)
     
 
     @property
-    def srgb(self):
-        unit = Color4F.unit_linear_to_srgb
-        return Color4F(unit(self.r), unit(self.g), unit(self.b), self.a)
+    def srgb(self): return self.apply_to_rgb(Color4F.unit_linear_to_srgb)
+
+
+    def apply_to_rgb(self, func: Callable[[float], float]):
+        return Color4F(func(self.r), func(self.g), func(self.b), self.a)
     
 
     @staticmethod
-    def unit_srgb_to_linear(c: float):
+    def unit_srgb_to_linear(c: float) -> float:
         return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
 
 
     @staticmethod
-    def unit_linear_to_srgb(c: float):
+    def unit_linear_to_srgb(c: float) -> float:
         return c * 12.92 if c <= 0.0031308 else 1.055 * (c ** (1 / 2.4)) - 0.055
 
 
     @property
-    def r(self) -> float: return self.x
-    @r.setter
-    def r(self, value: float): self.x = value
+    def r(self): return self.x
 
     @property
-    def g(self) -> float: return self.y
-    @g.setter
-    def g(self, value: float): self.y = value
+    def g(self): return self.y
 
     @property
-    def b(self) -> float: return self.z
-    @b.setter
-    def b(self, value: float): self.z = value
+    def b(self): return self.z
 
     @property
-    def a(self) -> float: return self.w
-    @a.setter
-    def a(self, value: float): self.w = value
-    
+    def a(self): return self.w 
 
 
-class Transforms:
-    __slots__ = "translation", "scale", "rotation"
-    IDENTITY: 'Transforms'
+    ZERO: Color4F
+    ONE: Color4F
+    WHITE: Color4F
+    BLACK: Color4F
 
-    def __init__(self, translation: Vec3F| None = None, scale: Vec3F | None = None, rotation: Quat4I16 | None = None):
-        self.translation = Vec3F.ZERO if translation is None else translation
-        self.scale = Vec3F.ONE if scale is None else scale
-        self.rotation = Quat4I16.create_identity() if rotation is None else rotation
+
+Color4F.ZERO = Color4F.from_value(0.0)
+Color4F.ONE = Color4F.from_value(1.0)
+Color4F.WHITE = Color4F.ONE
+Color4F.BLACK = Color4F(0.0 ,0.0 ,0.0 ,1.0)
+
+
+
+class Transforms(tuple[Vec3F, Vec3F, Quat4I16]):
+    __slots__ = ()
+
+    IDENTITY: Transforms
+
+    @property
+    def translation(self): return self[0]
+
+    @property
+    def scale(self): return self[1]
+
+    @property
+    def rotation(self): return self[2]
+
+
+    def __new__(cls, translation: Vec3F = Vec3F.ZERO, scale: Vec3F = Vec3F.ONE, rotation: Quat4I16 = Quat4I16.IDENTITY):
+        return _new_tuple(cls, (translation, scale, rotation))
 
 
     @classmethod
@@ -347,17 +367,8 @@ class Transforms:
         return cls(translation, scale, rotation)
     
 
-    def __eq__(self, value: object):
-        if not isinstance(value, Transforms):
-            return False
-        return self.translation == value.translation and self.scale == value.scale and self.rotation == value.rotation
-    
-
-
-Vec3F.ZERO = Vec3F(0.0,0.0,0.0)
-Vec3F.ONE = Vec3F(1.0,1.0,1.0)
-
 Transforms.IDENTITY = Transforms()
+
 
 
 __all__ = "Vec2F", "Vec3F", "Vec4F", "Quat4F", "Quat4I16", "Box6F", "Color4F", "Transforms"

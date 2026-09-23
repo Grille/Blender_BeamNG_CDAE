@@ -4,11 +4,8 @@ import struct
 
 from grille_cdae.common import *
 
-from dataclasses import dataclass, asdict
 from numpy.typing import NDArray
-
 from .packed_vector import PackedVector
-from ...common.numerics import *
 
 
 
@@ -19,7 +16,7 @@ class _PHasNameIndex(Protocol):
 
 class CdaeV31:
 
-    @dataclass
+    @dataclass(slots=True)
     class Node:
 
         nameIndex: int = -1
@@ -29,8 +26,9 @@ class CdaeV31:
         nextSibling: int = -1
 
 
-        def unpack(self, data: bytes):
-            (self.nameIndex, self.parentIndex, self.firstObject, self.firstChild, self.nextSibling) = struct.unpack("<5i", data)
+        @classmethod
+        def unpack(cls, data: bytes):
+            return cls(*struct.unpack("<5i", data))
         
 
         def pack(self):
@@ -38,7 +36,7 @@ class CdaeV31:
 
 
 
-    @dataclass
+    @dataclass(slots=True)
     class Object:
 
         nameIndex: int = -1
@@ -49,8 +47,9 @@ class CdaeV31:
         firstDecal: int = -1
 
 
-        def unpack(self, data: bytes):
-            (self.nameIndex, self.numMeshes, self.startMeshIndex, self.nodeIndex, self.nextSibling, self.firstDecal) = struct.unpack("<6i", data)
+        @classmethod
+        def unpack(cls, data: bytes):
+            return cls(*struct.unpack("<6i", data))
         
 
         def pack(self):
@@ -198,7 +197,7 @@ class CdaeV31:
 
 
 
-    @dataclass
+    @dataclass(slots=True)
     class ObjectState:
         
         vis: float = 1.0
@@ -206,30 +205,34 @@ class CdaeV31:
         matFrameIndex: int = 0
 
 
-        def unpack(self, data: bytes):
-            self.vis, self.frameIndex, self.matFrameIndex = struct.unpack("<fii", data)
+        @classmethod
+        def unpack(cls, data: bytes):
+            return cls(*struct.unpack("<fii", data))
+        
 
         def pack(self):
             return struct.pack("<fii", self.vis, self.frameIndex, self.matFrameIndex)
 
 
 
-    @dataclass
+    @dataclass(slots=True)
     class Trigger:
 
         state: int = 0
         pos: float = 0.0
 
 
-        def unpack(self, data: bytes):
-            self.state, self.pos = struct.unpack("<if", data)
+        @classmethod
+        def unpack(cls, data: bytes):
+            return cls(*struct.unpack("<if", data))
+
 
         def pack(self):
             return struct.pack("<if", self.state, self.pos)
 
 
 
-    @dataclass
+    @dataclass(slots=True)
     class SubShape:
 
         firstNode: int = 0
@@ -239,7 +242,7 @@ class CdaeV31:
 
 
 
-    @dataclass
+    @dataclass(slots=True)
     class Detail:
 
         nameIndex: int = 0
@@ -256,15 +259,9 @@ class CdaeV31:
         bbPolarAngle: float = 0
         bbIncludePoles: int = 0
 
-        def unpack(self, data: bytes):
-            (
-                self.nameIndex, self.subShapeNum, self.objectDetailNum,
-                self.size, self.averageError, self.maxError,
-                self.polyCount,
-                self.bbDimension, self.bbDetailLevel, self.bbEquatorSteps, self.bbPolarSteps,
-                self.bbPolarAngle,
-                self.bbIncludePoles
-            ) = struct.unpack("<3i 3f 5i f I", data)
+        @classmethod
+        def unpack(cls, data: bytes):
+            return cls(*struct.unpack("<3i 3f 5i f I", data))
 
         def pack(self):
             return struct.pack("<3i 3f 5i f I",
@@ -276,7 +273,7 @@ class CdaeV31:
                 self.bbIncludePoles
         )
 
-        def asdict(self): return asdict(self)
+        def asdict(self): return dataclass_asdict(self)
 
 
 
@@ -292,7 +289,7 @@ class CdaeV31:
 
     class Mesh:
 
-        @dataclass
+        @dataclass(slots=True)
         class DrawRegion:
 
             class InfoMask(IntEnum):
@@ -310,7 +307,7 @@ class CdaeV31:
 
 
 
-            @dataclass
+            @dataclass(slots=True)
             class DrawInfo:
                 material: int
                 type: 'CdaeV31.Mesh.DrawRegion.DrawType'
@@ -368,8 +365,10 @@ class CdaeV31:
                 return range(start, stop)
 
 
-            def unpack(self, data: bytes):
-                self.index_start, self.index_count, self.raw_info = struct.unpack("<iii", data)
+            @classmethod
+            def unpack(cls, data: bytes):
+                return cls(*struct.unpack("<iii", data))
+
 
             def pack(self):
                 return struct.pack("<iii", self.index_start, self.index_count, self.raw_info)
@@ -400,9 +399,9 @@ class CdaeV31:
             self.tverts1 = PackedVector(np.float32, Vec2F, 8) #vtx vec2
             self.colors = PackedVector(np.ubyte, element_size=4) #vtx int/rgba
             self.norms = PackedVector(np.float32, Vec3F, 12) #vtx vec3
-            self.encoded_norms = PackedVector(np.ubyte, element_size=1) #vtx byte
+            self.encoded_norms = PackedVector(np.ubyte) #vtx byte
             self.draw_regions = PackedVector(np.int32, CdaeV31.Mesh.DrawRegion, 12) #start: int, count: int, material_index: int (DrawRegion)
-            self.indices = PackedVector(np.int32, element_size=4) #int
+            self.indices = PackedVector(np.int32) #int
             self.tangents = PackedVector(np.float32, Vec4F, 16) #vtx vec4
 
             self.vertsPerFrame: int = 0
@@ -414,13 +413,13 @@ class CdaeV31:
 
 
         def get_vec4f_colors(self):
-            byte_array = self.colors.to_numpy_array()
+            byte_array = self.colors.to_array()
             float_array = byte_array.astype(np.float32) / 255.0
             return float_array
         
 
         def set_vec4_colors(self, colors: NDArray[np.float32]):
-            self.colors.set_numpy_array((colors * 255.0).astype(np.ubyte))
+            self.colors.set_array((colors * 255.0).astype(np.ubyte))
         
 
         def data_equals(self, other: 'CdaeV31.Mesh') -> bool:
@@ -489,7 +488,7 @@ class CdaeV31:
         self.radius: float = 5.0
         self.tube_radius: float = 5.0
         self.center: Vec3F = Vec3F()
-        self.bounds: Box6F = Box6F(-2,-2,-2, 2, 2, 2)
+        self.bounds: Box6F = Box6F(Vec3F(-2,-2,-2), Vec3F(2, 2, 2))
 
         self.nodes = PackedVector(np.ubyte, CdaeV31.Node, 20) #Node
         self.objects = PackedVector(np.ubyte, CdaeV31.Object, 24) #Object
@@ -561,10 +560,10 @@ class CdaeV31:
     
 
     def unpack_subshapes(self):
-        fn = self.subShapeFirstNode.to_numpy_array()
-        nn = self.subShapeNumNodes.to_numpy_array()
-        fo = self.subShapeFirstObject.to_numpy_array()
-        no = self.subShapeNumObjects.to_numpy_array()
+        fn = self.subShapeFirstNode.to_array()
+        nn = self.subShapeNumNodes.to_array()
+        fo = self.subShapeFirstObject.to_array()
+        no = self.subShapeNumObjects.to_array()
 
         count = fn.size
         assert all(arr.size == count for arr in (nn, fo, no)), "Subshape buffers must have the same length"
@@ -597,7 +596,7 @@ class CdaeV31:
         return self.nodes.pack_list(list)
 
 
-    def pack_objects(self, list):
+    def pack_objects(self, list: list[CdaeV31.Object]):
         return self.objects.pack_list(list)
     
 
@@ -612,10 +611,10 @@ class CdaeV31:
     def pack_subshapes(self, subshapes: 'list[CdaeV31.SubShape]'):
         count = len(subshapes)
 
-        fn = np.empty(count, dtype=np.uint32)
-        nn = np.empty(count, dtype=np.uint32)
-        fo = np.empty(count, dtype=np.uint32)
-        no = np.empty(count, dtype=np.uint32)
+        fn = self.subShapeFirstNode.new_array(count)
+        nn = self.subShapeNumNodes.new_array(count)
+        fo = self.subShapeFirstObject.new_array(count)
+        no = self.subShapeNumObjects.new_array(count)
 
         for i, s in enumerate(subshapes):
             fn[i] = s.firstNode
@@ -623,21 +622,21 @@ class CdaeV31:
             fo[i] = s.firstObject
             no[i] = s.numObjects
 
-        self.subShapeFirstNode.set_numpy_array(fn)
-        self.subShapeNumNodes.set_numpy_array(nn)
-        self.subShapeFirstObject.set_numpy_array(fo)
-        self.subShapeNumObjects.set_numpy_array(no)
+        self.subShapeFirstNode.set_array(fn)
+        self.subShapeNumNodes.set_array(nn)
+        self.subShapeFirstObject.set_array(fo)
+        self.subShapeNumObjects.set_array(no)
     
 
-    def pack_details(self, list):
+    def pack_details(self, list: list['CdaeV31.Detail']):
         return self.details.pack_list(list)
     
 
-    def pack_triggers(self, list):
+    def pack_triggers(self, list: list['CdaeV31.Trigger']):
         return self.triggers.pack_list(list)
     
 
-    def pack_states(self, list):
+    def pack_states(self, list: list['CdaeV31.ObjectState']):
         return self.objectStates.pack_list(list)
     
 
@@ -663,3 +662,6 @@ class CdaeV31:
         print("- ground")
         print(self.groundRotations.element_count)
         print(self.groundTranslations.element_count)
+
+
+__all__ = "CdaeV31",

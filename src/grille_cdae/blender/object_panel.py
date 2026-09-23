@@ -29,11 +29,11 @@ class ObjectPanel(Panel):
 
         has_mesh = ObjectProperties.has_mesh(obj)
 
-        layout.prop(obj, ObjectProperties.ROLE)
+        layout.prop(obj, ObjectProperties.role.key)
 
-        role = ObjectProperties.get_role(obj)
+        role = ObjectProperties.role[obj]
         if role == ObjectRole.Generic:
-            layout.prop(obj, ObjectProperties.PATH)
+            layout.prop(obj, ObjectProperties.path.key)
             return
         
         uses_mesh = role.uses_mesh
@@ -50,11 +50,11 @@ class ObjectPanel(Panel):
 
 
         if role.uses_lod:
-            layout.prop(obj, ObjectProperties.LOD_SIZE)
+            layout.prop(obj, ObjectProperties.lod_size.key)
 
         if role == ObjectRole.Billboard:
-            layout.prop(obj, ObjectProperties.BB_FLAG0, text="Lock XY Axis")
+            layout.prop(obj, ObjectProperties.bb_flag0.key, text="Lock XY Axis")
 
         if role == ObjectRole.AutoBillboard:
-            layout.prop(obj, ObjectProperties.BB_DIMENSION)
-            layout.prop(obj, ObjectProperties.BB_EQUATOR_STEPS)
+            layout.prop(obj, ObjectProperties.bb_dimension.key)
+            layout.prop(obj, ObjectProperties.bb_equator_steps.key)

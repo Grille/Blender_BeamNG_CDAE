@@ -1,15 +1,12 @@
-import bpy
-import bmesh
+
+
+
 import re
-import numpy as np
 
-from numpy.typing import NDArray
-from enum import Enum
-from dataclasses import dataclass
-from typing import List, Dict, Optional, Tuple, cast, Generator
-from collections import defaultdict
+from grille_cdae.common import *
+from typing import Generator
 
-from .v31 import *
+from .v31 import CdaeV31
 from ...blender.object_properties import ObjectProperties, ObjectRole
 
 
@@ -66,7 +63,7 @@ class CdaeNodeList:
 
 
 
-class CdaeTreeBuildMode(str, Enum):
+class CdaeTreeBuildMode(StrEnum):
     NONE = "NONE"
     SINGLE_SHAPE = "SINGLE_SHAPE"
     DAE_NODE_TREE = "DAE_NODE_TREE"
@@ -219,7 +216,7 @@ class CdaeTree:
 
         shape = self.get_shape()
         has_mesh = ObjectProperties.has_mesh(obj)
-        lod_size = ObjectProperties.get_lod(obj)
+        lod_size = ObjectProperties.lod_size[obj]
         namespace = "base00.start01"
 
         def add(path: str, use_obj = True):
@@ -228,24 +225,24 @@ class CdaeTree:
                 node.bpy_sample_obj = obj
                 node.get_object().set_mesh(0, obj)
 
-        match ObjectProperties.get_role(obj):
+        match ObjectProperties.role[obj]:
             case ObjectRole.Generic:
-                path = getattr(obj, ObjectProperties.PATH)
+                path = ObjectProperties.path[obj]
                 add(path, has_mesh)
             case ObjectRole.Mesh:
                 add(f"{namespace}.detail{lod_size}")
             case ObjectRole.Collision:
                 add(f"{namespace}.colmesh-1")
             case ObjectRole.Billboard:
-                bb = "bbz" if getattr(obj, ObjectProperties.BB_FLAG0) else "bb"
+                bb = "bbz" if ObjectProperties.bb_flag0[obj] else "bb"
                 add(f"{namespace}.{bb}_billboard{lod_size}")
             case ObjectRole.NullDetail:
                 add(f"{namespace}.nulldetail{lod_size}", False)
             case ObjectRole.AutoBillboard:
                 add(f"{namespace}.bb_autobillboard{lod_size}", False)
                 self.details["bb_autobillboard"] = detail = CdaeTree.Detail(shape, -1)
-                detail.template.bbDimension = getattr(obj, ObjectProperties.BB_DIMENSION)
-                detail.template.bbEquatorSteps = getattr(obj, ObjectProperties.BB_EQUATOR_STEPS)
+                detail.template.bbDimension = ObjectProperties.bb_dimension[obj]
+                detail.template.bbEquatorSteps = ObjectProperties.bb_equator_steps[obj]
                 detail.template.size = lod_size
             case _:
                 raise ValueError()

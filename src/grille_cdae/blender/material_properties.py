@@ -38,49 +38,27 @@ GROUNDMODELS = [
 ]
 
 
-class MaterialProperties(StrEnum):
+_pinfo = props.PropertyInfoFactory(types.Material)
 
-    PREFIX = "grille_beamng_cdae_"
-    VERSION = f"{PREFIX}version"
-    GROUND_TYPE = f"{PREFIX}groundtype"
-    GROUND_TYPE_SELECT = f"{PREFIX}groundtype_select"
-    UV1_HINT = f"{PREFIX}uv1hint"
+class MaterialProperties:
+
+    groundtype_custom = _pinfo.str("groundtype_custom", "", "")
+    groundtype_select = _pinfo.enum("groundtype_select", "Ground Type", GROUNDMODEL_CUSTOM, GROUNDMODELS)
 
 
     @staticmethod
     def get_ground_type(bmat: bpy.types.Material):
-        value = getattr(bmat, MaterialProperties.GROUND_TYPE_SELECT)
+        value = MaterialProperties.groundtype_select[bmat]
         if value == GROUNDMODEL_CUSTOM:
-            return getattr(bmat, MaterialProperties.GROUND_TYPE)
+            return MaterialProperties.groundtype_custom[bmat]
         return value
     
 
     @staticmethod
-    def get_version(bmat: bpy.types.Material):
-        return float(getattr(bmat, MaterialProperties.VERSION))
-
-
-    @staticmethod
     def register():
-        def _set(key: str, property: object): setattr(bpy.types.Material, key, property)
-
-        groundmodels_items = [(item, item, "") for item in GROUNDMODELS]
-
-        _set(MaterialProperties.GROUND_TYPE_SELECT, props.Enum(
-            name="Ground Type",
-            items=groundmodels_items,
-            default=GROUNDMODELS[0],
-        ))
-
-        _set(MaterialProperties.GROUND_TYPE, props.String(
-            name="",
-            default=""
-        ))
+        _pinfo.register()
 
 
     @staticmethod
     def unregister():
-        def _del(key: str): delattr(bpy.types.Material, key)
-        
-        _del(MaterialProperties.GROUND_TYPE_SELECT)
-        _del(MaterialProperties.GROUND_TYPE)
+        _pinfo.unregister()

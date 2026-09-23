@@ -32,11 +32,11 @@ class MaterialNodeWalker(NodeWalker):
         child: 'MaterialNodeWalker.MatSocketInfo' = None
         issues: list[str] = None
 
-        def set_value_or_color(self, value: float | tuple):
-            if isinstance(value, float):
+        def set_value_or_color(self, value: float | tuple[float,...]):
+            if isinstance(value, float | int):
                 self.factor = value
             else:
-                self.color = Color4F.from_list4(value)
+                self.color = Color4F.from_list(value)
 
 
     @dataclass

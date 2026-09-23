@@ -28,13 +28,21 @@ class CdaeMaterialIndexer:
             self.materials.append(bmat)
         return self.material_to_index[bmat]
     
+
     
 class MeshDataEvalMode(StrEnum):
-    RawData = "RawData"
+    RawData = "None"
     ModViewport = "Viewport"
     ModRender = "Render"
     ModAll = "All"
-    Depsgraph = "depsgraph"
+    Depsgraph = "Depsgraph"
+
+    def get_description(self) -> str:
+        return _MeshDataEvalMode_desc.get(self, "")
+
+_MeshDataEvalMode_desc = {
+   MeshDataEvalMode.Depsgraph: "More efficient alternative to Viewport.",
+}
 
 
 
@@ -245,7 +253,7 @@ class CdaeMeshBuilder:
             mesh.calc_tangents()
             npmesh.tangents = ctx.get_loop_data("tangent", 4)
 
-        material_ranges: defaultdict[int, list[tuple[int, int, int]]] = defaultdict(list)
+        material_ranges: defaultdict[int, list[Tuple3I]] = defaultdict(list)
         for tri in mesh.loop_triangles:
             poly = mesh.polygons[tri.polygon_index]
             mat = mesh.materials[poly.material_index] if poly.material_index < len(mesh.materials) else None
@@ -253,11 +261,11 @@ class CdaeMeshBuilder:
 
             #def get_loop_index(idx: int) -> int: return tri.loops[0] # type: ignore
 
-            loops: tuple[int, int, int] = (tri.loops[2], tri.loops[1], tri.loops[0]) # type: ignore
+            loops: Tuple3I = (tri.loops[2], tri.loops[1], tri.loops[0]) # type: ignore
             material_ranges[global_mat_index].append(loops)
 
         
-        indices_list: list[int] = []
+        indices_list: list[Tuple3I] = []
         for mat_index in material_ranges:
             matrange = material_ranges[mat_index]
             indices_list.extend(matrange)
@@ -265,7 +273,7 @@ class CdaeMeshBuilder:
 
         U16_LIMIT = 65535
 
-        draw_regions = []
+        draw_regions: list[Tuple3I] = []
         offset = 0
         for mat_index in material_ranges:
             count = len(material_ranges[mat_index]) * 3
@@ -290,31 +298,31 @@ class CdaeMeshBuilder:
         mesh_out.type = CdaeV31.MeshType.STANDARD
 
         npmesh.collapse_vertices()
-        mesh_out.draw_regions.set_numpy_array(npmesh.draw_regions)
-        mesh_out.indices.set_numpy_array(npmesh.indices)
-        mesh_out.verts.set_numpy_array(npmesh.positions)
-        mesh_out.norms.set_numpy_array(npmesh.normals)
+        mesh_out.draw_regions.set_array(npmesh.draw_regions)
+        mesh_out.indices.set_array(npmesh.indices)
+        mesh_out.verts.set_array(npmesh.positions)
+        mesh_out.norms.set_array(npmesh.normals)
 
         if self.compute_encoded_normals:
             encoded_norms = np.zeros(len(npmesh.normals), dtype=np.uint8)
             for i in range(len(npmesh.normals)):
                 encoded_norms[i] = U8NormalTable.encode_normal(npmesh.normals[i])
-            mesh_out.encoded_norms.set_numpy_array(encoded_norms)
+            mesh_out.encoded_norms.set_array(encoded_norms)
 
         if npmesh.tangents is not None:
-            mesh_out.tangents.set_numpy_array(npmesh.tangents)
+            mesh_out.tangents.set_array(npmesh.tangents)
 
         if npmesh.uvs0 is not None:
-            mesh_out.tverts0.set_numpy_array(npmesh.uvs0)
+            mesh_out.tverts0.set_array(npmesh.uvs0)
         else:
             # generate default UV so the object is visible in BeamNG (default UV values is [0.0, 1.0] as BeamNG does for a .dae without UV)
-            mesh_out.tverts0.set_numpy_array(np.tile(np.array([0.0, 1.0], dtype=np.float32), (len(npmesh.positions), 1)))
+            mesh_out.tverts0.set_array(np.tile(np.array([0.0, 1.0], dtype=np.float32), (len(npmesh.positions), 1)))
 
         if npmesh.uvs1 is not None:
-            mesh_out.tverts1.set_numpy_array(npmesh.uvs1)
+            mesh_out.tverts1.set_array(npmesh.uvs1)
 
         if npmesh.colors is not None:
-            mesh_out.colors.set_numpy_array(npmesh.colors)
+            mesh_out.colors.set_array(npmesh.colors)
 
 
         mesh_out.numFrames = 1
@@ -350,13 +358,16 @@ class CdaeMeshBuilder:
 
         else:
 
+            collection = not_none(bpy.context.collection)
+            view_layer = not_none(bpy.context.view_layer)
+
             temp_obj: bpy.types.Object = obj.copy()
             mesh = temp_obj.data = obj.data.copy()
 
-            bpy.context.collection.objects.link(temp_obj)
+            collection.objects.link(temp_obj)
 
-            active = bpy.context.view_layer.objects.active
-            bpy.context.view_layer.objects.active = temp_obj
+            active = view_layer.objects.active
+            view_layer.objects.active = temp_obj
             
             match self.eval_mode:
                 case MeshDataEvalMode.RawData:
@@ -374,7 +385,7 @@ class CdaeMeshBuilder:
                 bpy.ops.object.modifier_apply(modifier=mod.name)
 
             bpy.data.objects.remove(temp_obj, do_unlink=True)
-            bpy.context.view_layer.objects.active = active
+            view_layer.objects.active = active
 
             try:
                 return self.build_from_mesh(mesh)
@@ -431,8 +442,10 @@ class CdaeKeyframeSampler:
 
 
     def sample_keyframes(self, obj: bpy.types.Object):
+
+        scene = not_none(bpy.context.scene)
         
-        frame_backup = bpy.context.scene.frame_current
+        frame_backup = scene.frame_current
 
         frame_range = self.end - self.start
         frame_scale = frame_range / self.sample_count
@@ -440,17 +453,17 @@ class CdaeKeyframeSampler:
         for iframe in (range(self.sample_count)):
             scaled_frame = iframe * frame_scale
             final_frame = scaled_frame + self.start
-            self.keyframes.append(self.sample_frame(obj, final_frame))
+            self.keyframes.append(self.sample_frame(obj, scene, final_frame))
 
-        bpy.context.scene.frame_set(frame_backup)
+        scene.frame_set(frame_backup)
 
         self.nodes_enabled.append(True)
 
 
-    def sample_frame(self, obj: bpy.types.Object, frame: float) -> Transforms:
+    def sample_frame(self, obj: types.Object, scene: types.Scene, frame: float) -> Transforms:
         intframe = int(frame)
         subframe = frame - intframe
-        bpy.context.scene.frame_set(intframe, subframe=subframe)
+        scene.frame_set(intframe, subframe=subframe)
         return self.sample_current(obj)
     
 
@@ -527,7 +540,7 @@ class CdeaBuilder:
 
         details = cdae.unpack_details()
         for key, detail in self.tree.details.items():
-            shapeidx = shapes_dict.get(detail.shape, -1)
+            shapeidx = shapes_dict.get(not_none(detail.shape), -1)
             detail.template.nameIndex = self.cdae.get_name_index(key)
             detail.template.subShapeNum = shapeidx
             details.append(detail.template)

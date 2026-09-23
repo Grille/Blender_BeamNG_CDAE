@@ -265,10 +265,6 @@ U8_NORMAL_TABLE_NP = np.array(U8_NORMAL_TABLE)
 class U8NormalTable:
 
     @staticmethod
-    def encode_normal(normal: Vec3F | Tuple3F):
-
-        if isinstance(normal, Vec3F):
-            normal = normal.tuple3
-
+    def encode_normal(normal: Tuple3F):
         dots = U8_NORMAL_TABLE_NP @ normal
         return np.argmax(dots)

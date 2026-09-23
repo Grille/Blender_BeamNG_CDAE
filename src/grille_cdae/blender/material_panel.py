@@ -28,11 +28,12 @@ class MaterialPanel(basetypes.Panel):
         layout.use_property_decorate = True
 
         mat = context.material
+        assert mat is not None
 
-        gts = getattr(mat, MaterialProperties.GROUND_TYPE_SELECT)
-        layout.prop(mat, MaterialProperties.GROUND_TYPE_SELECT)
+        gts = MaterialProperties.groundtype_select[mat]
+        layout.prop(mat, MaterialProperties.groundtype_select.key)
         if gts == GROUNDMODEL_CUSTOM:
-            layout.prop(mat, MaterialProperties.GROUND_TYPE)
+            layout.prop(mat, MaterialProperties.groundtype_custom.key)
             layout.separator()
 
         row = layout.row()

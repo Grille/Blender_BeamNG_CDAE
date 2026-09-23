@@ -1,38 +1,33 @@
-from typing import Container as _Container
+import typing as _typing
 import bpy.types as _t
-import grille_cdae.common.props as _props
 
 # pyright: reportIncompatibleMethodOverride=information
 
-type _Result = set[str]
+type _Result = set[_typing.Any]
 
-class _Extension():
-    @classmethod
-    def anotate(cls, **props: _props._PropertyDeferred): # type: ignore
-        _props.anotate_properties(cls, **props) # type: ignore
 
-class Operator(_t.Operator, _Extension):
+class Operator(_t.Operator):
     filepath: str
     layout: _t.UILayout
-    def execute(self, context: _t.Context) -> _Result: return super().execute(context) # type: ignore
-    def invoke(self, context: _t.Context, event: _t.Event)-> _Result: return super().invoke(context, event) # type: ignore
+    def execute(self, context: _t.Context) -> _Result: return super().execute(context)
+    def invoke(self, context: _t.Context, event: _t.Event)-> _Result: return super().invoke(context, event)
     def draw(self, context: _t.Context) -> None: return super().draw(context)
     def check(self, context: _t.Context) -> bool: return super().check(context)
 
-class Panel(_t.Panel, _Extension):
+class Panel(_t.Panel):
     layout: _t.UILayout
     def draw(self, context: _t.Context) -> None: return super().draw(context)
     @classmethod
     def poll(cls, context: _t.Context) -> bool: return super().poll(context)
 
-class Menu(_t.Menu, _Extension):
+class Menu(_t.Menu):
     layout: _t.UILayout
     def draw(self, context: _t.Context) -> None: return super().draw(context)
     @classmethod
     def poll(cls, context: _t.Context) -> bool: return super().poll(context)
 
-class ShaderNodeCustomGroup(_t.ShaderNodeCustomGroup, _Extension):
+class ShaderNodeCustomGroup(_t.ShaderNodeCustomGroup):
     def draw_buttons(self, context: _t.Context, layout: _t.UILayout): return super().draw_buttons(context, layout)
 
-class PropertyGroup(_t.PropertyGroup, _Extension):
+class PropertyGroup(_t.PropertyGroup):
     pass
