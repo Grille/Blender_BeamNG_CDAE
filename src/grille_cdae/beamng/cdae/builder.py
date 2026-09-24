@@ -5,13 +5,9 @@ import math
 from collections import defaultdict
 
 from .v31 import *
-from ...blender.object_properties import ObjectProperties, ObjectRole
+from ...blender.object_properties import ObjectProperties
 from .builder_tree import CdaeTree
 from ..u8_normal_table import U8NormalTable
-
-
-
-# pyright: reportUnknownMemberType=information
 
 
 
@@ -50,6 +46,7 @@ type _ArrayAny = np.typing.NDArray[np.generic]
 type _ArrayF32 = np.typing.NDArray[np.float32]
 type _ArrayI32 = np.typing.NDArray[np.int32]
 type _ArrayU8 = np.typing.NDArray[np.uint8]
+type Indices = np.typing.NDArray[np.int32]
 
 
 
@@ -116,27 +113,16 @@ class CdaeMeshBuilder:
             self.mesh = mesh
 
 
-        def get_vtx_indices(self):
-            loop_vertex_indices = np.empty(len(self.mesh.loops), dtype=np.int32)
-            self.mesh.loops.foreach_get("vertex_index", loop_vertex_indices)
-            return loop_vertex_indices
+        def get_vtx_indices(self) -> Indices:
+            return butils.np_new(self.mesh.loops, "vertex_index", np.int32).ravel()
 
 
-        def map_vtx_to_loop(self, vtx_data: _ArrayF32, size: int, indices: _ArrayI32):
-            vtx_data = vtx_data.reshape((-1, size))
-            return vtx_data[indices]
-        
-
-        def get_vtx_data(self, key: str, size: int, indices: _ArrayI32):
-            vertex_data = np.empty(len(self.mesh.vertices) * size, dtype=np.float32)
-            self.mesh.vertices.foreach_get(key, vertex_data)
-            return self.map_vtx_to_loop(vertex_data, size, indices)
+        def get_vtx_data(self, key: str, size: int, indices: Indices):
+            return butils.np_new(self.mesh.vertices, key, np.float32, size)[indices]
 
 
         def get_loop_data(self, key: str, size: int):
-            loop_data = np.empty(len(self.mesh.loops) * size, dtype=np.float32)
-            self.mesh.loops.foreach_get(key, loop_data)
-            return loop_data.reshape((-1, size))
+            return butils.np_new(self.mesh.loops, key, np.float32, size)
         
 
         def get_uv_layer(self, uv_hint: str | int):
@@ -148,30 +134,23 @@ class CdaeMeshBuilder:
                         return item.data
                 return None
 
-            elif isinstance(uv_hint, int):
+            if len(self.mesh.uv_layers) > uv_hint:
+                return self.mesh.uv_layers[uv_hint].data
 
-                if len(self.mesh.uv_layers) > uv_hint:
-                    return self.mesh.uv_layers[uv_hint].data
-
-                return None
-
-            raise TypeError(uv_hint)
+            return None
         
 
         def get_uv_data(self, uv_hint: str | int):
 
             uv_layer = self.get_uv_layer(uv_hint)
-            if uv_layer is None:
-                return None
+            if uv_layer is None: return None
             
-            uv_data = np.empty(len(uv_layer) * 2, dtype=np.float32)
-            uv_layer.foreach_get("uv", uv_data)
-            uv_data = uv_data.reshape((-1, 2))
+            uv_data = butils.np_new(uv_layer, "uv", np.float32, 2)
             uv_data[:, 1] = 1.0 - uv_data[:, 1]
             return uv_data
             
 
-        def get_color_data(self, indices: np.typing.NDArray[np.int32]):
+        def get_color_data(self, indices: Indices) -> _ArrayU8 | None:
 
             if len(self.mesh.color_attributes) > 0:
                 layer_name = self.mesh.color_attributes[0].name
@@ -184,19 +163,14 @@ class CdaeMeshBuilder:
 
             loop_count = len(self.mesh.loops)
             vert_count = len(self.mesh.vertices)
-            components = 4
+
+            raw_color = butils.np_new(color_layer.data, "color", np.float32, 4)
 
             if color_layer.domain == 'CORNER':
-                raw = np.empty(loop_count * components, dtype=np.float32)
-                color_layer.data.foreach_get("color", raw)
-                colors = raw.reshape((loop_count, components))
+                colors = raw_color.reshape((loop_count, 4))
 
             elif color_layer.domain == 'POINT':
-                raw = np.empty(vert_count * components, dtype=np.float32)
-                color_layer.data.foreach_get("color", raw)
-                colors = raw.reshape((vert_count, components))
-
-                colors = colors[indices]
+                colors = raw_color.reshape((vert_count, 4))[indices]
 
             else:
                 return None
@@ -291,7 +265,7 @@ class CdaeMeshBuilder:
             ('elements_count', np.int32),
             ('material_index', np.int32),
         ])
-        npmesh.draw_regions = np.array(draw_regions, dtype=DrawRegion).astype(np.int32)
+        npmesh.draw_regions = np.array(draw_regions, dtype=np.int32).reshape((-1, 3))
 
 
         mesh_out = CdaeV31.Mesh()
@@ -330,9 +304,9 @@ class CdaeMeshBuilder:
         mesh_out.vertsPerFrame = len(npmesh.positions)
 
         if mesh_out.vertsPerFrame > 0:
-            mins = npmesh.positions.min(axis=0).astype(float)
-            maxs = npmesh.positions.max(axis=0).astype(float)
-            mesh_out.bounds = Box6F(*mins, *maxs)
+            mins = Vec3F(*npmesh.positions.min(axis=0).astype(float))
+            maxs = Vec3F(*npmesh.positions.max(axis=0).astype(float))
+            mesh_out.bounds = Box6F(mins, maxs)
             mesh_out.center = mesh_out.bounds.center()
             mesh_out.radius = CdaeMeshBuilder.get_radius(mesh_out.bounds)
 

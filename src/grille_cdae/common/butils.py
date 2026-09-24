@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 from grille_cdae.common.type_alias import *
+import numpy as _np
 import bpy as _bpy
 import bpy.types as _types
 
@@ -51,3 +54,14 @@ def set_default_value(socket: _types.NodeSocket | _types.NodeTreeInterfaceSocket
 def get_default_value(socket: _types.NodeSocket | _types.NodeTreeInterfaceSocket) -> SocketValue:
     return socket.default_value # type: ignore
 
+
+def np_get[T](collection: _types.bpy_prop_collection[T], key: str, array: _np.ndarray):
+    collection.foreach_get(key, array)  # pyright: ignore[reportUnknownMemberType]
+
+def np_new[T, TNP: _np.generic](collection: _types.bpy_prop_collection[T], key: str, dtype: type[TNP] = _np.float32, component_count: int = 1):
+    array = _np.empty(len(collection) * component_count, dtype=dtype)
+    np_get(collection, key, array)
+    return array.reshape((-1, component_count))
+
+def np_set[T](collection: _types.bpy_prop_collection[T], key: str, array: _np.ndarray):
+    collection.foreach_set(key, array.ravel()) # pyright: ignore[reportUnknownMemberType]

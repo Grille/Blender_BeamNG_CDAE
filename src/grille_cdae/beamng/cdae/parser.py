@@ -3,8 +3,6 @@ from grille_cdae.common import *
 from .v31 import CdaeV31
 
 
-# pyright: reportUnknownMemberType=information
-
 
 class CdaeParser:
 
@@ -140,7 +138,7 @@ class CdaeParser:
             region_materials.extend([region.material] * len(tris))
 
         indices = np.vstack(region_triangles).ravel()
-        return (positions, indices, region_materials)
+        return (positions, indices, np.array(region_materials, dtype=np.int32))
     
 
     def build_mesh(self, info: CdaeV31.Mesh, mesh: bpy.types.Mesh):
@@ -167,13 +165,13 @@ class CdaeParser:
         mesh.loops.add(loop_count)
         mesh.polygons.add(face_count)
 
-        mesh.vertices.foreach_set("co", vert_positions.ravel())
-        mesh.loops.foreach_set("vertex_index", vert_indices.ravel())
-        mesh.polygons.foreach_set("loop_start", loop_start)
-        mesh.polygons.foreach_set("loop_total", loop_total)
+        butils.np_set(mesh.vertices, "co", vert_positions)
+        butils.np_set(mesh.loops, "vertex_index", vert_indices)
+        butils.np_set(mesh.polygons, "loop_start", loop_start)
+        butils.np_set(mesh.polygons, "loop_total", loop_total)
         mesh.update(calc_edges=True)
 
-        mesh.polygons.foreach_set("material_index", np.array(mat_indices, dtype=np.int32))
+        butils.np_set(mesh.polygons, "material_index", mat_indices)
 
         def shape_loop_data(array: np.typing.NDArray[np.float32], vec_size: int):
             return array.reshape(-1, vec_size)[indices].reshape(-1, 3, vec_size)[:, [2, 1, 0], :].reshape(-1, vec_size)
@@ -181,17 +179,17 @@ class CdaeParser:
         if info.tverts0.element_count:
             layer = mesh.uv_layers.new(name="UV0")
             loop_tverts = shape_loop_data(info.tverts0.to_array(), 2)
-            layer.data.foreach_set("uv", loop_tverts.ravel())
+            butils.np_set(layer.data, "uv", loop_tverts)
 
         if info.tverts1.element_count:
             layer = mesh.uv_layers.new(name="UV1")
             loop_tverts = shape_loop_data(info.tverts0.to_array(), 2)
-            layer.data.foreach_set("uv", loop_tverts.ravel())
+            butils.np_set(layer.data, "uv", loop_tverts)
 
         if info.colors.element_count:
             layer = cast(bpy.types.MeshLoopColorLayer, mesh.color_attributes.new(name="Color", domain='CORNER', type='FLOAT_COLOR'))
             loop_colors = shape_loop_data(info.colors.to_array().astype(np.float32) / np.float32(255), 4)
-            layer.data.foreach_set("color", loop_colors.ravel())
+            butils.np_set(layer.data, "color", loop_colors)
 
         if info.norms.element_count:
             loop_normals = shape_loop_data(info.norms.to_array(), 3)
