@@ -54,7 +54,7 @@ class MaterialParser:
 
         src0 = src.stages[0]
         
-        color = Color4F.from_list(src0.color.factor).linear
+        color = Color4F.from_seq(src0.color.factor).linear
         bdsf = tree.nc.node(BeamBDSF10Basic, color)
 
         if src0.color.map:
@@ -69,7 +69,7 @@ class MaterialParser:
 
         src0 = src.stages[0]
 
-        color = Color4F.from_list(src0.color.factor).linear
+        color = Color4F.from_seq(src0.color.factor).linear
         bdsf = tree.nc.node(BeamBSDF15, color)
 
         if src0.color.map:

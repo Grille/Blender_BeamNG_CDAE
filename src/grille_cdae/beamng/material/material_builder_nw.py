@@ -36,7 +36,7 @@ class MaterialNodeWalker(NodeWalker):
             if isinstance(value, float | int):
                 self.factor = value
             else:
-                self.color = Color4F.from_list(value)
+                self.color = Color4F.from_seq(value)
 
 
     @dataclass

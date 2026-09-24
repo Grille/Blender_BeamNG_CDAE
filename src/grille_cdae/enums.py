@@ -304,6 +304,15 @@ class Operation(StrEnum):
     NORMALIZE = "NORMALIZE"
     ABSOLUTE = "ABSOLUTE"
 
+    @property
+    def neutral_value(self):
+        return _OPERATION_NEUTRAL_VALUE.get(self, 0.0)
+
+_OPERATION_NEUTRAL_VALUE: dict[Operation, float] = {
+    Operation.MULTIPLY: 1,
+    Operation.DIVIDE: 1,
+}
+
 
 
 class ColorSpace(StrEnum):

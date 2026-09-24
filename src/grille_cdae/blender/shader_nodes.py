@@ -122,7 +122,7 @@ class _Extended_NGB(NodeGroupBuilder):
         return self.nc.seperate_bundle(RGBA, value)
 
     def RGBA_default(self, value: LinkBuilderBase, default_value: LinkSource = COLOR_WHITE):
-        return self.nc.node(BeamRGBADefault, value, color=default_value)
+        return self.nc.node(BeamRGBADefault, value, color_value=default_value)
 
     def RGBA_input(self, name: str, default_value: Tuple4F | None = None, sci = _RGBA_VALUE):
         value = self.input(sci, name)
@@ -800,11 +800,25 @@ class BeamRGBADefault(BaseBeamRGBA):
 
 
 
-class BeamMathHardLight(BaseShaderNode):
+class BeamOperatorNode(BaseShaderNode):
+
+    ng_color_tag = GroupColorTag.CONVERTER
+
+    @classmethod
+    def mix(cls, a: LinkBuilderBase, b: LinkSource, i: int = 0):
+        return a.ntb.nc.node(cls, a, b)
+
+
+    @classmethod
+    def mix_xyz(cls, a: LinkBuilderBase, b: LinkSource):
+        return a.ntb.nc.mix_foreach_xyz(a, b, cls.mix)
+
+
+
+class BeamONHardLight(BeamOperatorNode):
 
     bl_idname = f"{SHADER_NODE_PREFIX}MathHardLight"
     bl_label = "BNG HardLight"
-    ng_color_tag = GroupColorTag.CONVERTER
 
     def create_node_group(self, ngb: NodeGroupBuilder):
 
@@ -818,6 +832,12 @@ class BeamMathHardLight(BaseShaderNode):
 
 
 
+_OPERATOR_NODES: SDict[type[BeamOperatorNode]] = {
+    Operation.HARD_LIGHT: BeamONHardLight
+}
+
+
+
 class BeamRGBAMath(BaseShaderNode):
 
     bl_idname = f"{SHADER_NODE_PREFIX}RGBA_Math"
@@ -825,38 +845,37 @@ class BeamRGBAMath(BaseShaderNode):
     ng_color_tag = GroupColorTag.COLOR
 
 
-    operation: Operation
+    operation: str
+
 
     def get_node_group_name(self):
         return f"{super().get_node_group_name()}_{self.operation}"
 
 
-    def create_node_group(self, ngb):
-
-        b_default_value = (1,1,1,1) if self.operation == Operation.MULTIPLY or self.operation == Operation.DIVIDE else (0,0,0,0)
-        a = ngb.RGBA_input("A")
-        b = ngb.RGBA_input("B", b_default_value)
+    def create_node_group_body(self, a: LinkBuilderBase, b: LinkBuilderBase):
+        ngb = a.ntb
 
         if self.operation == Operation.OVERLAY:
-            ngb.RGBA_output("Result", ngb.nc.mix(b[1], a[0], b[0]), a[1])
-        elif self.operation == Operation.HARD_LIGHT:
-            a_rgb = ngb.nc.node(bpy.types.ShaderNodeSeparateColor, a)
-            b_rgb = ngb.nc.node(bpy.types.ShaderNodeSeparateColor, b)
-            red = ngb.nc.node(BeamMathHardLight, a_rgb[0], b_rgb[0])
-            green = ngb.nc.node(BeamMathHardLight, a_rgb[1], b_rgb[1])
-            blue = ngb.nc.node(BeamMathHardLight, a_rgb[2], b_rgb[2])
-            color = ngb.nc.node(bpy.types.ShaderNodeCombineColor, red, green, blue)
-            alpha = ngb.nc.node(BeamMathHardLight, a[1], b[1])
-            ngb.RGBA_output("Result", color, alpha)
-        else:
-            color = ngb.nc.math(self.operation, a[0], b[0]) 
-            alpha = ngb.nc.math(self.operation, a[1], b[1]) 
-            ngb.RGBA_output("Result", color, alpha)
+            return ngb.nc.mix(b[1], a[0], b[0]), a[1]
+
+        op_cls = _OPERATOR_NODES.get(self.operation)
+        if op_cls is not None:
+            return op_cls.mix_xyz(a[0], b[0]), op_cls.mix(a[1], b[1])
+
+        return ngb.nc.math(self.operation, a[0], b[0]), ngb.nc.math(self.operation, a[1], b[1]) 
+
+
+    def create_node_group(self, ngb):
+
+        a = ngb.RGBA_input("A")
+        b = ngb.RGBA_input("B", Vec4F.from_value(Operation(self.operation).neutral_value))
+        ngb.RGBA_output("Result", *self.create_node_group_body(a, b))
 
 
     def draw_buttons(self, context: bpy.types.Context, layout: bpy.types.UILayout):
         super().draw_buttons(context, layout)
         layout.prop(self, "operation", text="")
+
 
 BeamRGBAMath.__annotations__.update(
     operation = Operation.to_bpy_enum("Type", default=Operation.MULTIPLY, update=_BaseShaderNode_init)
@@ -1587,7 +1606,7 @@ class ShaderNodeTree(Menu):
         "Utils",
         BeamBSDFCollision,
         BeamImageTex,
-        BeamMathHardLight,
+        BeamONHardLight,
         BeamPalette,
         BeamPaint,
         BeamPaletteEval,
@@ -1652,7 +1671,7 @@ class ShaderNodeRegistry:
         BeamRGBADefault,
         BeamRGBAMath,
         BeamNormalOrDefault,
-        BeamMathHardLight,
+        BeamONHardLight,
         BeamPaint,
         BeamPalette,
         BeamPaletteEval,

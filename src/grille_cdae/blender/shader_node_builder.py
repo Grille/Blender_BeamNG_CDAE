@@ -5,7 +5,8 @@ from grille_cdae.enums import *
 
 
 
-type LinkSource = 'LinkBuilderBase | SocketValue'
+type LinkSource = LinkBuilderBase | SocketValue
+type LinkSourceSequence = LinkBuilderBase | Sequence[SocketValue]
 
 
 
@@ -40,14 +41,18 @@ class LinkBuilderBase:
     def get_output(self) -> bpy.types.NodeSocket:...
 
 
+    @staticmethod
+    def _cast_default_value(value: SocketValue, target: SocketType):
+        if target == SocketType.Vector: return Vec3F.from_obj(value)
+        if target == SocketType.Color: return Color4F.from_obj(value)
+
+        return value
+
+
     def set_default_value(self, value: SocketValue):
         input = self.get_input()
-        input_type = SocketType.from_data_type(input.type)
-        value_type = _get_input_type(value).simplify_value()
-
-        if (input_type == SocketType.Vector and value_type == SocketType.Float):
-            if not isinstance(value, (float, int)): raise TypeError(type(value))
-            value = (value, value, value)
+        target_type = SocketType.from_data_type(input.type)
+        value = self._cast_default_value(value, target_type)
 
         butils.set_default_value(input, value)
 
@@ -68,11 +73,6 @@ class LinkBuilderBase:
 
 
     def clamp(self, min: LinkSource = 0, max: LinkSource = 1): return self.ntb.nc.clamp(self, min, max)
-
-
-    def is_true(self): return self > 0.5
-    def is_false(self): return self < 0.5
-
 
     def __rshift__(self, other: LinkBuilderBase) -> None: self.link_to(other)
     def __rrshift__(self, other: LinkSource) -> None: self.link_from(other)
@@ -99,6 +99,13 @@ class LinkBuilderBase:
 
     def __lt__(self, other: LinkSource): return self.ntb.nc.math(Operation.LESS_THAN, self, other)
     def __gt__(self, other: LinkSource): return self.ntb.nc.math(Operation.GREATER_THAN, self, other)
+
+    def __neg__(self): return 0 - self
+    def __le__(self, other: LinkSource): return 1 - (self > other)
+    def __ge__(self, other: LinkSource): return 1 - (self < other)
+
+    def is_true(self): return self > 0
+    def is_false(self): return self <= 0
 
 
 
@@ -171,7 +178,7 @@ class NodeSignature(tuple[_NodeSignatureSocket, ...]):
         outputs: 'NodeSignature'
 
 
-    def __new__(cls, *sockets: tuple[str, 'SocketType | NodeSignature']):
+    def __new__(cls, *sockets: tuple[str, SocketType | NodeSignature]):
         sockets = tuple(s if isinstance(s, _NodeSignatureSocket) else _NodeSignatureSocket(*s) for s in sockets)
         return super().__new__(cls, sockets)
 
@@ -212,7 +219,7 @@ class NodeTreeBuilder:
             return lb
 
 
-        def math(self, operation: str, *values: LinkSource, socket_type: SocketType | None = None):
+        def math(self, operation: str, *values: LinkSource, socket_type: SocketType | None = None) -> LinkBuilderBase:
             match _get_input_type_by_precedence(*values).simplify() if socket_type is None else socket_type:
                 case SocketType.Float:
                     return self.node(bpy.types.ShaderNodeMath, *values, operation=operation)
@@ -242,12 +249,10 @@ class NodeTreeBuilder:
             return self.math(Operation.COMPARE, value0, value1, epsilon)
         
 
-        def mix(self, factor: LinkSource, a: LinkSource, b: LinkSource, op = Operation.MIX, clamp_factor = False, clamp_result = False, socket_type: SocketType | None = None):
+        def mix(self, factor: LinkSource, a: LinkSource, b: LinkSource, op = Operation.MIX, clamp_factor = False, clamp_result = False, socket_type: SocketType | None = None) -> LinkBuilderBase:
 
-            def mix_node(data_type: SocketType):
-                mix = self.node(bpy.types.ShaderNodeMix)
-                mix.node.data_type = data_type.data_type # type: ignore
-                mix.node.blend_type = op # type: ignore
+            def mix_node(socket_type: SocketType):
+                mix = self.node(bpy.types.ShaderNodeMix, data_type = socket_type.data_type, blend_type = op)
                 mix.node.clamp_factor = clamp_factor
                 mix.node.clamp_result = clamp_result
                 return mix
@@ -297,6 +302,10 @@ class NodeTreeBuilder:
         def bool(self, value: LinkSource, invert = False):
             op = Operation.LESS_THAN if invert else Operation.GREATER_THAN
             return self.node(bpy.types.ShaderNodeMath, value, 0.5, operation=op)
+
+
+        def invert(self, value: LinkBuilderBase):
+            return 0 - value
 
 
         def teximage(self, image: types.Image | str | None = None, colorspace: str | None = None, uv: LinkBuilderOptional = None):
@@ -357,13 +366,13 @@ class NodeTreeBuilder:
             return lb
 
 
-        def mix_bundle(self, signature: 'NodeSignature', factor: LinkSource, a: LinkBuilderBase, b: LinkBuilderBase):
+        def mix_bundle(self, signature: NodeSignature, factor: LinkSource, a: LinkBuilderBase, b: LinkBuilderBase):
             a = self.seperate_bundle(signature, a)
             b = self.seperate_bundle(signature, b)
             result = self.combine_bundle(signature)
             for socket in signature:
                 name = socket.name
-                type = socket.type
+                type = socket.type 
                 a = a[name]
                 b = b[name]
                 result = result[name]
@@ -372,7 +381,22 @@ class NodeTreeBuilder:
             return result
 
 
-    
+        def mix_foreach[TDst:LinkBuilderBase](self, src0: LinkBuilderBase, src1: LinkSourceSequence, dst: TDst, count: int, operator: Callable[[LinkBuilderBase, LinkSource, int], LinkSource], src_offset: int = 0, dst_offset: int | None = None) -> TDst:
+            if dst_offset is None: dst_offset = src_offset
+            for i in range(count): 
+                src_index = i + src_offset
+                dst_index = i + dst_offset
+                operator(src0[src_index], src1[src_index], i) >> dst[dst_index]
+            return dst
+
+
+        def mix_foreach_xyz(self, value0: LinkSource, value1: LinkSource, operator: Callable[[LinkBuilderBase, LinkSource, int], LinkSource]):
+            xyz0 = self.node(types.ShaderNodeSeparateXYZ, value0)
+            xyz1 = self.node(types.ShaderNodeSeparateXYZ, value1)
+            return self.mix_foreach(xyz0, xyz1, self.node(types.ShaderNodeCombineXYZ), 3, operator)
+
+
+
     def __init__(self, tree: bpy.types.ShaderNodeTree):
         self.tree = tree
         assert self.tree.interface is not None

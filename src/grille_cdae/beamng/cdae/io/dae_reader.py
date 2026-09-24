@@ -315,8 +315,8 @@ def convert(dae: Collada):
 
         if node.matrix is not None:
             matrix = node.matrix.to_matrix()
-            translation = Vec3F.from_list(matrix.to_translation())
-            scale = Vec3F.from_list(matrix.to_scale())
+            translation = Vec3F.from_seq(matrix.to_translation())
+            scale = Vec3F.from_seq(matrix.to_scale())
             rotation = Quat4I16.from_collada_quaternion(matrix.to_quaternion())
             transforms = Transforms(translation, scale, rotation)
         else:

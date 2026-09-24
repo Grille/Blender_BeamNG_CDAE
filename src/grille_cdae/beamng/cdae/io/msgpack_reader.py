@@ -109,13 +109,13 @@ class MsgpackReader:
         
 
     def read_vec2f(self):
-        return Vec2F.from_list(self._read_float_list(2))
+        return Vec2F.from_seq(self._read_float_list(2))
 
 
     def read_vec3f(self):
-        return Vec3F.from_list(self._read_float_list(3))
+        return Vec3F.from_seq(self._read_float_list(3))
     
 
     def read_box6f(self):
-        return Box6F.from_list(self._read_float_list(6))
+        return Box6F.from_seq(self._read_float_list(6))
 

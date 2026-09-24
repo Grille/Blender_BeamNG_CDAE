@@ -33,8 +33,8 @@ class _BaseDict:
             self.value_dict[full_key] = value
 
 
-    def pop(self, key: str):
-        return self.value_dict.pop(self.get_key(key))
+    def __delitem__(self, key: str):
+        del self.value_dict[self.get_key(key)]
 
 
 
@@ -77,7 +77,7 @@ class DictProperty[T=object|None]:
 
     def __set__(self, instance: _BaseDict, value: T | None):
         if value is None or value == self.default: 
-            instance.pop(self.key)
+            del instance[self.key]
         else:
             instance[self.key] = self._convert_in(value)
 
