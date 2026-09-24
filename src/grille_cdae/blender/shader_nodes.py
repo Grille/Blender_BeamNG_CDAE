@@ -1,3 +1,4 @@
+from __future__ import annotations
 
 from grille_cdae.common import *
 from grille_cdae.common.basetypes import ShaderNodeCustomGroup, Menu
@@ -163,11 +164,11 @@ class NodeRuntimeData:
 _NODE_GROUP_DATA_RUNTIME_DICT: dict[int, NodeGroupData] = {}
 
 
-def _BaseShaderNode_init(self: 'BaseShaderNode', ctx: bpy.types.Context):
+def _BaseShaderNode_init(self: BaseShaderNode, ctx: bpy.types.Context):
     return self.init(ctx)
 
 
-def _BaseShaderNode_post_init(self: 'BaseShaderNode', ctx: bpy.types.Context):
+def _BaseShaderNode_post_init(self: BaseShaderNode, ctx: bpy.types.Context):
     return self.post_init()
 
 
@@ -738,7 +739,7 @@ class BaseBeamRGBA(BaseShaderNode):
 
 
     def draw_buttons(self, context, layout):
-        layout.prop(self, "color", text="")
+        layout.prop(self, "color_value", text="")
 
 BaseBeamRGBA.anotate(
     color_value = bpy.props.FloatVectorProperty(
