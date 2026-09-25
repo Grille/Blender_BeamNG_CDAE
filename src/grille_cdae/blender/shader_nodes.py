@@ -335,8 +335,8 @@ class BeamImageTex(BaseShaderNode):
         #uv1hint = getattr(context.space_data.id, MaterialProperties.UV1_HINT)
         #layout.label(text=f"UV Map Index: {1 if uv1hint in self.uv_map else 0}")
 
-BeamImageTex.anotate(
-    image = props.Pointer(name="Image", type=bpy.types.Image, update=_BaseShaderNode_init),
+BeamImageTex.annotate(
+    image = props.PointerProperty(name="Image", type=bpy.types.Image, update=_BaseShaderNode_init),
     image_type = BeamImageTex.ImageType.to_bpy_enum("Type", default=BeamImageTex.ImageType.COLOR_RGBA, update=_BaseShaderNode_init)
 )
 
@@ -741,8 +741,8 @@ class BaseBeamRGBA(BaseShaderNode):
     def draw_buttons(self, context, layout):
         layout.prop(self, "color_value", text="")
 
-BaseBeamRGBA.anotate(
-    color_value = bpy.props.FloatVectorProperty(
+BaseBeamRGBA.annotate(
+    color_value = props.FloatVectorProperty(
         subtype='COLOR', size=4,
         default=(1.0, 1.0, 1.0, 1.0),
         min=0.0, max=1.0,
@@ -1544,7 +1544,7 @@ class BeamMaterial(BaseShaderNode):
         transparent = ngb.nc.node(bpy.types.ShaderNodeBsdfTransparent)
         shader.mix(transparent, blend_factor | discard) >> output
 
-BeamMaterial.anotate(
+BeamMaterial.annotate(
     reflection_mode= bpy.props.EnumProperty(
         name=SocketName.ReflectionMode,
         items=[

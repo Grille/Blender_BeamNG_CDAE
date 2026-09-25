@@ -5,6 +5,7 @@ from __future__ import annotations
 import bpy
 import json
 import bpy.types as types
+import bpy.props as props
 import mathutils
 import numpy as np
 import os

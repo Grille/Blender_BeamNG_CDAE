@@ -27,4 +27,4 @@ class MessageBox(basetypes.Operator):
     def show_dialog():
         bpy.ops.grille_beamng_cdae.msgbox('INVOKE_DEFAULT', message="Do you want to continue?") # type: ignore
 
-MessageBox.anotate(message = bpy.props.StringProperty(default="Are you sure?"))
+MessageBox.annotate(message = bpy.props.StringProperty(default="Are you sure?"))

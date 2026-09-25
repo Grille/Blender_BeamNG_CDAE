@@ -19,7 +19,7 @@ class OT_CreateBeamNgMaterial(basetypes.Operator):
 
         return {'FINISHED'}
 
-props.anotate_properties(OT_CreateBeamNgMaterial,
+annotate_properties(OT_CreateBeamNgMaterial,
     version = bpy.props.FloatProperty(name="version", default=1.0)
 )
 

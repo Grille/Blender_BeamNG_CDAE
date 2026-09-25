@@ -9,7 +9,7 @@ GROUNDMODELS = [
   "ASPHALT_PREPPED",
   "RUMBLE_STRIP",
   "ROCK",
-  "COBBLESTONE",
+  "COBBLESTONE", 
   "METAL",
   "METAL_TREAD",
   "WOOD",
@@ -38,13 +38,12 @@ GROUNDMODELS = [
 ]
 
 
-_pinfo = props.PropertyInfoFactory(types.Material)
 
-class MaterialProperties:
+class MaterialProperties(PropertyInfoGroup[types.Material]):
+    pinfo = PropertyInfoFactory(types.Material)
 
-    groundtype_custom = _pinfo.str("groundtype_custom", "", "")
-    groundtype_select = _pinfo.enum("groundtype_select", "Ground Type", GROUNDMODEL_CUSTOM, GROUNDMODELS)
-
+    groundtype_custom = pinfo.str("", "")
+    groundtype_select = pinfo.enum("Ground Type", items=GROUNDMODELS, default=GROUNDMODEL_CUSTOM)
 
     @staticmethod
     def get_ground_type(bmat: bpy.types.Material):
@@ -52,13 +51,3 @@ class MaterialProperties:
         if value == GROUNDMODEL_CUSTOM:
             return MaterialProperties.groundtype_custom[bmat]
         return value
-    
-
-    @staticmethod
-    def register():
-        _pinfo.register()
-
-
-    @staticmethod
-    def unregister():
-        _pinfo.unregister()

@@ -1,10 +1,10 @@
 from grille_cdae.common import *
 from grille_cdae.common.basetypes import Panel
 
+from .uilayout import UILayoutCtx
 from .object_properties import ObjectProperties, ObjectRole
 
 
-# Define the panel
 class ObjectPanel(Panel):
 
     bl_label = "BeamNG CDAE"
@@ -24,37 +24,31 @@ class ObjectPanel(Panel):
         layout = self.layout
         layout.use_property_split = True
 
-        obj = context.object
-        if obj is None: raise ValueError()
-
-        has_mesh = ObjectProperties.has_mesh(obj)
-
-        layout.prop(obj, ObjectProperties.role.key)
-
+        obj = not_none(context.object)
         role = ObjectProperties.role[obj]
+        uses_mesh = role.uses_mesh
+        has_mesh = ObjectProperties.has_mesh(obj)
+    
+        ui = UILayoutCtx(layout, obj)
+
+        ui.prop(ObjectProperties.role)
+
         if role == ObjectRole.Generic:
-            layout.prop(obj, ObjectProperties.path.key)
+            ui.prop(ObjectProperties.path)
             return
         
-        uses_mesh = role.uses_mesh
-        warnmsg = None
         if uses_mesh and not has_mesh:
-            warnmsg = "Mesh missing, Object won't export."
+            ui.label_error("Mesh missing, Object won't export.")
+
         elif not uses_mesh and has_mesh:
-            warnmsg = "Empty expected, Mesh will be ignored."
-
-        if warnmsg is not None:
-            row = layout.row()
-            row.alert = True
-            row.label(text=warnmsg, icon='ERROR')
-
+            ui.label_error("Empty expected, Mesh will be ignored.")
 
         if role.uses_lod:
-            layout.prop(obj, ObjectProperties.lod_size.key)
+            ui.prop(ObjectProperties.lod_size)
 
         if role == ObjectRole.Billboard:
-            layout.prop(obj, ObjectProperties.bb_flag0.key, text="Lock XY Axis")
+            ui.prop(ObjectProperties.bb_flag0, text="Lock XY Axis")
 
         if role == ObjectRole.AutoBillboard:
-            layout.prop(obj, ObjectProperties.bb_dimension.key)
-            layout.prop(obj, ObjectProperties.bb_equator_steps.key)
+            ui.prop(ObjectProperties.bb_dimension)
+            ui.prop(ObjectProperties.bb_equator_steps)

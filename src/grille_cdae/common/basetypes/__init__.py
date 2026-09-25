@@ -1,12 +1,12 @@
 import grille_cdae.common.basetypes._stubs as _stubs
-import grille_cdae.common.props as _props
+import grille_cdae.common.property_info as _pi
 
 
 
 class _Extension():
     @classmethod
-    def anotate(cls, **props: object):
-        _props.anotate_properties(cls, **props)
+    def annotate(cls, **props: object):
+        _pi.annotate_properties(cls, **props)
 
 
 

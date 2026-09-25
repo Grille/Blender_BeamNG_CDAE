@@ -73,11 +73,11 @@ class ImportCdae(PresetOperator, ImportHelper):
         if self.debug_dump:
             layout.prop(self, "debug_dump_key")
 
-ImportCdae.anotate(
-    filter_glob = props.String(default="*.dae;*.cdae;*.json", options={'HIDDEN'}),
-    validate_meshes = props.Bool(name="Validate Meshes", default=True),
-    debug_dump = props.Bool(name="Debug Info Enabled", default=False),
-    debug_dump_key = props.String(name="Key", default="debug_cdae"),
+ImportCdae.annotate(
+    filter_glob = props.StringProperty(default="*.dae;*.cdae;*.json", options={'HIDDEN'}),
+    validate_meshes = props.BoolProperty(name="Validate Meshes", default=True),
+    debug_dump = props.BoolProperty(name="Debug Info Enabled", default=False),
+    debug_dump_key = props.StringProperty(name="Key", default="debug_cdae"),
 )
 
 

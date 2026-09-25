@@ -11,27 +11,14 @@ class UtilsPanelPropertyGroup(PropertyGroup):
     matconv_aclip: bool
     matconv_force: bool
 
-props.anotate_properties(UtilsPanelPropertyGroup,
-    matconv_version = props.Enum(
-        name="Material Version",
-        description="BeamNG material conversion version",
-        items=[
-            ("1.0", "V1", ""),
-            ("1.5", "V1.5 (PBR)", ""),
-        ],
-        default="1.0",
-    ),
-    matconv_aclip = props.Bool(
-        name="Enable Alpha Clip",
-        description="",
-        default=True,
-    ),
-    matconv_force = props.Bool(
-        name="Force Conversion",
-        description="Force conversion even if materials already seem valid",
-        default=False,
-    )
-)
+class UtilsPanel_PGI(PropertyInfoGroup[UtilsPanelPropertyGroup]):
+    pinfo = PropertyInfoFactory(UtilsPanelPropertyGroup)
+
+    matconv_version = pinfo.enum("Material Version", description="BeamNG material conversion version", items=[("1.0", "V1"), ("1.5", "V1.5 (PBR)")], default="1.0")
+    matconv_aclip = pinfo.bool("Enable Alpha Clip", True)
+    matconv_force = pinfo.bool("Force Conversion", False)
+
+UtilsPanel_PGI.annotate()
 
 
 
@@ -78,9 +65,10 @@ class PT_materials_panel(Panel):
 
 
 
-_pinfo = props.PropertyInfoFactory(types.Scene)
 
-class UtilsSidepanel:
+
+class UtilsSidepanel(PropertyInfoGroup[types.Scene]):
+    pinfo = PropertyInfoFactory(types.Scene)
 
     classes = (
         UtilsPanelPropertyGroup,
@@ -88,24 +76,24 @@ class UtilsSidepanel:
         PT_materials_panel,
     )
 
-    utils_panel_properties = _pinfo.ptr("utils_panel_properties", UtilsPanelPropertyGroup)
+    utils_panel_properties = pinfo.ptr(UtilsPanelPropertyGroup, key="utils_panel_properties")
 
 
-    @staticmethod
-    def properties_from_ctx(ctx: types.Context):
+    @classmethod
+    def properties_from_ctx(cls, ctx: types.Context):
         assert ctx.scene is not None
-        return UtilsSidepanel.utils_panel_properties[ctx.scene]
+        return cls.utils_panel_properties[ctx.scene]
 
 
-    @staticmethod
-    def register():
-        for cls in UtilsSidepanel.classes:
-            bpy.utils.register_class(cls)
-        _pinfo.register()
+    @classmethod
+    def register(cls):
+        for rcls in cls.classes:
+            bpy.utils.register_class(rcls)
+        cls.pinfo.register()
 
 
-    @staticmethod
-    def unregister():
-        for cls in reversed(UtilsSidepanel.classes):
-            bpy.utils.unregister_class(cls)
-        _pinfo.unregister()
+    @classmethod
+    def unregister(cls):
+        for rcls in reversed(cls.classes):
+            bpy.utils.unregister_class(rcls)
+        cls.pinfo.unregister()

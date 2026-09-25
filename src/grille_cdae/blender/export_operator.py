@@ -336,7 +336,7 @@ class ExportBase(PresetOperator, ExportHelper):
             if self.save_textures != WriteMode.NONE:
                 box.prop(self, "texture_path")
 
-ExportBase.anotate(
+ExportBase.annotate(
     selection_only = BoolProperty(name="Selection Only", default=False, description="Use selected Objects."),
     include_children = BoolProperty(name="Include Children", default=False, description="Include all Children of selected Objects."),
     include_hidden = BoolProperty(name="Include Hidden", default=False, description="Include Objects that are hidden in Viewport."),

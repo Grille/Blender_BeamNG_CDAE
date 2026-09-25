@@ -22,26 +22,15 @@ class ObjectRole(StrEnum):
 
 
 
-_pinfo = props.PropertyInfoFactory(types.Object)
+class ObjectProperties(PropertyInfoGroup[types.Object]):
+    pinfo = PropertyInfoFactory(types.Object)
 
-class ObjectProperties:
-
-    path = _pinfo.str("path", "Node Path", "base00.start01.obj", description="Node tree path inside the cdae file")
-    role = _pinfo.enum("role", "Role", ObjectRole.Generic)
-    lod_size = _pinfo.int("lod_size", "LOD Size (PX)")
-    bb_flag0 = _pinfo.int("bb_flag0", "BB Dimension (PX)", 64)
-    bb_dimension = _pinfo.int("bb_dimension", "BB Equator Steps", 16)
-    bb_equator_steps = _pinfo.bool("bb_equator_steps", "BB Equator Steps")
-
+    path = pinfo.str("Node Path", "base00.start01.obj", description="Node tree path inside the cdae file")
+    role = pinfo.enum("Role", items=ObjectRole, default=ObjectRole.Generic)
+    lod_size = pinfo.int("LOD Size (PX)")
+    bb_flag0 = pinfo.int("BB Dimension (PX)", 64)
+    bb_dimension = pinfo.int("BB Equator Steps", 16)
+    bb_equator_steps = pinfo.bool("BB Equator Steps")
 
     @staticmethod
-    def has_mesh(obj: types.Object) -> bool:
-        return obj.type == 'MESH'
-    
-
-    @staticmethod
-    def register(): _pinfo.register()
-
-
-    @staticmethod
-    def unregister(): _pinfo.unregister()
+    def has_mesh(obj: types.Object): return obj.type == 'MESH'
