@@ -33,13 +33,7 @@ class MeshDataEvalMode(StrEnum):
     ModAll = "All"
     Depsgraph = "Depsgraph"
 
-    @property
-    def description(self) -> str:
-        return _MeshDataEvalMode_desc.get(self, "")
-
-_MeshDataEvalMode_desc = {
-   MeshDataEvalMode.Depsgraph: "More efficient alternative to Viewport.",
-}
+StrEnumMetaData.description[MeshDataEvalMode.Depsgraph] = "More efficient alternative to Viewport."
 
 
 
