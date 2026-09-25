@@ -33,7 +33,8 @@ class MeshDataEvalMode(StrEnum):
     ModAll = "All"
     Depsgraph = "Depsgraph"
 
-    def get_description(self) -> str:
+    @property
+    def description(self) -> str:
         return _MeshDataEvalMode_desc.get(self, "")
 
 _MeshDataEvalMode_desc = {

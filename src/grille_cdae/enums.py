@@ -309,8 +309,8 @@ class Operation(StrEnum):
         return _OPERATION_NEUTRAL_VALUE.get(self, 0.0)
 
 _OPERATION_NEUTRAL_VALUE: dict[Operation, float] = {
-    Operation.MULTIPLY: 1,
-    Operation.DIVIDE: 1,
+    Operation.MULTIPLY: 1.0,
+    Operation.DIVIDE: 1.0,
 }
 
 
