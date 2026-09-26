@@ -27,15 +27,14 @@ def _to_tuple3(value: EnumCtrItem) -> tuple[str, str, str]:
 
 
 
-class PropertyInfoFactory[T:types.bpy_struct]:
+class PropertyInfoFactory[T:types.bpy_struct = Any]:
 
-    def __init__(self, target: type[T]):
-        self.target = target 
+    def __init__(self):
         self.items: list[PropertyInfo[T]] = []
 
 
     def _new[TValue](self, property: object, *, cast: Converter[TValue] | None = None, key: nstr = None, type_hint: type[TValue] | None = None):
-        pinfo = PropertyInfo(self.target, property, cast)
+        pinfo = PropertyInfo[T, TValue](property, cast)
         if key is not None: pinfo.set_key(key)
         self.items.append(pinfo)
         return pinfo
@@ -88,27 +87,26 @@ class PropertyInfoFactory[T:types.bpy_struct]:
         return self._new(property, key=key, type_hint=type)
 
 
-    def register(self):
-        for pinfo in self.items: pinfo.register()
+    def register(self, target: type[T]):
+        for pinfo in self.items: pinfo.register(target)
 
 
-    def unregister(self):
-        for pinfo in self.items: pinfo.unregister()
+    def unregister(self, target: type[T]):
+        for pinfo in self.items: pinfo.unregister(target)
 
 
-    def annotate(self):
-        for pinfo in self.items: pinfo.annotate()
+    def annotate(self, target: type[T]):
+        for pinfo in self.items: pinfo.annotate(target)
 
 
 
 PREFIX = "grille_beamng_cdae_"
 
-class PropertyInfo[T:types.bpy_struct, TValue = Any]:
+class PropertyInfo[T:types.bpy_struct = Any, TValue = Any]:
 
     PREFIX = PREFIX
 
-    def __init__(self, target: type[T], property: object, cast: Converter[TValue] | None = None):
-        self.target = target
+    def __init__(self, property: object, cast: Converter[TValue] | None = None):
         self.property = property
         self.cast = cast
 
@@ -117,16 +115,16 @@ class PropertyInfo[T:types.bpy_struct, TValue = Any]:
         self.key = f"{prefix}{key}"
 
 
-    def register(self):
-        setattr(self.target, self.key, self.property)
+    def register(self, target: type[T]):
+        setattr(target, self.key, self.property)
 
 
-    def unregister(self):
-        delattr(self.target, self.key)
+    def unregister(self, target: type[T]):
+        delattr(target, self.key)
 
 
-    def annotate(self):
-        self.target.__annotations__[self.key] = self.property
+    def annotate(self, target: type[T]):
+        target.__annotations__[self.key] = self.property
 
 
     def __getitem__(self, obj: T) -> TValue:
@@ -153,17 +151,18 @@ class PropertyInfoGroupMeta(type):
 
 
 
-class PropertyInfoGroup[T:types.bpy_struct](metaclass=PropertyInfoGroupMeta):
+class PropertyInfoGroup[T:types.bpy_struct = Any](metaclass=PropertyInfoGroupMeta):
     pinfo: PropertyInfoFactory[T]
+    target: type[T]
 
     @classmethod
-    def register(cls): cls.pinfo.register()
+    def register(cls): cls.pinfo.register(cls.target)
 
     @classmethod
-    def unregister(cls): cls.pinfo.unregister()
+    def unregister(cls): cls.pinfo.unregister(cls.target)
 
     @classmethod
-    def annotate(cls): cls.pinfo.annotate()
+    def annotate(cls): cls.pinfo.annotate(cls.target)
 
 
 

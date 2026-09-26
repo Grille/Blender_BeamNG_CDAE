@@ -6,6 +6,7 @@ from ..beamng.cdae.io import *
 from ..beamng.cdae.parser import CdaeParser
 from .local_storage import LocalStorage
 from .presets_operators import OpPresetsUtils, PresetOperator
+from .uilayout import UILayoutCtx
 
 
 
@@ -22,11 +23,7 @@ class ImportCdae(PresetOperator, ImportHelper):
     bl_label = "Import BeamNG"
     filename_ext = ".cdae"
 
-    filter_glob: str
 
-    validate_meshes: bool
-    debug_dump: bool
-    debug_dump_key: str
 
     def invoke(self, context, event):
         OpPresetsUtils.setup(self)
@@ -49,36 +46,44 @@ class ImportCdae(PresetOperator, ImportHelper):
         cdae.print_debug()
         
         parser = CdaeParser()
-        parser.validate = self.validate_meshes
-        parser.debug = self.debug_dump
+
+        pinfo = ImportCdaePInfo
+
+        parser.validate = pinfo.validate_meshes[self]
+        parser.debug = pinfo.debug_dump[self]
         parser.parse(cdae)
 
-        if self.debug_dump:
-            LocalStorage.set(self.debug_dump_key, DebugWriter.to_dict(cdae))
+        if pinfo.debug_dump[self]:
+            LocalStorage.set(pinfo.debug_dump_key[self], DebugWriter.to_dict(cdae))
 
 
         return {'FINISHED'}
     
 
     def draw(self, context):
-
         layout = self.layout
         layout.use_property_split = True
         layout.use_property_decorate = False
 
         OpPresetsUtils.draw(self, context)
+        ui = UILayoutCtx(layout, self)
+        pinfo = ImportCdaePInfo
 
-        layout.prop(self, "validate_meshes")
-        layout.prop(self, "debug_dump")
-        if self.debug_dump:
-            layout.prop(self, "debug_dump_key")
+        ui.prop(pinfo.validate_meshes)
+        ui.prop(pinfo.debug_dump)
+        if pinfo.debug_dump[self]:
+            ui.prop(pinfo.debug_dump_key)
 
-ImportCdae.annotate(
-    filter_glob = props.StringProperty(default="*.dae;*.cdae;*.json", options={'HIDDEN'}),
-    validate_meshes = props.BoolProperty(name="Validate Meshes", default=True),
-    debug_dump = props.BoolProperty(name="Debug Info Enabled", default=False),
-    debug_dump_key = props.StringProperty(name="Key", default="debug_cdae"),
-)
+
+class ImportCdaePInfo(PropertyInfoGroup):
+    pinfo = PropertyInfoFactory()
+
+    filter_glob = pinfo.str("", "*.dae;*.cdae;*.json") #options={'HIDDEN'}
+    validate_meshes = pinfo.bool("Validate Meshes", True)
+    debug_dump = pinfo.bool("Debug Info Enabled", False)
+    debug_dump_key = pinfo.str("Key", "debug_cdae")
+
+ImportCdaePInfo.pinfo.annotate(ImportCdae)
 
 
 

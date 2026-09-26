@@ -4,21 +4,19 @@ from grille_cdae.common.basetypes import PropertyGroup, Operator, Panel
 from ..beamng.material.material import MaterialVersion
 from ..beamng.material.material_parser import MaterialParser
 
-
-
 class UtilsPanelPropertyGroup(PropertyGroup):
     matconv_version: str
     matconv_aclip: bool
     matconv_force: bool
 
-class UtilsPanel_PGI(PropertyInfoGroup[UtilsPanelPropertyGroup]):
-    pinfo = PropertyInfoFactory(UtilsPanelPropertyGroup)
-
+class UtilsPanelPInfo(PropertyInfoGroup[UtilsPanelPropertyGroup]):
+    pinfo = PropertyInfoFactory()
+    
     matconv_version = pinfo.enum("Material Version", description="BeamNG material conversion version", items=[("1.0", "V1"), ("1.5", "V1.5 (PBR)")], default="1.0")
     matconv_aclip = pinfo.bool("Enable Alpha Clip", True)
     matconv_force = pinfo.bool("Force Conversion", False)
 
-UtilsPanel_PGI.annotate()
+UtilsPanelPInfo.pinfo.annotate(UtilsPanelPropertyGroup)
 
 
 
@@ -68,7 +66,7 @@ class PT_materials_panel(Panel):
 
 
 class UtilsSidepanel(PropertyInfoGroup[types.Scene]):
-    pinfo = PropertyInfoFactory(types.Scene)
+    pinfo = PropertyInfoFactory()
 
     classes = (
         UtilsPanelPropertyGroup,
@@ -86,14 +84,14 @@ class UtilsSidepanel(PropertyInfoGroup[types.Scene]):
 
 
     @classmethod
-    def register(cls):
+    def register(cls, target = types.Scene):
         for rcls in cls.classes:
             bpy.utils.register_class(rcls)
-        cls.pinfo.register()
+        cls.pinfo.register(target)
 
 
     @classmethod
-    def unregister(cls):
+    def unregister(cls, target = types.Scene):
         for rcls in reversed(cls.classes):
             bpy.utils.unregister_class(rcls)
-        cls.pinfo.unregister()
+        cls.pinfo.unregister(target)

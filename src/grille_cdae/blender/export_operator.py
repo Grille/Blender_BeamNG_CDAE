@@ -34,6 +34,14 @@ class FileFormat(StrEnum):
     DTS = ".dts"
     DEBUG = ".json"
 
+StrEnumMetaData.display_name.update(FileFormat, {
+    FileFormat.NONE: "None",
+    FileFormat.DAE: "Collada (.dae)", 
+    FileFormat.CDAE: "Cached v31 (.cdae)", 
+    FileFormat.DTS: "Torque3D v26 (.dts)", 
+    FileFormat.DEBUG: "Debug (.json)", 
+})
+
 
 class UvMode(StrEnum):
     NONE = "NONE"

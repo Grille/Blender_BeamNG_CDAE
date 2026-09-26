@@ -23,7 +23,8 @@ class ObjectRole(StrEnum):
 
 
 class ObjectProperties(PropertyInfoGroup[types.Object]):
-    pinfo = PropertyInfoFactory(types.Object)
+    pinfo = PropertyInfoFactory()
+    target = types.Object
 
     path = pinfo.str("Node Path", "base00.start01.obj", description="Node tree path inside the cdae file")
     role = pinfo.enum("Role", items=ObjectRole, default=ObjectRole.Generic)

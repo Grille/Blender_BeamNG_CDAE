@@ -40,7 +40,8 @@ GROUNDMODELS = [
 
 
 class MaterialProperties(PropertyInfoGroup[types.Material]):
-    pinfo = PropertyInfoFactory(types.Material)
+    pinfo = PropertyInfoFactory()
+    target = types.Material
 
     groundtype_custom = pinfo.str("", "")
     groundtype_select = pinfo.enum("Ground Type", items=GROUNDMODELS, default=GROUNDMODEL_CUSTOM)
