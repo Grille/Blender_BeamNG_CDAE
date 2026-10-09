@@ -9,7 +9,7 @@ import bpy
 
 from grille_cdae.common import *
 from grille_cdae.beamng.material import Material, MaterialBuilder, MaterialParser, MaterialImportError
-from grille_cdae.blender.shader_nodes import BeamBSDF15, BeamStageMix
+from grille_cdae.blender.shader_nodes import BeamBSDF15, BeamBDSF10Basic, BeamImageTex, BeamRGBA, BeamStageMix
 
 import grille_cdae.addon as addon
 
@@ -41,6 +41,24 @@ CANONICAL: SDict = {
         },
         {"metallicFactor": 1.0, "roughnessFactor": 0.3, "opacityFactor": 1.0, "clearCoatFactor": 0.0},
         {}, {},
+    ],
+}
+
+CANONICAL_10: SDict = {
+    "name": "test_mat", "mapTo": "test_mat", "class": "Material", "version": 1.0,
+    "Stages": [
+        {
+            "baseColorMap": "albedo.png", "baseColorFactor": [1.0, 0.5, 0.0, 1.0], "instanceDiffuse": True,
+            "normalMap": "normal.png",
+            "detailMap": "detail.png", "detailScale": [4.0, 4.0],
+            "reflectivityMap": "reflect.png", "reflectivityMapFactor": 0.5,
+            "overlayMap": "overlay.png",
+            "opacityMap": "opacity.png",
+            "specularMap": "spec.png", "pixelSpecular": True, "specular": [0.5, 0.5, 0.5, 1.0], "roughnessFactor": 0.25,
+            "emissive": True,
+            "glow": True, "glowFactor": [1.0, 0.0, 0.0],
+        },
+        {}, {}, {},
     ],
 }
 
@@ -91,9 +109,26 @@ class MaterialImportTest(unittest.TestCase):
         self.assertAlmostEqual(stage.inputs[BeamBSDF15.Sockets.METALLIC_FACTOR].default_value, 1.0) # pyright: ignore
 
 
-    def test_version_1_not_supported_yet(self):
+    def test_canonical_roundtrip_10(self):
+        self.assertEqual(export_material(import_material(CANONICAL_10)), CANONICAL_10)
+
+
+    def test_nodes_10(self):
+        bmat = import_material(CANONICAL_10)
+        idnames = collections.Counter(node.bl_idname for node in not_none(bmat.node_tree).nodes)
+        self.assertEqual(idnames[BeamBDSF10Basic.bl_idname], 1)
+        self.assertEqual(idnames[BeamImageTex.bl_idname], 4)  # color, detail, reflectivity, overlay (RGBA sockets)
+        self.assertEqual(idnames[BeamRGBA.bl_idname], 1)  # color factor
+
+
+    def test_missing_version_is_10(self):
+        bmat = import_material({"name": "m", "Stages": [{"baseColorMap": "a.png"}]})
+        self.assertEqual(export_material(bmat)["version"], 1.0)
+
+
+    def test_unknown_version(self):
         with self.assertRaises(MaterialImportError):
-            import_material({"name": "m", "version": 1.0})
+            import_material({"name": "m", "version": 2.0})
 
 
 
@@ -116,7 +151,7 @@ class MaterialSampleRoundtripTest(unittest.TestCase):
                 entries = cast(dict[str, SDict], json.load(f))
 
             for key, raw in entries.items():
-                if raw.get("class") not in ("Material", "material") or raw.get("version") != 1.5:
+                if raw.get("class") not in ("Material", "material"):
                     continue
 
                 with self.subTest(file=os.path.relpath(path, root), material=key):

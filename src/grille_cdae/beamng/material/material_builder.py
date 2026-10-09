@@ -7,9 +7,11 @@ from grille_cdae.enums import *
 
 from ...blender.material_properties import MaterialProperties
 from ...blender.node_walker import NodeWalker
-from ...blender.shader_nodes import BeamMaterial, BeamBSDFCollision, BeamImageTex, BeamStageMix, BeamUVData, BeamUVAnimation, ReflectionMode
+from ...blender.shader_nodes import (
+    BaseBeamRGBA, BeamMaterial, BeamBSDFCollision, BeamBDSF10Basic, BeamImageTex, BeamStageMix, BeamUVData, BeamUVAnimation, ReflectionMode
+)
 from .material import *
-from .node_fields import Field, Tex, Value, Bundle, STAGE_FIELDS, MATERIAL_FIELDS, UV_ANIMATION, to_float, to_vec2
+from .node_fields import Field, Tex, Value, Bundle, STAGE_FIELDS, STAGE_VERSION, MATERIAL_FIELDS, UV_ANIMATION, to_float, to_srgb, to_vec2
 
 
 
@@ -177,28 +179,41 @@ class MaterialBuilder:
         if len(stages) > MAX_STAGES:
             raise MaterialExportError(f"{len(stages)} stages, BeamNG supports at most {MAX_STAGES}.")
 
+        nodes = [not_none(stage_walker.current) for stage_walker in stages]
+        for node in nodes:
+            if type(node) not in STAGE_FIELDS:
+                raise MaterialExportError(f"'{node.bl_label}' is not supported as stage.")
+        if len(set(type(node) for node in nodes)) > 1:
+            raise MaterialExportError(f"Stages of different material versions can't be mixed: {', '.join(node.bl_label for node in nodes)}.")
+
         mat = self.material
-        mat.version = MaterialVersion.V1_5
+        mat.version = STAGE_VERSION[type(nodes[0])]
         mat.active_layers = len(stages)
 
-        for index, stage_walker in enumerate(stages):
-            node = not_none(stage_walker.current)
-            fields = STAGE_FIELDS.get(type(node))
-            if fields is None:
-                raise MaterialExportError(f"'{node.bl_label}' is not supported as stage.")
-
+        for index, (stage_walker, node) in enumerate(zip(stages, nodes)):
             stage = mat.stages[index]
             ctx = _Context(f"{node.name} (stage {index})")
-            self._apply_fields(stage_walker, fields, stage, ctx)
+            self._apply_fields(stage_walker, STAGE_FIELDS[type(node)], stage, ctx)
+            if isinstance(node, BeamBDSF10Basic):
+                self._apply_glow(stage_walker, stage, ctx)
             self._apply_detail_scale(stage, ctx)
             self._apply_animation(stage, ctx)
+
+
+    def _apply_glow(self, walker: NodeWalker, stage: MaterialStage, ctx: _Context):
+        color = to_srgb(self._read_value(walker, BeamBDSF10Basic.Sockets.GLOW_COLOR, ctx))
+        if any(c > 0 for c in color[:3]):
+            stage.legacy_light.glow_enabled = True
+            stage.legacy_light.glow_color = color
 
 
     def _apply_fields(self, walker: NodeWalker, fields: Sequence[Field], target: object, ctx: _Context):
         for field in fields:
             if isinstance(field, Value):
+                value = self._read_value(walker, field.socket, ctx)
+                if value is None: continue
                 obj, name = _resolve(target, field.path)
-                setattr(obj, name, field.conv(self._read_value(walker, field.socket, ctx)))
+                setattr(obj, name, field.conv(value))
             elif isinstance(field, Tex):
                 self._apply_tex(walker, field, target, ctx)
             else:
@@ -229,18 +244,19 @@ class MaterialBuilder:
             except KeyError:
                 self._issue(ctx.location, f"'{field.map}': BeamNG has no '{key}' for this map.")
 
-        ref = self._find_image(walker, field.map, ctx)
+        ref = self._find_image(walker, field.map, dataclass_replace(ctx, detail=ctx.detail or field.detail))
         if ref is not None:
             socket.set_field("map", ref.image.name)
             if ref.uv != 0: set_field("uv", ref.uv)
             if field.normal and ref.strength is not None: set_field("value", to_float(ref.strength))
 
-        if field.value is not None:
-            set_field("value", field.conv(self._read_value(walker, field.value, ctx)))
-        if field.instance is not None:
-            set_field("instance", bool(self._read_value(walker, field.instance, ctx)))
-        if field.vertex is not None:
-            set_field("vertex", bool(self._read_value(walker, field.vertex, ctx)))
+        def read(socket_name: str | None, conv: Converter[object]):
+            if socket_name is None: return None
+            value = self._read_value(walker, socket_name, ctx)
+            return None if value is None else conv(value)
+
+        for key, value in (("value", read(field.value, field.conv)), ("instance", read(field.instance, bool)), ("vertex", read(field.vertex, bool))):
+            if value is not None: set_field(key, value)
 
 
     def _apply_detail_scale(self, stage: MaterialStage, ctx: _Context):
@@ -289,23 +305,29 @@ class MaterialBuilder:
 
 
     def _read_value(self, walker: NodeWalker, socket_name: str, ctx: _Context) -> Any:
+        """Value of a plain socket, or of the constant node linked to it. None for an unlinked socket without value (bundle)."""
 
         input = not_none(walker.get_input(socket_name))
+        has_value = hasattr(input, "default_value")
+        def own_value(): return butils.get_default_value(input) if has_value else None
+
         if not input.is_linked:
-            return butils.get_default_value(input)
+            return own_value()
 
         source = walker.fork()
         if not source.try_follow(socket_name):
             # unlinked node group input, use the value of the group node socket
             if source.last_socket_value is not None: return source.last_socket_value
-            return butils.get_default_value(input)
+            return own_value()
 
         node = not_none(source.current)
         if source.is_node_any_idname(*_CONSTANT_NODES):
             return butils.get_default_value(node.outputs[0])
+        if isinstance(node, BaseBeamRGBA):
+            return tuple(node.color_value)
 
-        self._issue(ctx.location, f"'{socket_name}' is linked to '{node.bl_label}', only plain values can be exported, using the socket value.")
-        return butils.get_default_value(input)
+        self._issue(ctx.location, f"'{socket_name}' is linked to '{node.bl_label}', only plain values can be exported" + (", using the socket value." if has_value else "."))
+        return own_value()
 
 
     def _find_image(self, walker: NodeWalker, socket_name: str, ctx: _Context) -> _ImageRef | None:

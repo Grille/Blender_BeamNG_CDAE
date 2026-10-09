@@ -7,7 +7,7 @@ from grille_cdae.enums import AlphaBlendMode
 from grille_cdae.beamng.material import MaterialBuilder, MaterialExportError
 from grille_cdae.beamng.material.material import AnimationFlags
 from grille_cdae.blender.shader_nodes import (
-    BeamMaterial, BeamBSDF15, BeamBSDFCollision, BeamStageMix, BeamUVData, BeamUVAnimation, BeamImageTex,
+    BeamMaterial, BeamBSDF15, BeamBDSF10Basic, BeamBSDFCollision, BeamStageMix, BeamUVData, BeamUVAnimation, BeamImageTex,
     BeamBSDF15Detail, BeamPalette, ReflectionMode
 )
 
@@ -370,6 +370,13 @@ class MaterialExportTest(unittest.TestCase):
         mix = self.mix(self.new_stage(0.1), None)
         self.link(mix.outputs[0], self.mat_node.inputs["BNGS"])
         self.assertNotIn("activeLayers", self.build(expect_issues=1))
+
+
+    def test_mixed_versions(self):
+        mix = self.mix(self.new_stage(0.1), self.node(BeamBDSF10Basic.bl_idname))
+        self.link(mix.outputs[0], self.mat_node.inputs["BNGS"])
+        with self.assertRaisesRegex(MaterialExportError, "can't be mixed"):
+            self.build()
 
 
     def test_too_many_stages(self):

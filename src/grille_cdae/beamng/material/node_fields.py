@@ -8,8 +8,10 @@ never JSON keys, those are owned by material.py and material_socket_info.py.
 from __future__ import annotations
 
 from grille_cdae.common import *
+from grille_cdae.enums import SocketName
 
-from ...blender.shader_nodes import BaseShaderNode, BeamBSDF15, BeamBSDF15Detail, BeamMaterial, BeamPalette, BeamUVAnimation
+from ...blender.shader_nodes import BaseShaderNode, BeamBSDF15, BeamBSDF15Detail, BeamBDSF10Basic, BeamMaterial, BeamPalette, BeamUVAnimation
+from .material import MaterialVersion
 
 
 
@@ -40,6 +42,7 @@ class Tex(NamedTuple):
     instance: str | None = None
     vertex: str | None = None
     normal: bool = False # value is the strength of the normal map in front of the image
+    detail: bool = False # detail map (uses detail UVs and scale)
 
 
 
@@ -107,9 +110,36 @@ STAGE_15: tuple[Field, ...] = (
     Bundle(_S15.PALETTE, BeamPalette, PALETTE),
 )
 
+_S10 = BeamBDSF10Basic.Sockets
+
+# glow (color + enabled) is derived in code
+STAGE_10: tuple[Field, ...] = (
+    Tex(_S10.COLOR_MAP, "color", _S10.COLOR_FACTOR, to_srgb, instance=SocketName.InstanceColor, vertex=SocketName.VertexColor),
+    Tex(SocketName.Normal, "normal", normal=True),
+    Tex(_S10.DETAIL_COLOR, "detail.color", detail=True),
+    Tex(SocketName.DetailNormal, "detail.normal", normal=True, detail=True),
+    Tex(_S10.RM, "reflectivity", _S10.RM_FACTOR),
+    Tex(_S10.OVERLAY_MAP, "overlay"),
+    Tex(_S10.OPACITY_MAP, "opacity"),
+    Tex(_S10.SPECULAR_MAP, "specular"),
+    Value(_S10.SPECULAR_ENABLED, "specular.enabled", to_bool),
+    Value(_S10.SPECULAR_COLOR, "specular.factor", to_srgb),
+    Value(_S10.SPECULAR_ROUGHNESS, "specular.roughness"),
+    Value(_S10.EMISIVE, "legacy_light.emissive_enabled", to_bool),
+    Bundle(_S10.PALETTE, BeamPalette, PALETTE),
+)
+
 STAGE_FIELDS: dict[type, tuple[Field, ...]] = {
     BeamBSDF15: STAGE_15,
+    BeamBDSF10Basic: STAGE_10,
 }
+
+STAGE_VERSION: dict[type, MaterialVersion] = {
+    BeamBSDF15: MaterialVersion.V1_5,
+    BeamBDSF10Basic: MaterialVersion.V1,
+}
+
+STAGE_NODE: dict[MaterialVersion, type[BaseShaderNode]] = {version: node for node, version in STAGE_VERSION.items()}
 
 
 _SA = BeamUVAnimation.Sockets

@@ -6,11 +6,11 @@ from grille_cdae.common import *
 from grille_cdae.enums import *
 
 from ...blender.material_properties import MaterialProperties
-from ...blender.shader_nodes import BeamMaterial, BeamBSDF15, BeamStageMix, BeamUVData, BeamUVAnimation, ReflectionMode
+from ...blender.shader_nodes import BeamMaterial, BeamBDSF10Basic, BeamImageTex, BeamRGBA, BeamStageMix, BeamUVData, BeamUVAnimation, ReflectionMode
 from ...blender.shader_node_builder import NodeTreeBuilder
 from .material import *
 from .material_builder import MaterialBuilder, MaterialExportError, MAX_STAGES
-from .node_fields import Field, Tex, Value, STAGE_FIELDS, MATERIAL_FIELDS, UV_ANIMATION, INVERSE
+from .node_fields import Field, Tex, Value, STAGE_FIELDS, STAGE_NODE, MATERIAL_FIELDS, UV_ANIMATION, INVERSE, from_srgb
 
 
 
@@ -55,6 +55,10 @@ def _set_socket(node: bpy.types.Node, name: str, value: object):
     butils.set_default_value(node.inputs[name], cast(SocketValue, value))
 
 
+def _is_bundle(socket: bpy.types.NodeSocket) -> bool:
+    return socket.type == 'BUNDLE'
+
+
 
 class MaterialParser:
     """Creates a node tree made of the addon's shader nodes from a BeamNG material, using the same field tables as the export."""
@@ -75,6 +79,7 @@ class MaterialParser:
             mat = builder.material # not a BeamNG node tree (yet)
 
         if (mat.version == MaterialVersion.NONE or force_conversion):
+            if mat.version == MaterialVersion.NONE: mat.version = self.target_version
             self.parse_to_bmat(mat, bmat)
 
 
@@ -84,9 +89,14 @@ class MaterialParser:
 
     def parse_to_bmat(self, src: Material, dst: bpy.types.Material):
 
-        version = src.version if src.version != MaterialVersion.NONE else self.target_version
-        if version != MaterialVersion.V1_5:
-            raise MaterialImportError(f"Material version {float(version)} is not supported yet.")
+        try:
+            # BeamNG treats materials without version as 1.0
+            version = src.version if src.is_set("version") else MaterialVersion.V1
+        except ValueError:
+            raise MaterialImportError(f"Unknown material version '{src['version']}'.")
+        stage_node = STAGE_NODE.get(version)
+        if stage_node is None:
+            raise MaterialImportError(f"Material version {float(version)} is not supported.")
 
         tree = not_none(dst.node_tree)
         builder = NodeTreeBuilder(tree)
@@ -100,11 +110,11 @@ class MaterialParser:
         self._import_material(src, mat_node)
 
         stage_count = min(max(src.active_layers, 1), MAX_STAGES)
-        shader = self._import_stage(tree, src.stages[0], 0)
+        shader = self._import_stage(tree, stage_node, src.stages[0], 0)
         for index in range(1, stage_count):
             mix = tree.nodes.new(BeamStageMix.bl_idname)
             tree.links.new(shader.outputs[0], mix.inputs[BeamStageMix.Sockets.BASE])
-            tree.links.new(self._import_stage(tree, src.stages[index], index).outputs[0], mix.inputs[BeamStageMix.Sockets.OVERLAY])
+            tree.links.new(self._import_stage(tree, stage_node, src.stages[index], index).outputs[0], mix.inputs[BeamStageMix.Sockets.OVERLAY])
             shader = mix
 
         tree.links.new(shader.outputs[0], mat_node.inputs[SocketName.BNGShader])
@@ -114,8 +124,9 @@ class MaterialParser:
     def _import_material(self, src: Material, node: BeamMaterial):
 
         LS = BeamMaterial.Sockets
+        # always set, the model defaults are BeamNG's file defaults while some node defaults differ (e.g. invert backface normals)
         for field in MATERIAL_FIELDS:
-            if isinstance(field, Value) and src.is_set(field.path):
+            if isinstance(field, Value):
                 _set_socket(node, field.socket, INVERSE[field.conv](getattr(src, field.path)))
 
         if src.alpha_test:
@@ -144,11 +155,24 @@ class MaterialParser:
             node.reflection_mode = ReflectionMode.NONE
 
 
-    def _import_stage(self, tree: bpy.types.ShaderNodeTree, stage: MaterialStage, index: int) -> bpy.types.Node:
-        node = tree.nodes.new(BeamBSDF15.bl_idname)
+    def _import_stage(self, tree: bpy.types.ShaderNodeTree, node_type: type[bpy.types.Node], stage: MaterialStage, index: int) -> bpy.types.Node:
+        node = tree.nodes.new(node_type.bl_idname)
         ctx = _Context(tree, stage, f"stage {index}")
-        self._apply_fields(node, STAGE_FIELDS[BeamBSDF15], stage, ctx)
+        self._apply_fields(node, STAGE_FIELDS[node_type], stage, ctx)
+        if node_type is BeamBDSF10Basic and stage.legacy_light.glow_enabled:
+            _set_socket(node, BeamBDSF10Basic.Sockets.GLOW_COLOR, from_srgb(list(stage.legacy_light.glow_color)[:3]))
         return node
+
+
+    def _set_value(self, node: bpy.types.Node, socket_name: str, value: object, ctx: _Context):
+        """Sets a socket value, bundle (RGBA) sockets get a linked BNG RGBA node."""
+        socket = node.inputs[socket_name]
+        if not _is_bundle(socket):
+            _set_socket(node, socket_name, value)
+            return
+        rgba = cast(BeamRGBA, ctx.tree.nodes.new(BeamRGBA.bl_idname))
+        rgba.color_value = cast(Tuple4F, value)
+        ctx.tree.links.new(rgba.outputs[0], socket)
 
 
     def _has_data(self, fields: Sequence[Field], target: object) -> bool:
@@ -168,7 +192,7 @@ class MaterialParser:
         for field in fields:
             if isinstance(field, Value):
                 obj, name = _resolve(target, field.path)
-                if obj.is_set(name): _set_socket(node, field.socket, INVERSE[field.conv](getattr(obj, name)))
+                if obj.is_set(name): self._set_value(node, field.socket, INVERSE[field.conv](getattr(obj, name)), ctx)
             elif isinstance(field, Tex):
                 self._import_tex(node, field, target, ctx)
             elif self._has_data(field.fields, target):
@@ -185,9 +209,15 @@ class MaterialParser:
 
         map: str | None = _get_field(socket, "map")
         if map:
-            image_node = tree.nodes.new(NodeName.TexImage)
-            cast(bpy.types.ShaderNodeTexImage, image_node).image = self._get_image(map)
-            output = image_node.outputs[SocketName.Color]
+            if _is_bundle(node.inputs[field.map]):
+                # RGBA maps need the addon's image node
+                image_node = tree.nodes.new(BeamImageTex.bl_idname)
+                cast(BeamImageTex, image_node).image = self._get_image(map)
+                output = image_node.outputs[BeamImageTex.ImageType.COLOR_RGBA]
+            else:
+                image_node = tree.nodes.new(NodeName.TexImage)
+                cast(bpy.types.ShaderNodeTexImage, image_node).image = self._get_image(map)
+                output = image_node.outputs[SocketName.Color]
 
             if field.normal:
                 normal_map = tree.nodes.new(NodeName.NormalMap)
@@ -197,17 +227,12 @@ class MaterialParser:
                 output = normal_map.outputs[SocketName.Normal]
 
             tree.links.new(output, node.inputs[field.map])
-            self._link_uv(image_node, _get_field(socket, "uv") or 0, ctx)
+            self._link_uv(image_node, _get_field(socket, "uv") or 0, dataclass_replace(ctx, detail=ctx.detail or field.detail))
 
-        if field.value is not None:
-            value = _get_field(socket, "value")
-            if value is not None: _set_socket(node, field.value, INVERSE[field.conv](value))
-        if field.instance is not None:
-            value = _get_field(socket, "instance")
-            if value is not None: _set_socket(node, field.instance, bool(value))
-        if field.vertex is not None:
-            value = _get_field(socket, "vertex")
-            if value is not None: _set_socket(node, field.vertex, bool(value))
+        for key, socket_name, conv in (("value", field.value, INVERSE[field.conv]), ("instance", field.instance, bool), ("vertex", field.vertex, bool)):
+            if socket_name is None: continue
+            value = _get_field(socket, key)
+            if value is not None: self._set_value(node, socket_name, conv(value), ctx)
 
 
     def _link_uv(self, image_node: bpy.types.Node, uv: int, ctx: _Context):
