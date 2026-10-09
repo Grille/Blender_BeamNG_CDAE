@@ -21,10 +21,6 @@ def read_v31_from_stream(f: BufferedReader) -> CdaeV31:
     header_size = struct.unpack("<I", f.read(4))[0]
     header = MsgpackReader.from_bytes(f.read(header_size)).read_dict()
 
-    for key in header:
-        print(key)
-        print(header[key])
-
     is_compressed = header.get('compression', False)
 
     body_data = f.read()
@@ -43,9 +39,11 @@ def read_v31_from_stream(f: BufferedReader) -> CdaeV31:
     cdae.bounds = body.read_box6f()
 
     def read_vector(vec : PPackedVector):
+        element_count = body.read_int32()
         element_size = body.read_int32()
-        if vec.element_size != element_size: raise Exception()
-        vec.element_count = body.read_int32()
+        if vec.element_size != element_size:
+            raise ValueError(f"expected element size {vec.element_size}, got {element_size}")
+        vec.element_count = element_count
         vec.data = body.read_bytes()
     
 
@@ -122,7 +120,7 @@ def read_v31_from_stream(f: BufferedReader) -> CdaeV31:
 
 
     seq_count = body.read_int32()
-    if seq_count != 0:
+    for _ in range(seq_count):
         seq = CdaeV31.Sequence()
         cdae.sequences.append(seq)
 

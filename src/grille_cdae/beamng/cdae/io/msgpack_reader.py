@@ -73,12 +73,14 @@ class MsgpackReader:
         value = self.read_next()
 
         if not isinstance(value, list):
-            raise Exception()
-        value = cast(list[int], value)
-        
+            raise Exception(f"integerset must be [chunk_count, chunks], got {value!r}")
+        value = cast(list[Any], value)
+        if len(value) != 2:
+            raise Exception(f"integerset must be [chunk_count, chunks], got {value!r}")
+
         bits: list[bool] = []
         chunk_count: int = value[0]
-        chunks: list[int] = value
+        chunks: list[int] = value[1]
 
         if chunk_count != len(chunks):
             raise Exception(f"expected: {chunk_count}, actual: {len(chunks)}")

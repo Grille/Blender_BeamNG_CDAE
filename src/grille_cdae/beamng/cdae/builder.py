@@ -191,7 +191,8 @@ class CdaeMeshBuilder:
 
     @staticmethod
     def get_radius(bounds: Box6F):
-        return math.sqrt(bounds.range().max_unit()*2)
+        size = bounds.range()
+        return math.sqrt(size.dot(size)) / 2
 
 
     def build_from_mesh(self, mesh: bpy.types.Mesh)-> CdaeV31.Mesh:
@@ -217,6 +218,15 @@ class CdaeMeshBuilder:
         npmesh.uvs0 = ctx.get_uv_data(uv0_hint)
         npmesh.uvs1 = ctx.get_uv_data(uv1_hint)
         npmesh.colors = ctx.get_color_data(vertex_indices)
+
+        if self.apply_scale and self.scale != Vec3F.ONE:
+            scale = np.array(self.scale, dtype=np.float32)
+            npmesh.positions = npmesh.positions * scale
+            # normals transform with the inverse scale, skip for degenerate (zero) scale
+            if np.all(scale != 0):
+                normals = npmesh.normals / scale
+                lengths = np.linalg.norm(normals, axis=1, keepdims=True)
+                npmesh.normals = np.divide(normals, lengths, out=normals, where=lengths > 0).astype(np.float32)
 
         if self.compute_tangents and npmesh.uvs0 is not None and len(npmesh.uvs0) > 0:
             mesh.calc_tangents()

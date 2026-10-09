@@ -169,8 +169,17 @@ class ExportBase(PresetOperator, ExportHelper):
 
         filepath: str = self.filepath
         dirpath = os.path.dirname(filepath)
+        materials = builder.materials
 
         match self.file_format:
+            case FileFormat.NONE:
+                # no geometry gets built, collect materials directly from the objects
+                materials = list(dict.fromkeys(
+                    slot.material
+                    for obj in sorted(collector.objects, key=lambda o: o.name)
+                    for slot in obj.material_slots
+                    if slot.material is not None
+                ))
             case FileFormat.DAE:
                 DaeWriter.limit_precision_enabled = self.limit_precision_enabled
                 DaeWriter.limit_precision_dp = self.limit_precision_dp
@@ -186,7 +195,7 @@ class ExportBase(PresetOperator, ExportHelper):
             case _: raise KeyError()
         log("write file")
 
-        self.export_materials(dirpath, builder.materials)
+        self.export_materials(dirpath, materials)
         log("misc")
 
         return {OperatorResult.FINISHED.value}
