@@ -115,11 +115,11 @@ class CdaeRoundtripTest(unittest.TestCase):
 
 
 
-@unittest.skipUnless(os.environ.get("CDAE_SAMPLES_DIR"), "pass a directory with .cdae files to run_tests.py")
+@unittest.skipUnless(os.environ.get("BEAMNG_SAMPLES_DIR"), "pass a BeamNG directory to run_tests.py")
 class CdaeSampleFilesTest(unittest.TestCase):
 
     def test_read_and_rewrite(self):
-        root = os.environ["CDAE_SAMPLES_DIR"]
+        root = os.environ["BEAMNG_SAMPLES_DIR"]
         files = glob.glob(os.path.join(root, "**", "*.cdae"), recursive=True)
         self.assertTrue(files, f"no .cdae files in {root}")
 

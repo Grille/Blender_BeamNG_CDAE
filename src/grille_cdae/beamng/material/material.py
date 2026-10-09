@@ -28,13 +28,13 @@ class _BaseDict:
     def __setitem__(self, key: str, value: object | None):
         full_key = self.get_key(key)
         if value is None:
-            self.value_dict.pop(full_key)
+            self.value_dict.pop(full_key, None)
         else:
             self.value_dict[full_key] = value
 
 
     def __delitem__(self, key: str):
-        del self.value_dict[self.get_key(key)]
+        self.value_dict.pop(self.get_key(key), None)
 
 
 
@@ -215,6 +215,7 @@ _DEFAULT_DETAIL_SCALE = Vec2F(2.0, 2.0)
 class MaterialStage(_BaseDict):
 
     class _Detail(_BaseDict):
+        __slots__ = "color", "normal", "metallic", "roughness", "opacity", "ambient_occlusion"
         scale = _Vec2("detailScale", _DEFAULT_DETAIL_SCALE)
         def __init__(self, parent: MaterialStage):
             super().__init__(parent) 
@@ -226,10 +227,12 @@ class MaterialStage(_BaseDict):
             self.ambient_occlusion = _TexStrengthSocket(self, _SI.DETAIL_AMBIENT_OCCLUSION)
 
     class _RetroReflective(_BaseDict):
+        __slots__=()
         factor = _Float("retroreflectivity", 0.0)
         color = _Color3("retroreflectiveColor", Color4F.BLACK)
 
     class _LegacyLight(_BaseDict):
+        __slots__=()
         emissive_enabled = _Bool("emissive", False)
         emissive_color = _Color3("emissiveFactor", Color4F.BLACK)
         emissive_intensity_nits = _Float("emissiveIntensityNits", -1.0)
@@ -239,6 +242,7 @@ class MaterialStage(_BaseDict):
         minnaert_constant = _Float("minnaertConstant", -1.0)
 
     class _Animation(_BaseDict):
+        __slots__=()
         flags = _Int("animFlags", AnimationFlags.NONE, AnimationFlags)
         scroll_speed = _Float("scrollSpeed", 0.0)
         scroll_direction = _Vec2("scrollDir", Vec2F.ZERO)
@@ -252,7 +256,11 @@ class MaterialStage(_BaseDict):
 
     use_anisotropic = _Bool("useAnisotropic", True)
 
-
+    __slots__ = (
+        "detail", "retro_reflectivity", "legacy_light", "animation",
+        "color", "normal", "specular", "metallic", "roughness", "opacity", "ambient_occlusion",
+        "emission", "palette", "reflectivity", "overlay", "clear_coat", "clear_coat_normal",
+    )
     def __init__(self, dict: SDict):
         super().__init__(dict)
 
@@ -338,7 +346,7 @@ class Material(_BaseDict):
     dynamic_cubemap = _Bool("dynamicCubemap", True)
     cubemap = _Str("cubemap", "")
 
-    __slots__=()
+    __slots__ = "stages", "translucent", "subsurface"
     def __init__(self, dict):
         super().__init__(dict)
 

@@ -1249,6 +1249,7 @@ class BeamBSDF15(BaseShaderNode):
     bl_nclass = "SHADER"
     bl_width_default = 240
     ng_color_tag = GroupColorTag.SHADER
+    ng_version_mayor = 1
 
  
     def update(self):
@@ -1267,7 +1268,7 @@ class BeamBSDF15(BaseShaderNode):
         INSTANCE_COLOR = "Instance Color"
         VERTEX_COLOR = "Vertex Color"
         METALLIC_MAP = "Metallic Map"
-        METALLIC_FACTOR = "Mettalic Factor"
+        METALLIC_FACTOR = "Metallic Factor"
         NORMAL = "Normal"
         ROUGHNESS_MAP = "Roughness Map"
         ROUGHNESS_FACTOR = "Roughness Factor"
