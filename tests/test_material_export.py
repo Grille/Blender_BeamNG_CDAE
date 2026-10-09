@@ -5,14 +5,18 @@ import bpy
 from grille_cdae.common import *
 from grille_cdae.enums import AlphaBlendMode
 from grille_cdae.beamng.material import MaterialBuilder, MaterialExportError
+from grille_cdae.beamng.material.material import AnimationFlags
 from grille_cdae.blender.shader_nodes import (
-    BeamMaterial, BeamBSDF15, BeamBSDFCollision, BeamStageMix, BeamUVData, BeamImageTex, BeamBSDF15Detail, ReflectionMode
+    BeamMaterial, BeamBSDF15, BeamBSDFCollision, BeamStageMix, BeamUVData, BeamUVAnimation, BeamImageTex,
+    BeamBSDF15Detail, BeamPalette, ReflectionMode
 )
 
 import grille_cdae.addon as addon
 
 S = BeamBSDF15.Sockets
 M = BeamMaterial.Sockets
+D = BeamBSDF15Detail.Sockets
+A = BeamUVAnimation.Sockets
 
 
 def setUpModule(): addon.register()
@@ -169,11 +173,122 @@ class MaterialExportTest(unittest.TestCase):
         self.assertNotIn("roughnessMap", stage)
 
 
-    def test_unsupported_sockets_are_reported(self):
+    def detail_node(self):
         detail = self.node(BeamBSDF15Detail.bl_idname)
         self.link(detail.outputs["Detail"], self.stage.inputs[S.DETAIL])
+        return detail
+
+
+    def test_detail(self):
+        detail = self.detail_node()
+        detail.inputs[D.BASE_COLOR_STRENGTH].default_value = 0.5
+        uv_data = self.node(BeamUVData.bl_idname)
+        uv_data.inputs[BeamUVData.Sockets.DETAIL_SCALE].default_value = (4.0, 8.0)
+        color = self.image_node("detail.png", detail.inputs[D.BASE_COLOR_MAP])
+        self.link(uv_data.outputs[BeamUVData.Sockets.DETAIL_UV1], color.inputs["Vector"])
+        rough = self.image_node("detail_r.png", detail.inputs[D.ROUGHNESS_MAP])
+        self.link(uv_data.outputs[BeamUVData.Sockets.DETAIL_UV1], rough.inputs["Vector"])
+
+        stage = self.stage0(expect_issues=1)  # roughness detail map has no uv key in BeamNG
+        self.assertEqual(stage["detailMap"], "detail.png")
+        self.assertEqual(stage["detailMapUseUV"], 1)
+        self.assertEqual(stage["detailBaseColorMapStrength"], 0.5)
+        self.assertEqual(stage["roughnessDetailMap"], "detail_r.png")
+        self.assertEqual(stage["detailScale"], [4.0, 8.0])
+        self.assertIn("uv", self.issues[0].message)
+
+
+    def test_detail_without_detail_uv_has_scale_one(self):
+        detail = self.detail_node()
+        self.image_node("detail.png", detail.inputs[D.BASE_COLOR_MAP])
+        self.assertEqual(self.stage0()["detailScale"], [1.0, 1.0])
+
+
+    def test_detail_scale_conflict(self):
+        detail = self.detail_node()
+        uv_data = self.node(BeamUVData.bl_idname)
+        uv_data.inputs[BeamUVData.Sockets.DETAIL_SCALE].default_value = (4.0, 4.0)
+        color = self.image_node("detail.png", detail.inputs[D.BASE_COLOR_MAP])
+        self.link(uv_data.outputs[BeamUVData.Sockets.DETAIL_UV0], color.inputs["Vector"])
+        self.image_node("detail_o.png", detail.inputs[D.OPACITY_MAP])  # plain UV, scale 1
+        stage = self.stage0(expect_issues=1)
+        self.assertEqual(stage["detailScale"], [4.0, 4.0])
+        self.assertIn("detail scales", self.issues[0].message)
+
+
+    def test_detail_uv_on_main_map_is_reported(self):
+        uv_data = self.node(BeamUVData.bl_idname)
+        color = self.image_node("albedo.png", self.stage.inputs[S.BASE_COLOR_MAP])
+        self.link(uv_data.outputs[BeamUVData.Sockets.DETAIL_UV0], color.inputs["Vector"])
+        self.assertNotIn("detailScale", self.stage0(expect_issues=1))
+
+
+    def test_wrong_node_on_bundle_socket(self):
+        palette = self.node(BeamPalette.bl_idname)
+        self.link(palette.outputs[BeamPalette.Sockets.PALETTE], self.stage.inputs[S.DETAIL])
         self.stage0(expect_issues=1)
-        self.assertIn("Detail", self.issues[0].message)
+        self.assertIn(BeamBSDF15Detail.bl_label, self.issues[0].message)
+
+
+    def test_palette(self):
+        palette = self.node(BeamPalette.bl_idname)
+        self.link(palette.outputs[BeamPalette.Sockets.PALETTE], self.stage.inputs[S.PALETTE])
+        self.image_node("palette.png", palette.inputs[BeamPalette.Sockets.PALETTE_MAP])
+        palette.inputs[BeamPalette.Sockets.METALLIC].default_value = False
+        stage = self.stage0()
+        self.assertEqual(stage["colorPaletteMap"], "palette.png")
+        self.assertEqual(stage["paletteMetallic"], False)
+        self.assertNotIn("paletteBaseColor", stage)  # default True
+
+
+    def animated_map(self, socket: str):
+        uv_data = self.node(BeamUVData.bl_idname)
+        anim = self.node(BeamUVAnimation.bl_idname)
+        self.link(anim.outputs[A.ANIMATION], uv_data.inputs[BeamUVData.Sockets.ANIMATION])
+        tex = self.image_node(f"{socket}.png", self.stage.inputs[socket])
+        self.link(uv_data.outputs[BeamUVData.Sockets.UV0], tex.inputs["Vector"])
+        return anim
+
+
+    def test_uv_animation(self):
+        anim = self.animated_map(S.BASE_COLOR_MAP)
+        anim.inputs[A.ROTATION_SPEED].default_value = 0.5
+        anim.inputs[A.ROTATION_PIVOT_OFFSET].default_value = (0.5, 0.25)
+        anim.inputs[A.SCROLL_SPEED].default_value = 2.0
+        anim.inputs[A.SCROLL_FACTOR].default_value = (1.0, 0.0)
+        anim.inputs[A.WAVE_TYPE].default_value = BeamUVAnimation.WaveType.SQUARE
+        anim.inputs[A.WAVE_AMPLITUDE].default_value = 0.1
+        anim.inputs[A.WAVE_FREQUENCY].default_value = 3.0
+        anim.inputs[A.FRAMES_SEC].default_value = 10.0
+        anim.inputs[A.FRAMES].default_value = 4.0
+
+        stage = self.stage0()
+        self.assertEqual(stage["animFlags"], int(AnimationFlags.ROTATION | AnimationFlags.SCROLL | AnimationFlags.WAVE | AnimationFlags.SEQUENCE))
+        self.assertEqual(stage["rotSpeed"], 0.5)
+        self.assertEqual(stage["rotPivotOffset"], [0.5, 0.25])
+        self.assertEqual(stage["scrollSpeed"], 2.0)
+        self.assertEqual(stage["scrollDir"], [1.0, 0.0])
+        self.assertEqual(stage["waveType"], "Square")
+        self.assertEqual(stage["waveAmp"], 0.1)
+        self.assertEqual(stage["waveFreq"], 3.0)
+        self.assertEqual(stage["sequenceFramePerSec"], 10.0)
+        self.assertEqual(stage["sequenceSegmentSize"], 0.25)
+
+
+    def test_uv_animation_wave_scale(self):
+        anim = self.animated_map(S.BASE_COLOR_MAP)
+        anim.inputs[A.WAVE_TYPE].default_value = BeamUVAnimation.WaveType.SIN
+        anim.inputs[A.WAVE_SCALE].default_value = True
+        stage = self.stage0()
+        self.assertEqual(stage["animFlags"], int(AnimationFlags.SCALE))
+        self.assertNotIn("waveType", stage)  # Sin is the default
+
+
+    def test_uv_animation_conflict(self):
+        self.animated_map(S.BASE_COLOR_MAP).inputs[A.ROTATION_SPEED].default_value = 1.0
+        self.animated_map(S.ROUGHNESS_MAP).inputs[A.ROTATION_SPEED].default_value = 2.0
+        self.assertEqual(self.stage0(expect_issues=1)["rotSpeed"], 1.0)
+        self.assertIn("UV animations", self.issues[0].message)
 
 
     def test_material_settings(self):
@@ -222,8 +337,38 @@ class MaterialExportTest(unittest.TestCase):
             self.build()
 
 
-    def test_stage_mix_not_supported_yet(self):
+    def mix(self, base: bpy.types.Node | None, overlay: bpy.types.Node | None):
         mix = self.node(BeamStageMix.bl_idname)
+        if base: self.link(base.outputs[0], mix.inputs[BeamStageMix.Sockets.BASE])
+        if overlay: self.link(overlay.outputs[0], mix.inputs[BeamStageMix.Sockets.OVERLAY])
+        return mix
+
+
+    def new_stage(self, roughness: float):
+        stage = self.node(BeamBSDF15.bl_idname)
+        stage.inputs[S.ROUGHNESS_FACTOR].default_value = roughness
+        return stage
+
+
+    def test_stage_mix(self):
+        # ((0.1, 0.2), 0.3) -> stages in order base to overlay
+        mix = self.mix(self.mix(self.new_stage(0.1), self.new_stage(0.2)), self.new_stage(0.3))
         self.link(mix.outputs[0], self.mat_node.inputs["BNGS"])
-        with self.assertRaisesRegex(MaterialExportError, "not supported"):
+        mat = self.build()
+        stages = cast(list[SDict], mat["Stages"])
+        self.assertEqual(mat["activeLayers"], 3)
+        self.assertEqual([s.get("roughnessFactor") for s in stages], [0.1, 0.2, 0.3, None])
+
+
+    def test_stage_mix_missing_input(self):
+        mix = self.mix(self.new_stage(0.1), None)
+        self.link(mix.outputs[0], self.mat_node.inputs["BNGS"])
+        self.assertNotIn("activeLayers", self.build(expect_issues=1))
+
+
+    def test_too_many_stages(self):
+        a = self.mix(self.new_stage(0.1), self.new_stage(0.2))
+        b = self.mix(self.new_stage(0.3), self.mix(self.new_stage(0.4), self.new_stage(0.5)))
+        self.link(self.mix(a, b).outputs[0], self.mat_node.inputs["BNGS"])
+        with self.assertRaisesRegex(MaterialExportError, "5 stages"):
             self.build()

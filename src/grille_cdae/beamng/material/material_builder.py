@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+from dataclasses import field as dataclass_field, replace as dataclass_replace
+
 from grille_cdae.common import *
 from grille_cdae.enums import *
 
 from ...blender.material_properties import MaterialProperties
 from ...blender.node_walker import NodeWalker
-from ...blender.shader_nodes import BeamMaterial, BeamBSDFCollision, BeamImageTex, BeamUVData, ReflectionMode
+from ...blender.shader_nodes import BeamMaterial, BeamBSDFCollision, BeamImageTex, BeamStageMix, BeamUVData, BeamUVAnimation, ReflectionMode
 from .material import *
-from .node_fields import Field, Tex, Value, STAGE_FIELDS, STAGE_UNSUPPORTED, MATERIAL_FIELDS, to_float
+from .node_fields import Field, Tex, Value, Bundle, STAGE_FIELDS, MATERIAL_FIELDS, UV_ANIMATION, to_float, to_vec2
 
 
 
@@ -34,9 +36,24 @@ class _ImageRef:
 
 
 
+@dataclass
+class _Context:
+    """State while applying the fields of one node (tree), shared per stage."""
+    location: str
+    detail: bool = False
+    # stage wide settings, reachable from several maps, written once per stage
+    detail_scales: list[Vec2F] = dataclass_field(default_factory=list[Vec2F])
+    animations: list[bpy.types.Node] = dataclass_field(default_factory=list[bpy.types.Node])
+
+
+
+MAX_STAGES = 4
+
 _UV_DATA_INDEX = {
-    BeamUVData.Sockets.UV0: 0,
-    BeamUVData.Sockets.UV1: 1,
+    BeamUVData.Sockets.UV0: (0, False),
+    BeamUVData.Sockets.UV1: (1, False),
+    BeamUVData.Sockets.DETAIL_UV0: (0, True),
+    BeamUVData.Sockets.DETAIL_UV1: (1, True),
 }
 
 # value sources that can be read without evaluating the node tree
@@ -105,16 +122,16 @@ class MaterialBuilder:
 
         mat = self.material
         node = cast(BeamMaterial, walker.current)
-        location = node.name
+        ctx = _Context(node.name)
 
-        self._apply_fields(walker, MATERIAL_FIELDS, mat, location)
+        self._apply_fields(walker, MATERIAL_FIELDS, mat, ctx)
 
         if mat.alpha_test:
-            mat.alpha_ref = round(self._read_value(walker, BeamMaterial.Sockets.CLIP_T, location) * 255)
+            mat.alpha_ref = round(self._read_value(walker, BeamMaterial.Sockets.CLIP_T, ctx) * 255)
         if not mat.double_sided:
             mat.invert_backface_normals = False
 
-        subsurface = to_float(self._read_value(walker, BeamMaterial.Sockets.SUBSURFACE_SCATTERING, location))
+        subsurface = to_float(self._read_value(walker, BeamMaterial.Sockets.SUBSURFACE_SCATTERING, ctx))
         mat.subsurface.enabled = subsurface > 0
         if subsurface > 0: mat.subsurface.intensity = subsurface
 
@@ -135,35 +152,73 @@ class MaterialBuilder:
         self._build_stages(stage_walker)
 
 
+    def _collect_stages(self, walker: NodeWalker, stages: list[NodeWalker]):
+        """Flattens stage mix nodes, base before overlay."""
+
+        if not walker.is_node_idname(BeamStageMix):
+            stages.append(walker)
+            return
+
+        for socket in BeamStageMix.Sockets:
+            source = walker.fork()
+            if source.try_follow(socket):
+                self._collect_stages(source, stages)
+            else:
+                self._issue(not_none(walker.current).name, f"Nothing linked to '{socket}'.")
+
+
     def _build_stages(self, walker: NodeWalker):
 
-        node = not_none(walker.current)
-        fields = STAGE_FIELDS.get(type(node))
-        if fields is None:
-            raise MaterialExportError(f"'{node.bl_label}' is not supported as stage yet.")
+        stages: list[NodeWalker] = []
+        self._collect_stages(walker, stages)
+
+        if len(stages) == 0:
+            raise MaterialExportError("No stage found.")
+        if len(stages) > MAX_STAGES:
+            raise MaterialExportError(f"{len(stages)} stages, BeamNG supports at most {MAX_STAGES}.")
 
         mat = self.material
         mat.version = MaterialVersion.V1_5
-        mat.active_layers = 1
+        mat.active_layers = len(stages)
 
-        location = f"{node.name} (stage 0)"
-        for socket in STAGE_UNSUPPORTED.get(type(node), ()):
-            if walker.is_linked(socket):
-                self._issue(location, f"'{socket}' is not exported yet.")
+        for index, stage_walker in enumerate(stages):
+            node = not_none(stage_walker.current)
+            fields = STAGE_FIELDS.get(type(node))
+            if fields is None:
+                raise MaterialExportError(f"'{node.bl_label}' is not supported as stage.")
 
-        self._apply_fields(walker, fields, mat.stages[0], location)
+            stage = mat.stages[index]
+            ctx = _Context(f"{node.name} (stage {index})")
+            self._apply_fields(stage_walker, fields, stage, ctx)
+            self._apply_detail_scale(stage, ctx)
+            self._apply_animation(stage, ctx)
 
 
-    def _apply_fields(self, walker: NodeWalker, fields: Sequence[Field], target: object, location: str):
+    def _apply_fields(self, walker: NodeWalker, fields: Sequence[Field], target: object, ctx: _Context):
         for field in fields:
             if isinstance(field, Value):
                 obj, name = _resolve(target, field.path)
-                setattr(obj, name, field.conv(self._read_value(walker, field.socket, location)))
+                setattr(obj, name, field.conv(self._read_value(walker, field.socket, ctx)))
+            elif isinstance(field, Tex):
+                self._apply_tex(walker, field, target, ctx)
             else:
-                self._apply_tex(walker, field, target, location)
+                self._apply_bundle(walker, field, target, ctx)
 
 
-    def _apply_tex(self, walker: NodeWalker, field: Tex, target: object, location: str):
+    def _apply_bundle(self, walker: NodeWalker, field: Bundle, target: object, ctx: _Context):
+
+        source = walker.fork()
+        if not source.try_follow(field.socket):
+            return
+
+        if not source.is_node_idname(field.node):
+            self._issue(ctx.location, f"'{field.socket}' expects '{field.node.bl_label}', found '{not_none(source.current).bl_label}'.")
+            return
+
+        self._apply_fields(source, field.fields, target, dataclass_replace(ctx, detail=field.detail))
+
+
+    def _apply_tex(self, walker: NodeWalker, field: Tex, target: object, ctx: _Context):
 
         obj, name = _resolve(target, field.path)
         socket: TextureSocket = getattr(obj, name)
@@ -172,23 +227,68 @@ class MaterialBuilder:
             try:
                 socket.set_field(key, value)
             except KeyError:
-                self._issue(location, f"'{field.map}': BeamNG has no '{key}' for this map.")
+                self._issue(ctx.location, f"'{field.map}': BeamNG has no '{key}' for this map.")
 
-        ref = self._find_image(walker, field.map, location)
+        ref = self._find_image(walker, field.map, ctx)
         if ref is not None:
             socket.set_field("map", ref.image.name)
             if ref.uv != 0: set_field("uv", ref.uv)
             if field.normal and ref.strength is not None: set_field("value", to_float(ref.strength))
 
         if field.value is not None:
-            set_field("value", field.conv(self._read_value(walker, field.value, location)))
+            set_field("value", field.conv(self._read_value(walker, field.value, ctx)))
         if field.instance is not None:
-            set_field("instance", bool(self._read_value(walker, field.instance, location)))
+            set_field("instance", bool(self._read_value(walker, field.instance, ctx)))
         if field.vertex is not None:
-            set_field("vertex", bool(self._read_value(walker, field.vertex, location)))
+            set_field("vertex", bool(self._read_value(walker, field.vertex, ctx)))
 
 
-    def _read_value(self, walker: NodeWalker, socket_name: str, location: str) -> Any:
+    def _apply_detail_scale(self, stage: MaterialStage, ctx: _Context):
+        scales = list(dict.fromkeys(ctx.detail_scales))
+        if len(scales) == 0: return
+        if len(scales) > 1:
+            self._issue(ctx.location, f"Detail maps use different detail scales {[tuple(s) for s in scales]}, BeamNG has one per stage, using the first.")
+        stage.detail.scale = scales[0]
+
+
+    def _apply_animation(self, stage: MaterialStage, ctx: _Context):
+
+        nodes = list(dict.fromkeys(ctx.animations))
+        if len(nodes) == 0: return
+        if len(nodes) > 1:
+            self._issue(ctx.location, f"Maps use different UV animations {[n.name for n in nodes]}, BeamNG has one per stage, using '{nodes[0].name}'.")
+
+        walker = NodeWalker(nodes[0])
+        anim_ctx = _Context(nodes[0].name)
+        self._apply_fields(walker, UV_ANIMATION, stage, anim_ctx)
+
+        LS = BeamUVAnimation.Sockets
+        anim = stage.animation
+        flags = AnimationFlags.NONE
+
+        if anim.rot_speed != 0: flags |= AnimationFlags.ROTATION
+        if anim.scroll_speed != 0: flags |= AnimationFlags.SCROLL
+
+        wave_value: str = self._read_value(walker, LS.WAVE_TYPE, anim_ctx)
+        try:
+            wave_type = BeamUVAnimation.WaveType(wave_value or BeamUVAnimation.WaveType.NONE)
+        except ValueError:
+            self._issue(anim_ctx.location, f"Unknown wave type '{wave_value}'.")
+            wave_type = BeamUVAnimation.WaveType.NONE
+
+        if wave_type != BeamUVAnimation.WaveType.NONE:
+            anim.wave_type = AnimationWaveType(wave_type.value)
+            flags |= AnimationFlags.SCALE if self._read_value(walker, LS.WAVE_SCALE, anim_ctx) else AnimationFlags.WAVE
+
+        frames = to_float(self._read_value(walker, LS.FRAMES, anim_ctx))
+        if anim.seq_frames_per_sec > 0 and frames > 0:
+            anim.seq_segment_size = to_float(1 / frames)
+            flags |= AnimationFlags.SEQUENCE
+
+        anim.flags = flags
+
+
+    def _read_value(self, walker: NodeWalker, socket_name: str, ctx: _Context) -> Any:
 
         input = not_none(walker.get_input(socket_name))
         if not input.is_linked:
@@ -204,11 +304,11 @@ class MaterialBuilder:
         if source.is_node_any_idname(*_CONSTANT_NODES):
             return butils.get_default_value(node.outputs[0])
 
-        self._issue(location, f"'{socket_name}' is linked to '{node.bl_label}', only plain values can be exported, using the socket value.")
+        self._issue(ctx.location, f"'{socket_name}' is linked to '{node.bl_label}', only plain values can be exported, using the socket value.")
         return butils.get_default_value(input)
 
 
-    def _find_image(self, walker: NodeWalker, socket_name: str, location: str) -> _ImageRef | None:
+    def _find_image(self, walker: NodeWalker, socket_name: str, ctx: _Context) -> _ImageRef | None:
 
         source = walker.fork()
         if not source.try_follow(socket_name):
@@ -229,35 +329,46 @@ class MaterialBuilder:
             if source.last_socket_name == BeamImageTex.ImageType.NORMAL:
                 strength = source.get_float_value(SocketName.Strength)
         else:
-            self._issue(location, f"'{socket_name}' expects an image texture, found '{node.bl_label}'.")
+            self._issue(ctx.location, f"'{socket_name}' expects an image texture, found '{node.bl_label}'.")
             return None
 
         if image is None:
-            self._issue(location, f"'{socket_name}': image texture node '{node.name}' has no image.")
+            self._issue(ctx.location, f"'{socket_name}': image texture node '{node.name}' has no image.")
             return None
 
-        return _ImageRef(image, self._find_uv(source, location), strength)
+        return _ImageRef(image, self._find_uv(source, ctx), strength)
 
 
-    def _find_uv(self, image_walker: NodeWalker, location: str) -> int:
+    def _find_uv(self, image_walker: NodeWalker, ctx: _Context) -> int:
 
         source = image_walker.fork()
         if not source.try_follow(SocketName.Vector):
+            if ctx.detail: ctx.detail_scales.append(Vec2F.ONE)
             return 0
 
         node = not_none(source.current)
         if source.is_node_idname(BeamUVData):
-            uv = _UV_DATA_INDEX.get(BeamUVData.Sockets(source.last_socket_name), None)
-            if uv is None:
-                self._issue(location, f"'{node.name}' > {source.last_socket_name} is not exported yet, using UV 0.")
-                return 0
-            if source.is_linked(BeamUVData.Sockets.ANIMATION):
-                self._issue(location, f"'{node.name}': UV animation is not exported yet.")
+            uv, is_detail_uv = _UV_DATA_INDEX[BeamUVData.Sockets(source.last_socket_name)]
+
+            if is_detail_uv and not ctx.detail:
+                self._issue(ctx.location, f"'{node.name}' > {source.last_socket_name} is used for a non detail map, the detail scale is ignored.")
+            elif ctx.detail:
+                scale = to_vec2(self._read_value(source, BeamUVData.Sockets.DETAIL_SCALE, ctx)) if is_detail_uv else Vec2F.ONE
+                ctx.detail_scales.append(scale)
+
+            animation = source.fork()
+            if animation.try_follow(BeamUVData.Sockets.ANIMATION):
+                if animation.is_node_idname(BeamUVAnimation):
+                    ctx.animations.append(not_none(animation.current))
+                else:
+                    self._issue(ctx.location, f"'{node.name}' > {BeamUVData.Sockets.ANIMATION} expects '{BeamUVAnimation.bl_label}'.")
             return uv
+
+        if ctx.detail: ctx.detail_scales.append(Vec2F.ONE)
 
         if source.is_node_idname(NodeName.UVMap):
             uv_map: str = cast(bpy.types.ShaderNodeUVMap, node).uv_map
             return 1 if self.uv1_hint and self.uv1_hint.lower() in uv_map.lower() else 0
 
-        self._issue(location, f"'{node.bl_label}' as image UV source is not supported, using UV 0.")
+        self._issue(ctx.location, f"'{node.bl_label}' as image UV source is not supported, using UV 0.")
         return 0

@@ -9,13 +9,14 @@ from __future__ import annotations
 
 from grille_cdae.common import *
 
-from ...blender.shader_nodes import BeamBSDF15, BeamMaterial
+from ...blender.shader_nodes import BaseShaderNode, BeamBSDF15, BeamBSDF15Detail, BeamMaterial, BeamPalette, BeamUVAnimation
 
 
 
 def to_float(value: Any) -> float: return round(float(value), 6)
 def to_bool(value: Any) -> bool: return bool(value)
 def to_srgb(value: Any) -> Color4F: return Color4F(*(round(c, 6) for c in Color4F.from_obj(value).srgb))
+def to_vec2(value: Any) -> Vec2F: return Vec2F(*(round(c, 6) for c in Vec2F.from_obj(list(value))))
 
 
 
@@ -39,7 +40,40 @@ class Value(NamedTuple):
 
 
 
-type Field = Tex | Value
+class Bundle(NamedTuple):
+    """Socket linked to a helper node (e.g. detail, palette), whose own fields are applied to the same target."""
+    socket: str
+    node: type[BaseShaderNode]
+    fields: tuple[Field, ...]
+    detail: bool = False # maps of the helper node are detail maps (use detail UVs and scale)
+
+
+
+type Field = Tex | Value | Bundle
+
+
+_SD = BeamBSDF15Detail.Sockets
+
+DETAIL_15: tuple[Field, ...] = (
+    Tex(_SD.BASE_COLOR_MAP, "detail.color", _SD.BASE_COLOR_STRENGTH),
+    Tex(_SD.NORMAL, "detail.normal", normal=True),
+    Tex(_SD.METALLIC_MAP, "detail.metallic", _SD.METALLIC_STRENGTH),
+    Tex(_SD.ROUGHNESS_MAP, "detail.roughness", _SD.ROUGHNESS_STRENGTH),
+    Tex(_SD.OPACITY_MAP, "detail.opacity", _SD.OPACITY_STRENGTH),
+    Tex(_SD.AO_MAP, "detail.ambient_occlusion", _SD.AO_STRENGTH),
+)
+
+
+_SP = BeamPalette.Sockets
+
+PALETTE: tuple[Field, ...] = (
+    Tex(_SP.PALETTE_MAP, "palette"),
+    Value(_SP.COLOR, "palette.color", to_bool),
+    Value(_SP.METALLIC, "palette.metallic", to_bool),
+    Value(_SP.ROUGHNESS, "palette.roughness", to_bool),
+    Value(_SP.CLEAR_COAT, "palette.clear_coat", to_bool),
+    Value(_SP.CLEAR_COAT_ROUGHNESS, "palette.clear_coat_roughness", to_bool),
+)
 
 
 _S15 = BeamBSDF15.Sockets
@@ -58,16 +92,27 @@ STAGE_15: tuple[Field, ...] = (
     Tex(_S15.CC_NORMAL, "clear_coat_normal", normal=True),
     Value(_S15.RETRO_REFLECTIVITY, "retro_reflectivity.factor"),
     Value(_S15.RETRO_REFLECTIVITY_COLOR, "retro_reflectivity.color", to_srgb),
+    Bundle(_S15.DETAIL, BeamBSDF15Detail, DETAIL_15, detail=True),
+    Bundle(_S15.PALETTE, BeamPalette, PALETTE),
 )
 
 STAGE_FIELDS: dict[type, tuple[Field, ...]] = {
     BeamBSDF15: STAGE_15,
 }
 
-# sockets of stage nodes that are not exported yet
-STAGE_UNSUPPORTED: dict[type, tuple[str, ...]] = {
-    BeamBSDF15: (_S15.DETAIL, _S15.PALETTE),
-}
+
+_SA = BeamUVAnimation.Sockets
+
+# wave type, flags and sequence segment size are derived in code
+UV_ANIMATION: tuple[Field, ...] = (
+    Value(_SA.ROTATION_SPEED, "animation.rot_speed"),
+    Value(_SA.ROTATION_PIVOT_OFFSET, "animation.rot_pivot_offset", to_vec2),
+    Value(_SA.SCROLL_SPEED, "animation.scroll_speed"),
+    Value(_SA.SCROLL_FACTOR, "animation.scroll_direction", to_vec2),
+    Value(_SA.WAVE_AMPLITUDE, "animation.wave_amp"),
+    Value(_SA.WAVE_FREQUENCY, "animation.wave_freq"),
+    Value(_SA.FRAMES_SEC, "animation.seq_frames_per_sec"),
+)
 
 
 _SM = BeamMaterial.Sockets

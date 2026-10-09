@@ -915,14 +915,27 @@ class BeamPalette(BaseShaderNode):
     bl_label = "BNG Palette"
     ng_color_tag = GroupColorTag.CONVERTER
 
+
+    class Sockets(StrEnum):
+        PALETTE_MAP = "Palette Map"
+        COLOR = SocketName.Color
+        METALLIC = SocketName.Metallic
+        ROUGHNESS = SocketName.Roughness
+        CLEAR_COAT = SocketName.ClearCoat
+        CLEAR_COAT_ROUGHNESS = SocketName.ClearCoatRoughness
+        PALETTE = "Palette"
+
+
     def create_node_group(self, ngb):
 
-        pmap = ngb.input(_COLOR_TEXTURE, "Palette Map", COLOR_RED)
-        color_enabled = ngb.input(_BOOL_VALUE, SocketName.Color, True)
-        metallic_enabled = ngb.input(_BOOL_VALUE, SocketName.Metallic, True)
-        roughness_enabled = ngb.input(_BOOL_VALUE, SocketName.Roughness, True)
-        cc_enabled = ngb.input(_BOOL_VALUE, SocketName.ClearCoat, True)
-        ccr_enabled = ngb.input(_BOOL_VALUE, SocketName.ClearCoatRoughness, True)
+        LS = BeamPalette.Sockets
+
+        pmap = ngb.input(_COLOR_TEXTURE, LS.PALETTE_MAP, COLOR_RED)
+        color_enabled = ngb.input(_BOOL_VALUE, LS.COLOR, True)
+        metallic_enabled = ngb.input(_BOOL_VALUE, LS.METALLIC, True)
+        roughness_enabled = ngb.input(_BOOL_VALUE, LS.ROUGHNESS, True)
+        cc_enabled = ngb.input(_BOOL_VALUE, LS.CLEAR_COAT, True)
+        ccr_enabled = ngb.input(_BOOL_VALUE, LS.CLEAR_COAT_ROUGHNESS, True)
         paint_bundle = ngb.input(_BUNDLE_DISPLAY, "Paint")
 
         layers_bundle = ngb.nc.seperate_bundle(PAINT3, paint_bundle)
@@ -947,7 +960,7 @@ class BeamPalette(BaseShaderNode):
         mix3(SocketName.ClearCoat, cc_enabled)
         mix3(SocketName.ClearCoatRoughness, ccr_enabled)
 
-        result >> ngb.output(_BUNDLE_NODE, "Palette")
+        result >> ngb.output(_BUNDLE_NODE, LS.PALETTE)
 
 
 
@@ -1413,10 +1426,15 @@ class BeamStageMix(BaseShaderNode):
     ng_color_tag = GroupColorTag.SHADER
 
 
+    class Sockets(StrEnum):
+        BASE = "BNGS Base"
+        OVERLAY = "BNGS Overlay"
+
+
     def create_node_group(self, ngb: NodeGroupBuilder):
 
-        in_base = ngb.input(SocketType.Closure, "BNGS Base")
-        in_overlay = ngb.input(SocketType.Closure, "BNGS Overlay")
+        in_base = ngb.input(SocketType.Closure, BeamStageMix.Sockets.BASE)
+        in_overlay = ngb.input(SocketType.Closure, BeamStageMix.Sockets.OVERLAY)
         output = ngb.output(SocketType.Closure, SocketName.BNGShader)
 
         base = ngb.nc.eval_closure(BNGS_IO, in_base)
