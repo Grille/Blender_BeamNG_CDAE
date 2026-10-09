@@ -1579,6 +1579,7 @@ BeamMaterial.annotate(
         name=SocketName.AlphaBlendMode,
         items=[
             (AlphaBlendMode.NONE, AlphaBlendMode.NONE, ""),
+            (AlphaBlendMode.PRE_MUL_ALPHA, AlphaBlendMode.PRE_MUL_ALPHA, ""),
             (AlphaBlendMode.ADD, AlphaBlendMode.ADD, ""),
             (AlphaBlendMode.ADD_ALPHA, AlphaBlendMode.ADD_ALPHA, ""),
             (AlphaBlendMode.LERP_ALPHA, AlphaBlendMode.LERP_ALPHA, ""),

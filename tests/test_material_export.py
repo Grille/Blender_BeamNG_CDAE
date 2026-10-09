@@ -75,7 +75,6 @@ class MaterialExportTest(unittest.TestCase):
             "mapTo": "test_mat",
             "class": "Material",
             "version": 1.5,
-            "dynamicCubemap": False,
             "Stages": [
                 {"metallicFactor": 1.0, "roughnessFactor": 1.0, "opacityFactor": 1.0, "clearCoatFactor": 0.0},
                 {}, {}, {},
@@ -311,8 +310,15 @@ class MaterialExportTest(unittest.TestCase):
             "castShadows": False,
             "subSurface": True, "subSurfaceIntensity": 0.3,
             "translucent": True, "translucentBlendOp": "LerpAlpha", "translucentZWrite": True,
-            "dynamicCubemap": False, "cubemap": "global_cubemap",
+            "cubemap": "global_cubemap",
         })
+
+
+    def test_level_reflection(self):
+        self.mat_node.reflection_mode = ReflectionMode.LEVEL
+        mat = self.build()
+        self.assertEqual(mat["dynamicCubemap"], True)
+        self.assertNotIn("cubemap", mat)
 
 
     def test_invert_backface_normals_needs_double_sided(self):

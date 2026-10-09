@@ -37,14 +37,31 @@ class _BaseDict:
         self.value_dict.pop(self.get_key(key), None)
 
 
-    def set_field(self, key: str, value: object | None):
-        """Sets a value by its uniform key ("map", "uv", "value", ...) through the matching DictProperty, so conversion and default handling apply."""
+    def _find_property(self, match: Callable[[str, DictProperty[Any]], bool]) -> tuple[str, DictProperty[Any]]:
         for cls in type(self).__mro__:
             for name, attr in vars(cls).items():
-                if isinstance(attr, DictProperty) and attr.key == key:
-                    setattr(self, name, value)
-                    return
-        raise KeyError(f"{key} not valid in this context")
+                if isinstance(attr, DictProperty):
+                    prop = cast(DictProperty[Any], attr)
+                    if match(name, prop): return name, prop
+        raise KeyError("not valid in this context")
+
+
+    def set_field(self, key: str, value: object | None):
+        """Sets a value by its uniform key ("map", "uv", "value", ...) through the matching DictProperty, so conversion and default handling apply."""
+        name, _ = self._find_property(lambda _, prop: prop.key == key)
+        setattr(self, name, value)
+
+
+    def get_field(self, key: str) -> Any:
+        """Gets a value by its uniform key, None if it isn't set in the dict."""
+        name, _ = self._find_property(lambda _, prop: prop.key == key)
+        return None if self[key] is None else getattr(self, name)
+
+
+    def is_set(self, name: str) -> bool:
+        """Whether the property `name` is set in the dict (and not just returning its default)."""
+        _, prop = self._find_property(lambda prop_name, _: prop_name == name)
+        return self[prop.key] is not None
 
 
 
@@ -355,7 +372,7 @@ class Material(_BaseDict):
     double_sided = _Bool("doubleSided", False)
     invert_backface_normals = _Bool("invertBackFaceNormals", False)
     cast_shadows = _Bool("castShadows", True)
-    dynamic_cubemap = _Bool("dynamicCubemap", True)
+    dynamic_cubemap = _Bool("dynamicCubemap", False)
     cubemap = _Str("cubemap", "")
 
     __slots__ = "stages", "translucent", "subsurface"

@@ -52,3 +52,11 @@ class MaterialProperties(PropertyInfoGroup[types.Material]):
         if value == GROUNDMODEL_CUSTOM:
             return MaterialProperties.groundtype_custom[bmat]
         return value
+
+    @staticmethod
+    def set_ground_type(bmat: bpy.types.Material, value: str | None):
+        if value and value != GROUNDMODEL_CUSTOM and value in GROUNDMODELS:
+            MaterialProperties.groundtype_select[bmat] = value
+        else:
+            MaterialProperties.groundtype_select[bmat] = GROUNDMODEL_CUSTOM
+            MaterialProperties.groundtype_custom[bmat] = value or ""

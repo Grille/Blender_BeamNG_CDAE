@@ -18,6 +18,17 @@ def to_bool(value: Any) -> bool: return bool(value)
 def to_srgb(value: Any) -> Color4F: return Color4F(*(round(c, 6) for c in Color4F.from_obj(value).srgb))
 def to_vec2(value: Any) -> Vec2F: return Vec2F(*(round(c, 6) for c in Vec2F.from_obj(list(value))))
 
+def from_srgb(value: Any) -> tuple[float, ...]: return tuple(Color4F.from_obj(list(value) + [1.0] * (4 - len(value))).linear)
+def from_vec2(value: Any) -> tuple[float, float]: vec = Vec2F.from_obj(value); return (vec.x, vec.y)
+
+# node socket value from model value, for import
+INVERSE: dict[Converter[object], Converter[object]] = {
+    to_float: float,
+    to_bool: bool,
+    to_srgb: from_srgb,
+    to_vec2: from_vec2,
+}
+
 
 
 class Tex(NamedTuple):
