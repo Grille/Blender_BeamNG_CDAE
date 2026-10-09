@@ -37,6 +37,16 @@ class _BaseDict:
         self.value_dict.pop(self.get_key(key), None)
 
 
+    def set_field(self, key: str, value: object | None):
+        """Sets a value by its uniform key ("map", "uv", "value", ...) through the matching DictProperty, so conversion and default handling apply."""
+        for cls in type(self).__mro__:
+            for name, attr in vars(cls).items():
+                if isinstance(attr, DictProperty) and attr.key == key:
+                    setattr(self, name, value)
+                    return
+        raise KeyError(f"{key} not valid in this context")
+
+
 
 class _KeyPtrDict(_BaseDict):
     __slots__ = "_key_dict"
@@ -123,35 +133,37 @@ class _Int[T:int](_Converter[T]):
     def _convert_in(self, value): return int(value)
 
 
+# sequences are stored as lists, so the dict stays equal to the same data loaded from json
+
 class _Vec2(DictProperty[Vec2F]):
     __slots__=()
-    def _convert_in(self, value): return value
+    def _convert_in(self, value): return list(value)
     def _convert_out(self, value): return Vec2F.from_obj(value)
 
 
 class _Color3(DictProperty[Color4F]):
     __slots__=()
-    def _convert_in(self, value): return value[:3]
+    def _convert_in(self, value): return list(value[:3])
     def _convert_out(self, value): return Color4F.from_obj(value)
 
 
 class _Color4(DictProperty[Color4F]):
     __slots__=()
-    def _convert_in(self, value): return value
+    def _convert_in(self, value): return list(value)
     def _convert_out(self, value): return Color4F.from_obj(value)
 
 
 
-class _TextureSocket(_KeyPtrDict):
+class TextureSocket(_KeyPtrDict):
     __slots__=()
     map = _Str("map", "")
     uv = _Int("uv", 0)
 
-class _TexStrengthSocket(_TextureSocket):
+class _TexStrengthSocket(TextureSocket):
     __slots__=()
     strength = _Float("value", 1.0)
 
-class _TexFactorSocket(_TextureSocket):
+class _TexFactorSocket(TextureSocket):
     __slots__=()
     factor = _Float("value", -1)
 
@@ -159,7 +171,7 @@ class _TexOpacitySocket(_TexFactorSocket):
     __slots__=()
     instance_enabled = _Bool("instance", False)
 
-class _TexPaletteSocket(_TextureSocket):
+class _TexPaletteSocket(TextureSocket):
     __slots__=()
     color = _Bool("paletteBaseColor", True)
     metallic = _Bool("paletteMetallic", True)
@@ -167,20 +179,20 @@ class _TexPaletteSocket(_TextureSocket):
     clear_coat = _Bool("paletteClearCoat", True)
     clear_coat_roughness = _Bool("paletteClearCoatRoughness", True)
 
-class _TexColorSocket(_TextureSocket):
+class _TexColorSocket(TextureSocket):
     __slots__=()
     factor = _Color4("value", Color4F.WHITE)
     vertex_enabled = _Bool("vertex", False)
     instance_enabled = _Bool("instance", False)
 
-class _TexEmissiveSocket(_TextureSocket):
+class _TexEmissiveSocket(TextureSocket):
     __slots__=()
-    factor = _Color4("value", Color4F.BLACK)
+    factor = _Color3("value", Color4F.BLACK)
     vertex_enabled = _Bool("vertex", False)
     instance_enabled = _Bool("instance", False)
     intensity_nits = _Float("emissiveIntensityNits", -1.0)
 
-class _TexSpecularSocket(_TextureSocket):
+class _TexSpecularSocket(TextureSocket):
     __slots__=()
     enabled = _Bool("pixelSpecular", False)
     factor = _Color4("specular", Color4F.WHITE)
@@ -275,11 +287,11 @@ class MaterialStage(_BaseDict):
         self.metallic = _TexFactorSocket(self, _SI.METALLIC)
         self.roughness = _TexFactorSocket(self, _SI.ROUGHNESS)
         self.opacity = _TexOpacitySocket(self, _SI.OPACITY)
-        self.ambient_occlusion = _TextureSocket(self, _SI.AMBIENT_OCCLUSION)
+        self.ambient_occlusion = TextureSocket(self, _SI.AMBIENT_OCCLUSION)
         self.emission = _TexEmissiveSocket(self, _SI.EMISSION)
         self.palette = _TexPaletteSocket(self, _SI.PALETTE)
         self.reflectivity = _TexFactorSocket(self, _SI.REFLECTIVITY)
-        self.overlay = _TextureSocket(self, _SI.OVERLAY)
+        self.overlay = TextureSocket(self, _SI.OVERLAY)
         self.clear_coat = _TexCCSocket(self, _SI.CLEAR_COAT)
         self.clear_coat_normal = _TexStrengthSocket(self, _SI.CLEAR_COAT_NORMAL)
 

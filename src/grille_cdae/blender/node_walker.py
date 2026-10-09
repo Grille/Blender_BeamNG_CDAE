@@ -11,7 +11,8 @@ def _get_link0(socket: types.NodeSocket | None):
     if socket is None: return None
     if not socket.is_linked: return None
     assert socket.links is not None
-    return socket.links[0]
+    link = socket.links[0]
+    return None if link.is_muted else link
 
 
 def _find_node[T:types.Node](tree: types.ShaderNodeTree | None, btype: type[T]):
@@ -126,6 +127,11 @@ class NodeWalker():
 
         self.last_socket_name = from_socket.name
         self.last_socket_value = None
+
+        if isinstance(from_node, types.NodeReroute):
+            link0 = _get_link0(from_node.inputs[0])
+            if link0 is None: return None
+            return self.walk_link_recursively(link0)
 
         if self.skip_groups:
 

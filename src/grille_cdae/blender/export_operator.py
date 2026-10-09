@@ -13,7 +13,7 @@ from ..beamng.cdae.io.dae_asset import DaeAsset
 from ..beamng.cdae.builder_tree import CdaeTreeBuildMode
 from ..beamng.cdae.builder import CdeaBuilder, MeshDataEvalMode
 from ..beamng.cdae.v31 import CdaeV31
-from ..beamng.material import MaterialBuilder, MaterialLibary, MaterialVersion
+from ..beamng.material import MaterialBuilder, MaterialExportError, MaterialLibary, MaterialVersion
 from .local_storage import LocalStorage
 from .presets_operators import OpPresetsUtils, PresetOperator
 from ..beamng.cdae.io import *
@@ -255,15 +255,25 @@ class ExportBase(PresetOperator, ExportHelper):
         if (material_mode != WriteMode.REPLACE):
             libary.try_load(mat_filepath)
 
+        issues: list[str] = []
         for bmat in materials:
             if material_mode == WriteMode.APPEND and libary.bmat_exists(bmat):
                 continue
 
             builder = MaterialBuilder()
-            builder.default_version = MaterialVersion(self.material_default)
+            builder.default_version = MaterialVersion(float(self.material_default))
             builder.uv1_hint = self.material_uv1
-            builder.build_from_bmat(bmat)
+            try:
+                builder.build_from_bmat(bmat)
+            except MaterialExportError as e:
+                issues.append(f"{bmat.name}: skipped, {e}")
+                continue
+            issues.extend(str(issue) for issue in builder.issues)
             libary.set_material(builder.material)
+
+        for issue in issues: print(f"Material: {issue}")
+        if issues:
+            self.report({'WARNING'}, f"{len(issues)} material issue(s), see system console.")
 
         save_textures = WriteMode[self.save_textures]
         if save_textures != WriteMode.NONE:

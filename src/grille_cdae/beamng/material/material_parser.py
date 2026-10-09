@@ -4,7 +4,7 @@ from grille_cdae.enums import *
 from ...blender.shader_nodes import *
 from ...blender.shader_node_builder import NodeTreeBuilder
 from .material import Material, MaterialVersion
-from .material_builder import MaterialBuilder
+from .material_builder import MaterialBuilder, MaterialExportError
 
 
 class MaterialParser:
@@ -17,7 +17,10 @@ class MaterialParser:
     def convert_bmat(self, bmat: bpy.types.Material, force_conversion: bool = True):
 
         builder = MaterialBuilder(MaterialVersion.NONE)
-        mat = builder.build_from_bmat(bmat)
+        try:
+            mat = builder.build_from_bmat(bmat)
+        except MaterialExportError:
+            mat = builder.material # not a BeamNG node tree (yet)
 
         if (mat.version == MaterialVersion.NONE or force_conversion):
             self.parse_to_bmat(mat, bmat)
