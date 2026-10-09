@@ -161,7 +161,7 @@ class NodeRuntimeData:
 
 
 
-_NODE_GROUP_DATA_RUNTIME_DICT: dict[int, NodeGroupData] = {}
+_NODE_GROUP_DATA_RUNTIME_DICT: dict[str, NodeGroupData] = {}  # keyed by the stored json, pointers get reused after reload / undo
 
 
 def _BaseShaderNode_init(self: BaseShaderNode, ctx: bpy.types.Context):
@@ -218,11 +218,11 @@ class BaseShaderNode(ShaderNodeCustomGroup):
         self.node_tree = tree
 
         if NODE_GROUP_JSON_KEY in tree:
-            ptr = tree.as_pointer()
-            ngdata = _NODE_GROUP_DATA_RUNTIME_DICT.get(ptr, None)
+            text = tree[NODE_GROUP_JSON_KEY]
+            ngdata = _NODE_GROUP_DATA_RUNTIME_DICT.get(text, None)
             if ngdata is None:
-                ngdata =  NodeGroupData.from_text(tree[NODE_GROUP_JSON_KEY])
-                _NODE_GROUP_DATA_RUNTIME_DICT[ptr] = ngdata
+                ngdata =  NodeGroupData.from_text(text)
+                _NODE_GROUP_DATA_RUNTIME_DICT[text] = ngdata
 
             for key in ngdata.inputs: ngdata.inputs[key].apply(self.inputs[key])
             for key in ngdata.outputs: ngdata.outputs[key].apply(self.outputs[key])
@@ -261,8 +261,9 @@ class BaseShaderNode(ShaderNodeCustomGroup):
         ngb.arrange_nodes()
         tree = ngb.tree
         tree.color_tag = self.ng_color_tag # pyright: ignore[reportAttributeAccessIssue]
-        _NODE_GROUP_DATA_RUNTIME_DICT[tree.as_pointer()] = ngb.ngdata
-        tree[NODE_GROUP_JSON_KEY] = ngb.ngdata.dump()
+        text = ngb.ngdata.dump()
+        _NODE_GROUP_DATA_RUNTIME_DICT[text] = ngb.ngdata
+        tree[NODE_GROUP_JSON_KEY] = text
         tree[NODE_GROUP_VERSION_MAYOR_KEY] = self.ng_version_mayor
         tree[NODE_GROUP_VERSION_MINOR_KEY] = self.ng_version_minor
 
@@ -1018,7 +1019,7 @@ class BeamDisplayInject(BaseShaderNode):
         closure = ngb.nc.closure(BNGS_IO)
         eval = ngb.nc.eval_closure(BNGS_IO, input)
 
-        BNGS_INPUT.forward(closure, eval, exclude=(SocketName.DisplayInfo))
+        BNGS_INPUT.forward(closure, eval, exclude=(SocketName.DisplayInfo,))
         display_info >> eval[SocketName.DisplayInfo]
         BNGS_OUTPUT.forward(eval, closure)
         closure.output >> output

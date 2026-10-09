@@ -88,8 +88,8 @@ class LinkBuilderBase:
     def __mul__(self, other: LinkSource): return self.ntb.nc.mul(self, other)
     def __rmul__(self, other: LinkSource): return self.ntb.nc.mul(other, self)
 
-    def __div__(self, other: LinkSource): return self.ntb.nc.div(self, other)
-    def __rdiv__(self, other: LinkSource): return self.ntb.nc.div(other, self)
+    def __truediv__(self, other: LinkSource): return self.ntb.nc.div(self, other)
+    def __rtruediv__(self, other: LinkSource): return self.ntb.nc.div(other, self)
 
     def __and__(self, other: LinkSource): return self.ntb.nc.math(Operation.MINIMUM, self, other)
     def __rand__(self, other: LinkSource): return self.ntb.nc.math(Operation.MINIMUM, other, self)
@@ -372,13 +372,10 @@ class NodeTreeBuilder:
             result = self.combine_bundle(signature)
             for socket in signature:
                 name = socket.name
-                type = socket.type 
-                a = a[name]
-                b = b[name]
-                result = result[name]
-                if isinstance(type, NodeSignature): self.mix_bundle(type, factor, a, b) >> result
-                self.mix(factor, a, b) >> result
-            return result
+                type = socket.type
+                if isinstance(type, NodeSignature): self.mix_bundle(type, factor, a[name], b[name]) >> result[name]
+                else: self.mix(factor, a[name], b[name]) >> result[name]
+            return result[0]
 
 
         def mix_foreach[TDst:LinkBuilderBase](self, src0: LinkBuilderBase, src1: LinkSourceSequence, dst: TDst, count: int, operator: Callable[[LinkBuilderBase, LinkSource, int], LinkSource], src_offset: int = 0, dst_offset: int | None = None) -> TDst:
