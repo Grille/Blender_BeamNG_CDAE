@@ -17,6 +17,10 @@ class OT_CreateBeamNgMaterial(basetypes.Operator):
         assert context.material is not None
         parser.convert_bmat(context.material)
 
+        for issue in parser.issues: print(f"Material: {issue}")
+        if parser.issues:
+            self.report({'WARNING'}, f"{len(parser.issues)} material issue(s), see system console.")
+
         return {'FINISHED'}
 
 annotate_properties(OT_CreateBeamNgMaterial,

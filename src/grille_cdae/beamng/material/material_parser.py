@@ -72,14 +72,20 @@ class MaterialParser:
 
     def convert_bmat(self, bmat: bpy.types.Material, force_conversion: bool = True):
 
+        if bmat.is_grease_pencil or bmat.library is not None or bmat.node_tree is None:
+            return
+
         builder = MaterialBuilder(MaterialVersion.NONE)
         try:
-            mat = builder.build_from_bmat(bmat)
-        except MaterialExportError:
-            mat = builder.material # not a BeamNG node tree (yet)
+            mat = builder.build_from_bmat(bmat, convert=True)
+        except MaterialExportError as e:
+            mat = builder.material
+            self._issue(bmat.name, f"{e} Creating an empty BeamNG material.")
+        self.issues.extend(str(issue) for issue in builder.issues)
 
+        # version is only unset for trees that aren't BeamNG nodes yet
         if (mat.version == MaterialVersion.NONE or force_conversion):
-            if mat.version == MaterialVersion.NONE: mat.version = self.target_version
+            mat.version = self.target_version
             self.parse_to_bmat(mat, bmat)
 
 

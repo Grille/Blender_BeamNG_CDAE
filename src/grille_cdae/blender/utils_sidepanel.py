@@ -3,11 +3,10 @@ from grille_cdae.common.basetypes import PropertyGroup, Operator, Panel
 
 from ..beamng.material.material import MaterialVersion
 from ..beamng.material.material_parser import MaterialParser
+from .uilayout import UILayoutCtx
 
 class UtilsPanelPropertyGroup(PropertyGroup):
-    matconv_version: str
-    matconv_aclip: bool
-    matconv_force: bool
+    pass
 
 class UtilsPanelPInfo(PropertyInfoGroup[UtilsPanelPropertyGroup]):
     pinfo = PropertyInfoFactory()
@@ -27,12 +26,17 @@ class OT_convert_materials(Operator):
 
     def execute(self, context):
         properties = UtilsSidepanel.properties_from_ctx(context)
+        pinfo = UtilsPanelPInfo
 
-        target_version = MaterialVersion(float(properties.matconv_version))
+        target_version = MaterialVersion(float(pinfo.matconv_version[properties]))
         parser = MaterialParser(target_version)
-        parser.force_alpha_clip = properties.matconv_aclip
+        parser.force_alpha_clip = pinfo.matconv_aclip[properties]
         for bmat in bpy.data.materials:
-            parser.convert_bmat(bmat, properties.matconv_force)
+            parser.convert_bmat(bmat, pinfo.matconv_force[properties])
+
+        for issue in parser.issues: print(f"Material: {issue}")
+        if parser.issues:
+            self.report({'WARNING'}, f"{len(parser.issues)} material issue(s), see system console.")
 
         return {'FINISHED'}
     
@@ -47,11 +51,12 @@ class PT_materials_panel(Panel):
 
     def draw(self, context):
         layout = self.layout
-        properties = UtilsSidepanel.properties_from_ctx(context)
+        ui = UILayoutCtx(layout, UtilsSidepanel.properties_from_ctx(context))
+        pinfo = UtilsPanelPInfo
 
-        layout.prop(properties, "matconv_version")
-        layout.prop(properties, "matconv_aclip")
-        layout.prop(properties, "matconv_force")
+        ui.prop(pinfo.matconv_version)
+        ui.prop(pinfo.matconv_aclip)
+        ui.prop(pinfo.matconv_force)
 
         layout.separator()
 

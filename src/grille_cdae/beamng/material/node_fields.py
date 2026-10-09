@@ -142,6 +142,33 @@ STAGE_VERSION: dict[type, MaterialVersion] = {
 STAGE_NODE: dict[MaterialVersion, type[BaseShaderNode]] = {version: node for node, version in STAGE_VERSION.items()}
 
 
+# Blender's own shader nodes, only read when converting a material to BeamNG nodes (single stage, no detail).
+# Map and value share a socket: linked to an image it's the map, otherwise its value.
+# Emission strength and opacity from the base color alpha are handled in code.
+
+PRINCIPLED: tuple[Field, ...] = (
+    Tex("Base Color", "color", "Base Color", to_srgb),
+    Tex("Metallic", "metallic", "Metallic"),
+    Tex("Roughness", "roughness", "Roughness"),
+    Tex("Normal", "normal", normal=True),
+    Tex("Alpha", "opacity", "Alpha"),
+    Tex("Emission Color", "emission", "Emission Color", to_srgb),
+    Tex("Coat Weight", "clear_coat", "Coat Weight"),
+    Value("Coat Roughness", "clear_coat.roughness"),
+    Tex("Coat Normal", "clear_coat_normal", normal=True),
+)
+
+DIFFUSE: tuple[Field, ...] = (
+    Tex("Color", "color", "Color", to_srgb),
+    Tex("Normal", "normal", normal=True),
+)
+
+CONVERT_FIELDS: dict[type, tuple[Field, ...]] = {
+    bpy.types.ShaderNodeBsdfPrincipled: PRINCIPLED,
+    bpy.types.ShaderNodeBsdfDiffuse: DIFFUSE,
+}
+
+
 _SA = BeamUVAnimation.Sockets
 
 # wave type, flags and sequence segment size are derived in code

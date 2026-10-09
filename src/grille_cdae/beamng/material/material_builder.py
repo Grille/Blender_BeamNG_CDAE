@@ -11,7 +11,7 @@ from ...blender.shader_nodes import (
     BaseBeamRGBA, BeamMaterial, BeamBSDFCollision, BeamBDSF10Basic, BeamImageTex, BeamStageMix, BeamUVData, BeamUVAnimation, ReflectionMode
 )
 from .material import *
-from .node_fields import Field, Tex, Value, Bundle, STAGE_FIELDS, STAGE_VERSION, MATERIAL_FIELDS, UV_ANIMATION, to_float, to_srgb, to_vec2
+from .node_fields import Field, Tex, Value, Bundle, STAGE_FIELDS, STAGE_VERSION, CONVERT_FIELDS, MATERIAL_FIELDS, UV_ANIMATION, to_float, to_srgb, to_vec2
 
 
 
@@ -61,6 +61,8 @@ _UV_DATA_INDEX = {
 # value sources that can be read without evaluating the node tree
 _CONSTANT_NODES = (NodeName.Value, NodeName.RGB)
 
+_SEPARATE_COLOR_NODES = ("ShaderNodeSeparateColor", "ShaderNodeSeparateRGB")
+
 
 def _resolve(root: object, path: str) -> tuple[Any, str]:
     *parents, name = path.split(".")
@@ -79,7 +81,8 @@ class MaterialBuilder:
         self.issues: list[ExportIssue] = []
 
 
-    def build_from_bmat(self, bmat: bpy.types.Material) -> Material:
+    def build_from_bmat(self, bmat: bpy.types.Material, convert: bool = False) -> Material:
+        """`convert` also reads Blender's Principled / Diffuse BSDF (to convert them to BeamNG nodes), the version is left unset then."""
 
         mat = self.material
         mat.name = bmat.name
@@ -101,6 +104,8 @@ class MaterialBuilder:
             self._build_collision()
         elif walker.is_node_idname(BeamMaterial):
             self._build_material(walker)
+        elif convert and type(walker.current) in CONVERT_FIELDS:
+            self._build_converted(walker)
         else:
             raise MaterialExportError(f"Expected '{BeamMaterial.bl_label}' on Material Output > Surface, found '{not_none(walker.current).bl_label}'.")
 
@@ -109,6 +114,27 @@ class MaterialBuilder:
 
     def _issue(self, location: str, message: str):
         self.issues.append(ExportIssue(str(self.material.name), location, message))
+
+
+    def _build_converted(self, walker: NodeWalker):
+
+        node = not_none(walker.current)
+        stage = self.material.stages[0]
+        ctx = _Context(node.name)
+
+        self._apply_fields(walker, CONVERT_FIELDS[type(node)], stage, ctx)
+
+        if walker.has_input("Emission Strength") and to_float(self._read_value(walker, "Emission Strength", ctx)) == 0:
+            stage.emission.map = None
+            stage.emission.factor = None
+
+        if not stage.clear_coat.map and stage.clear_coat.factor == 0:
+            stage.clear_coat.roughness = None
+
+        # alpha of the base color image, BeamNG uses the base color alpha without an opacity map
+        if stage.opacity.map and stage.opacity.map == stage.color.map:
+            stage.opacity.map = None
+            stage.opacity.uv = None
 
 
     def _build_collision(self):
@@ -252,6 +278,8 @@ class MaterialBuilder:
 
         def read(socket_name: str | None, conv: Converter[object]):
             if socket_name is None: return None
+            # map and value on the same socket (Blender nodes): a linked socket's value isn't used
+            if socket_name == field.map and walker.is_linked(socket_name): return None
             value = self._read_value(walker, socket_name, ctx)
             return None if value is None else conv(value)
 
@@ -343,6 +371,12 @@ class MaterialBuilder:
             if not source.try_follow(SocketName.Color):
                 return None
 
+        channel: str | None = None
+        if source.is_node_any_idname(*_SEPARATE_COLOR_NODES):
+            channel = source.last_socket_name
+            if not source.try_follow(0):
+                return None
+
         node = not_none(source.current)
         if source.is_node_idname(NodeName.TexImage):
             image = cast(bpy.types.ShaderNodeTexImage, node).image
@@ -357,6 +391,9 @@ class MaterialBuilder:
         if image is None:
             self._issue(ctx.location, f"'{socket_name}': image texture node '{node.name}' has no image.")
             return None
+
+        if channel is not None:
+            self._issue(ctx.location, f"'{socket_name}' uses the {channel} channel of '{image.name}', the whole image is used as map.")
 
         return _ImageRef(image, self._find_uv(source, ctx), strength)
 
