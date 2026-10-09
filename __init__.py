@@ -20,5 +20,5 @@ bl_info: dict[str, object] = {
     "description": "Import and Export BeamNG model format (.cdae)",
 }
 
-from grille_cdae.blender import register, unregister
+from grille_cdae.addon import register, unregister
 __all__ = "bl_info", "register", "unregister"

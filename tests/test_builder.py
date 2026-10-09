@@ -5,7 +5,6 @@ import bpy
 import numpy as np
 
 from grille_cdae.common import *
-import grille_cdae.blender # same load order as the addon, beamng.cdae.builder <-> blender is circular
 from grille_cdae.beamng.cdae.builder import CdeaBuilder, CdaeMeshBuilder, MeshDataEvalMode
 from grille_cdae.beamng.cdae.builder_tree import CdaeTreeBuildMode
 
