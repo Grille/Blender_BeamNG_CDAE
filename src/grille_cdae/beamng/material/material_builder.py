@@ -393,7 +393,7 @@ class MaterialBuilder:
             return None
 
         if channel is not None:
-            self._issue(ctx.location, f"'{socket_name}' uses the {channel} channel of '{image.name}', the whole image is used as map.")
+            self._issue(ctx.location, f"'{socket_name}' uses the {channel} channel of '{image.name}', BeamNG reads data maps from the red channel, the image needs that channel split into its own map.")
 
         return _ImageRef(image, self._find_uv(source, ctx), strength)
 
