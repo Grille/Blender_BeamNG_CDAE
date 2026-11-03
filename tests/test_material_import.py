@@ -2,6 +2,7 @@ import collections
 import copy
 import glob
 import json
+import math
 import os
 import unittest
 
@@ -12,6 +13,7 @@ from grille_cdae.beamng.material import Material, MaterialBuilder, MaterialParse
 from grille_cdae.blender.shader_nodes import BeamBSDF15, BeamBDSF10Basic, BeamImageTex, BeamImageTexConverter, BeamRGBA, BeamStageMix
 
 import grille_cdae.addon as addon
+from grille_cdae.beamng.material.material import MaterialStage, DictProperty, _BaseDict # pyright: ignore[reportPrivateUsage]
 import grille_cdae.beamng.material.material_socket_info as _SI
 
 
@@ -26,6 +28,37 @@ ALIASES: dict[str, str] = {
     for json_key in cast(dict[str, _SI.JsonKey | None], info).values() if isinstance(json_key, tuple)
     for alias in json_key[1:]
 }
+
+
+def model_defaults(obj: _BaseDict, result: dict[str, list[object]] | None = None) -> dict[str, list[object]]:
+    """json key -> defaults of the model properties reading it (keys are reused between versions, so there can be several)"""
+    result = {} if result is None else result
+    for cls in type(obj).__mro__:
+        for attr in vars(cls).values():
+            if not isinstance(attr, DictProperty): continue
+            try: key = obj.get_key(cast(DictProperty[object], attr).key)
+            except KeyError: continue  # uniform key without a json key in this socket
+            for json_key in (key,) if isinstance(key, str) else key:
+                result.setdefault(json_key, []).append(cast(DictProperty[object], attr).default)
+        slots = getattr(cls, "__slots__", ())
+        for name in (slots,) if isinstance(slots, str) else slots:
+            child = getattr(obj, name, None)
+            if isinstance(child, _BaseDict): model_defaults(child, result)
+    return result
+
+
+def is_default(value: object, default: object) -> bool:
+    """value from json equals a model default, colors may omit alpha and floats went through float32 somewhere"""
+    if isinstance(default, tuple) and isinstance(value, list):
+        items = cast(list[object], value)
+        return 0 < len(items) <= len(default) and all(is_default(v, d) for v, d in zip(items, cast(tuple[object, ...], default)))
+    if type(value) in (int, float) and isinstance(default, int | float) and not isinstance(default, bool):
+        return math.isclose(cast(float, value), default, abs_tol=1e-6)
+    return value == default
+
+
+MATERIAL_DEFAULTS = model_defaults(Material({}))
+STAGE_DEFAULTS = model_defaults(MaterialStage({}))
 
 
 # everything the exporter writes for this tree, so import -> export must reproduce it exactly
@@ -159,6 +192,17 @@ class MaterialImportTest(unittest.TestCase):
         self.assertEqual(export_material(import_material(legacy)), CANONICAL_10)
 
 
+    def test_model_defaults(self):
+        # helper of the sample round trip report
+        self.assertIn(Color4F.WHITE, STAGE_DEFAULTS["diffuseColor"])  # legacy alias, texture socket uniform key
+        self.assertIn(0.0, STAGE_DEFAULTS["metallicFactor"])
+        self.assertIn(True, MATERIAL_DEFAULTS["castShadows"])
+        self.assertTrue(is_default([1.0, 0.9999999999999999, 1, 1], Color4F.WHITE))
+        self.assertTrue(is_default([0, 0, 0], Color4F.BLACK))  # color3
+        self.assertFalse(is_default([0.5, 1, 1, 1], Color4F.WHITE))
+        self.assertFalse(is_default(1, True) and is_default(0.5, 1.0))
+
+
     def test_missing_version_is_10(self):
         bmat = import_material({"name": "m", "Stages": [{"baseColorMap": "a.png"}]})
         self.assertEqual(export_material(bmat)["version"], 1.0)
@@ -182,7 +226,14 @@ class MaterialSampleRoundtripTest(unittest.TestCase):
 
         root = os.environ["BEAMNG_SAMPLES_DIR"]
         lost: collections.Counter[str] = collections.Counter()
+        defaults: collections.Counter[str] = collections.Counter()
         count = 0
+
+        def count_lost(prefix: str, src: SDict, exported: SDict, model: dict[str, list[object]]):
+            for key, value in src.items():
+                if key == "Stages" or ALIASES.get(key, key) in exported: continue
+                if value is None or any(is_default(value, d) for d in model.get(key, ())): defaults[prefix + key] += 1
+                else: lost[prefix + key] += 1
 
         for path in glob.glob(os.path.join(root, "**", "*.materials.json"), recursive=True):
             with open(path, encoding="utf-8") as f:
@@ -200,12 +251,14 @@ class MaterialSampleRoundtripTest(unittest.TestCase):
                     self.assertEqual(second, first)
                     count += 1
 
-                    lost.update(k for k in raw if k not in first and k != "Stages")
+                    count_lost("", raw, first, MATERIAL_DEFAULTS)
                     layers = int(cast(int, raw.get("activeLayers", 1)) or 1)
                     stages = zip(cast(list[SDict], raw.get("Stages", [])), cast(list[SDict], first["Stages"]))
                     for stage, exported in list(stages)[:layers]:
-                        lost.update(f"Stages.{k}" for k in stage if ALIASES.get(k, k) not in exported)
+                        count_lost("Stages.", stage, exported, STAGE_DEFAULTS)
 
         self.assertGreater(count, 0)
         print(f"\n  {count} materials, keys lost on first import -> export:")
         for key, n in lost.most_common(25): print(f"    {n:5} {key}")
+        print(f"  {defaults.total()} keys dropped because they equal the file default:")
+        print("    " + ", ".join(f"{n} {key}" for key, n in defaults.most_common(10)))
