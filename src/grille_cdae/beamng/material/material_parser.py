@@ -219,7 +219,7 @@ class MaterialParser:
                 # RGBA maps need the addon's image node
                 image_node = tree.nodes.new(BeamImageTex.bl_idname)
                 cast(BeamImageTex, image_node).image = self._get_image(map)
-                output = image_node.outputs[BeamImageTex.ImageType.COLOR_RGBA]
+                output = image_node.outputs[BeamImageTex.Sockets.COLOR_RGBA]
             else:
                 image_node = tree.nodes.new(NodeName.TexImage)
                 cast(bpy.types.ShaderNodeTexImage, image_node).image = self._get_image(map)

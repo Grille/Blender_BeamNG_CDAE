@@ -43,13 +43,13 @@ CANONICAL: SDict = {
         {
             "baseColorMap": "albedo.png", "diffuseMapUseUV": 1, "baseColorFactor": [1.0, 0.5, 0.0, 1.0], "vertColor": True,
             "normalMap": "normal.png", "normalMapStrength": 0.5,
-            "metallicFactor": 0.0, "roughnessFactor": 0.75, "opacityFactor": 1.0, "clearCoatFactor": 0.0,
+            "roughnessFactor": 0.75,
             "emissiveFactor": [1.0, 0.0, 0.0],
             "detailMap": "detail.png", "detailBaseColorMapStrength": 0.5, "detailScale": [4.0, 8.0],
             "colorPaletteMap": "palette.png", "paletteMetallic": False,
             "animFlags": 3, "rotSpeed": 0.5, "scrollSpeed": 2.0, "scrollDir": [1.0, 0.0],
         },
-        {"metallicFactor": 1.0, "roughnessFactor": 0.3, "opacityFactor": 1.0, "clearCoatFactor": 0.0},
+        {"metallicFactor": 1.0, "roughnessFactor": 0.3},
         {}, {},
     ],
 }
@@ -116,7 +116,8 @@ class MaterialImportTest(unittest.TestCase):
         bmat = import_material({"name": "m", "version": 1.5, "Stages": [{"roughnessFactor": 0.5}]})
         stage = next(n for n in not_none(bmat.node_tree).nodes if n.bl_idname == BeamBSDF15.bl_idname)
         self.assertAlmostEqual(stage.inputs[BeamBSDF15.Sockets.ROUGHNESS_FACTOR].default_value, 0.5) # pyright: ignore
-        self.assertAlmostEqual(stage.inputs[BeamBSDF15.Sockets.METALLIC_FACTOR].default_value, 1.0) # pyright: ignore
+        self.assertAlmostEqual(stage.inputs[BeamBSDF15.Sockets.METALLIC_FACTOR].default_value, 0.0) # pyright: ignore
+        self.assertNotIn("metallicFactor", cast(list[SDict], export_material(bmat)["Stages"])[0])
 
 
     def test_canonical_roundtrip_10(self):

@@ -382,7 +382,7 @@ class MaterialBuilder:
             image = cast(bpy.types.ShaderNodeTexImage, node).image
         elif source.is_node_idname(BeamImageTex):
             image = cast(BeamImageTex, node).image
-            if source.last_socket_name == BeamImageTex.ImageType.NORMAL:
+            if source.last_socket_name == BeamImageTex.Sockets.NORMAL:
                 strength = source.get_float_value(SocketName.Strength)
         else:
             self._issue(ctx.location, f"'{socket_name}' expects an image texture, found '{node.bl_label}'.")

@@ -76,8 +76,7 @@ class MaterialExportTest(unittest.TestCase):
             "class": "Material",
             "version": 1.5,
             "Stages": [
-                {"metallicFactor": 1.0, "roughnessFactor": 1.0, "opacityFactor": 1.0, "clearCoatFactor": 0.0},
-                {}, {}, {},
+                {}, {}, {}, {},
             ],
         })
 
@@ -129,7 +128,7 @@ class MaterialExportTest(unittest.TestCase):
     def test_beam_image_tex(self):
         node = cast(BeamImageTex, self.node(BeamImageTex.bl_idname))
         node.image = bpy.data.images.new("bng.png", 4, 4)
-        self.link(node.outputs[BeamImageTex.ImageType.COLOR_RGB], self.stage.inputs[S.BASE_COLOR_MAP])
+        self.link(node.outputs[BeamImageTex.Sockets.COLOR_RGB], self.stage.inputs[S.BASE_COLOR_MAP])
         self.assertEqual(self.stage0()["baseColorMap"], "bng.png")
 
 

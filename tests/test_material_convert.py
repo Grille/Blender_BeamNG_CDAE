@@ -67,7 +67,7 @@ class MaterialConvertTest(unittest.TestCase):
         self.assertEqual(mat["version"], 1.5)
         self.assertEqual(cast(list[SDict], mat["Stages"])[0], {
             "baseColorFactor": [0.735357, 0.537099, 0.34919, 1.0],
-            "metallicFactor": 0.25, "roughnessFactor": 0.75, "opacityFactor": 1.0, "clearCoatFactor": 0.0,
+            "metallicFactor": 0.25, "roughnessFactor": 0.75,
         })
         self.assertEqual(self.idnames()[BeamBSDF15.bl_idname], 1)
         self.assertEqual(self.idnames()["ShaderNodeBsdfPrincipled"], 0)

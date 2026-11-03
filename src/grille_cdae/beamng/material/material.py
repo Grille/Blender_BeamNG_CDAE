@@ -193,7 +193,11 @@ class _TexStrengthSocket(TextureSocket):
 
 class _TexFactorSocket(TextureSocket):
     __slots__=()
-    factor = _Float("value", -1)
+    factor = _Float("value", 1.0)
+
+class _TexMetallicSocket(TextureSocket):
+    __slots__=()
+    factor = _Float("value", 0.0)
 
 class _TexOpacitySocket(_TexFactorSocket):
     __slots__=()
@@ -226,8 +230,9 @@ class _TexSpecularSocket(TextureSocket):
     factor = _Color4("specular", Color4F.WHITE)
     roughness = _Float("roughnessFactor", 1.0)
 
-class _TexCCSocket(_TexFactorSocket):
+class _TexCCSocket(TextureSocket):
     __slots__=()
+    factor = _Float("value", 0.0)
     roughness = _Float("clearCoatRoughnessFactor", 1.0)
 
 
@@ -312,7 +317,7 @@ class MaterialStage(_BaseDict):
         self.color = _TexColorSocket(self, _SI.COLOR)
         self.normal = _TexStrengthSocket(self, _SI.NORMAL)
         self.specular = _TexSpecularSocket(self, _SI.SPECULAR)
-        self.metallic = _TexFactorSocket(self, _SI.METALLIC)
+        self.metallic = _TexMetallicSocket(self, _SI.METALLIC)
         self.roughness = _TexFactorSocket(self, _SI.ROUGHNESS)
         self.opacity = _TexOpacitySocket(self, _SI.OPACITY)
         self.ambient_occlusion = TextureSocket(self, _SI.AMBIENT_OCCLUSION)

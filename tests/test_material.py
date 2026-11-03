@@ -51,7 +51,7 @@ class MaterialDictTest(unittest.TestCase):
             "clearCoatRoughnessFactor": 0.3,
         })
         self.assertEqual(stage.metallic.factor, 0.25)
-        self.assertEqual(stage.roughness.factor, -1)
+        self.assertEqual(stage.roughness.factor, 1.0)
 
 
     def test_legacy_key_aliases(self):

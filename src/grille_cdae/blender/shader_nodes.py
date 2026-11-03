@@ -1321,7 +1321,7 @@ class BeamBSDF15(BaseShaderNode):
     bl_nclass = "SHADER"
     bl_width_default = 240
     ng_color_tag = GroupColorTag.SHADER
-    ng_version_mayor = 1
+    ng_version_mayor = 2
 
  
     def update(self):
@@ -1374,7 +1374,7 @@ class BeamBSDF15(BaseShaderNode):
         vc_enabled = ngb.input(_BOOL_VALUE, LS.VERTEX_COLOR) 
         normal = ngb.input(_NORMAL_MIX, LS.NORMAL)
         m_m = ngb.input(_FLOAT_TEXTURE, LS.METALLIC_MAP)
-        m_f = ngb.input(_FLOAT_VALUE, LS.METALLIC_FACTOR)
+        m_f = ngb.input(_FLOAT_VALUE, LS.METALLIC_FACTOR, 0)
         r_m = ngb.input(_FLOAT_TEXTURE, LS.ROUGHNESS_MAP)
         r_f = ngb.input(_FLOAT_VALUE, LS.ROUGHNESS_FACTOR)
         o_m = ngb.input(_FLOAT_TEXTURE, LS.OPACITY_MAP)
