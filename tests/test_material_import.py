@@ -8,8 +8,8 @@ import unittest
 import bpy
 
 from grille_cdae.common import *
-from grille_cdae.beamng.material import Material, MaterialBuilder, MaterialParser, MaterialImportError
-from grille_cdae.blender.shader_nodes import BeamBSDF15, BeamBDSF10Basic, BeamImageTex, BeamRGBA, BeamStageMix
+from grille_cdae.beamng.material import Material, MaterialBuilder, MaterialParser, MaterialImportError, ImageNodeMode
+from grille_cdae.blender.shader_nodes import BeamBSDF15, BeamBDSF10Basic, BeamImageTex, BeamImageTexConverter, BeamRGBA, BeamStageMix
 
 import grille_cdae.addon as addon
 import grille_cdae.beamng.material.material_socket_info as _SI
@@ -74,9 +74,11 @@ CANONICAL_10: SDict = {
 
 
 
-def import_material(raw: SDict, name: str = "test_mat") -> bpy.types.Material:
+def import_material(raw: SDict, name: str = "test_mat", image_nodes = ImageNodeMode.CONVERTER) -> bpy.types.Material:
     bmat = bpy.data.materials.new(name)
-    MaterialParser().parse_to_bmat(Material(copy.deepcopy(raw)), bmat)
+    parser = MaterialParser()
+    parser.image_nodes = image_nodes
+    parser.parse_to_bmat(Material(copy.deepcopy(raw)), bmat)
     return bmat
 
 
@@ -99,7 +101,10 @@ class MaterialImportTest(unittest.TestCase):
 
 
     def test_canonical_roundtrip(self):
-        self.assertEqual(export_material(import_material(CANONICAL)), CANONICAL)
+        for mode in ImageNodeMode:
+            with self.subTest(mode):
+                self.assertEqual(export_material(import_material(CANONICAL, image_nodes=mode)), CANONICAL)
+                cleanup()
 
 
     def test_nodes(self):
@@ -108,8 +113,17 @@ class MaterialImportTest(unittest.TestCase):
         self.assertEqual(idnames[BeamBSDF15.bl_idname], 2)
         self.assertEqual(idnames[BeamStageMix.bl_idname], 1)
         self.assertEqual(idnames["ShaderNodeTexImage"], 4)
-        self.assertEqual(idnames["ShaderNodeNormalMap"], 1)
+        self.assertEqual(idnames[BeamImageTexConverter.bl_idname], 1)  # normal, color maps link directly
+        self.assertEqual(idnames["ShaderNodeNormalMap"], 0)
         self.assertEqual(not_none(bpy.data.images["albedo.png"].colorspace_settings).name, "Non-Color")
+
+
+    def test_nodes_beam_image_tex(self):
+        bmat = import_material(CANONICAL, image_nodes=ImageNodeMode.BEAM_IMAGE_TEX)
+        idnames = collections.Counter(node.bl_idname for node in not_none(bmat.node_tree).nodes)
+        self.assertEqual(idnames[BeamImageTex.bl_idname], 4)
+        self.assertEqual(idnames["ShaderNodeTexImage"], 0)
+        self.assertEqual(idnames[BeamImageTexConverter.bl_idname], 0)
 
 
     def test_missing_keys_keep_node_defaults(self):
@@ -121,14 +135,19 @@ class MaterialImportTest(unittest.TestCase):
 
 
     def test_canonical_roundtrip_10(self):
-        self.assertEqual(export_material(import_material(CANONICAL_10)), CANONICAL_10)
+        for mode in ImageNodeMode:
+            with self.subTest(mode):
+                self.assertEqual(export_material(import_material(CANONICAL_10, image_nodes=mode)), CANONICAL_10)
+                cleanup()
 
 
     def test_nodes_10(self):
         bmat = import_material(CANONICAL_10)
         idnames = collections.Counter(node.bl_idname for node in not_none(bmat.node_tree).nodes)
         self.assertEqual(idnames[BeamBDSF10Basic.bl_idname], 1)
-        self.assertEqual(idnames[BeamImageTex.bl_idname], 4)  # color, detail, reflectivity, overlay (RGBA sockets)
+        self.assertEqual(idnames[BeamImageTex.bl_idname], 0)
+        self.assertEqual(idnames["ShaderNodeTexImage"], 7)
+        self.assertGreaterEqual(idnames[BeamImageTexConverter.bl_idname], 4)  # at least color, detail, reflectivity, overlay (RGBA sockets)
         self.assertEqual(idnames[BeamRGBA.bl_idname], 1)  # color factor
 
 

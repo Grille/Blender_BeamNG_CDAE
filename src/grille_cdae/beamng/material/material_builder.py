@@ -8,7 +8,7 @@ from grille_cdae.enums import *
 from ...blender.material_properties import MaterialProperties
 from ...blender.node_walker import NodeWalker
 from ...blender.shader_nodes import (
-    BaseBeamRGBA, BeamMaterial, BeamBSDFCollision, BeamBDSF10Basic, BeamImageTex, BeamStageMix, BeamUVData, BeamUVAnimation, ReflectionMode
+    BaseBeamRGBA, BeamMaterial, BeamBSDFCollision, BeamBDSF10Basic, BeamImageTex, BeamImageTexConverter, BeamStageMix, BeamUVData, BeamUVAnimation, ImageType, ReflectionMode
 )
 from .material import *
 from .node_fields import Field, Tex, Value, Bundle, STAGE_FIELDS, STAGE_VERSION, CONVERT_FIELDS, MATERIAL_FIELDS, UV_ANIMATION, to_float, to_srgb, to_vec2
@@ -371,6 +371,17 @@ class MaterialBuilder:
             if not source.try_follow(SocketName.Color):
                 return None
 
+        alpha: NodeWalker | None = None
+        if source.is_node_idname(BeamImageTexConverter):
+            CS = BeamImageTexConverter.Sockets
+            if source.last_socket_name == ImageType.NORMAL:
+                strength = source.get_float_value(CS.STRENGTH)
+            if source.last_socket_name == ImageType.COLOR_RGBA:
+                alpha = source.fork()
+                if not alpha.try_follow(CS.ALPHA): alpha = None
+            if not source.try_follow(CS.COLOR):
+                return None
+
         channel: str | None = None
         if source.is_node_any_idname(*_SEPARATE_COLOR_NODES):
             channel = source.last_socket_name
@@ -394,6 +405,11 @@ class MaterialBuilder:
 
         if channel is not None:
             self._issue(ctx.location, f"'{socket_name}' uses the {channel} channel of '{image.name}', BeamNG reads data maps from the red channel, the image needs that channel split into its own map.")
+
+        if alpha is not None and alpha.current is not node:
+            alpha_image = alpha.get_image() if alpha.is_node_any_idname(NodeName.TexImage, BeamImageTex) else None
+            alpha_source = not_none(alpha.current).name if alpha_image is None else alpha_image.name
+            self._issue(ctx.location, f"'{socket_name}': the alpha of '{image.name}' comes from '{alpha_source}', BeamNG uses the alpha channel of the same image.")
 
         return _ImageRef(image, self._find_uv(source, ctx), strength)
 

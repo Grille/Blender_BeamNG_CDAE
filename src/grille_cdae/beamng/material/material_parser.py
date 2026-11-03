@@ -6,7 +6,7 @@ from grille_cdae.common import *
 from grille_cdae.enums import *
 
 from ...blender.material_properties import MaterialProperties
-from ...blender.shader_nodes import BeamMaterial, BeamBDSF10Basic, BeamImageTex, BeamRGBA, BeamStageMix, BeamUVData, BeamUVAnimation, ReflectionMode
+from ...blender.shader_nodes import BeamMaterial, BeamBDSF10Basic, BeamImageTex, BeamImageTexConverter, BeamRGBA, BeamStageMix, BeamUVData, BeamUVAnimation, ImageType, ReflectionMode
 from ...blender.shader_node_builder import NodeTreeBuilder
 from .material import *
 from .material_builder import MaterialBuilder, MaterialExportError, MAX_STAGES
@@ -16,6 +16,12 @@ from .node_fields import Field, Tex, Value, STAGE_FIELDS, STAGE_NODE, MATERIAL_F
 
 class MaterialImportError(Exception):
     """The material can't be imported at all."""
+
+
+
+class ImageNodeMode(StrEnum):
+    CONVERTER = "CONVERTER"  # Blender image texture + BNG image converter, one shared node group
+    BEAM_IMAGE_TEX = "BEAM_IMAGE_TEX"  # BNG image texture, one node group per image
 
 
 
@@ -59,6 +65,14 @@ def _is_bundle(socket: bpy.types.NodeSocket) -> bool:
     return socket.type == 'BUNDLE'
 
 
+def _image_output(socket: bpy.types.NodeSocket, field: Tex) -> ImageType:
+    """The image converter output the target socket expects."""
+    if _is_bundle(socket): return ImageType.COLOR_RGBA
+    if field.normal: return ImageType.NORMAL
+    if socket.type == 'VALUE': return ImageType.DATA
+    return ImageType.COLOR_RGB
+
+
 
 class MaterialParser:
     """Creates a node tree made of the addon's shader nodes from a BeamNG material, using the same field tables as the export."""
@@ -66,6 +80,7 @@ class MaterialParser:
     def __init__(self, target_version = MaterialVersion.V1_5, base_dir: str | None = None):
         self.target_version = target_version
         self.force_alpha_clip = False
+        self.image_nodes = ImageNodeMode.CONVERTER
         self.base_dir = base_dir
         self.issues: list[str] = []
 
@@ -215,24 +230,30 @@ class MaterialParser:
 
         map: str | None = _get_field(socket, "map")
         if map:
-            if _is_bundle(node.inputs[field.map]):
-                # RGBA maps need the addon's image node
+            target = node.inputs[field.map]
+            output: str = _image_output(target, field)
+            image = self._get_image(map)
+
+            if self.image_nodes == ImageNodeMode.BEAM_IMAGE_TEX:
                 image_node = tree.nodes.new(BeamImageTex.bl_idname)
-                cast(BeamImageTex, image_node).image = self._get_image(map)
-                output = image_node.outputs[BeamImageTex.Sockets.COLOR_RGBA]
+                cast(BeamImageTex, image_node).image = image
+                converter = image_node
             else:
                 image_node = tree.nodes.new(NodeName.TexImage)
-                cast(bpy.types.ShaderNodeTexImage, image_node).image = self._get_image(map)
-                output = image_node.outputs[SocketName.Color]
+                cast(bpy.types.ShaderNodeTexImage, image_node).image = image
+                converter = image_node
+                if output == ImageType.COLOR_RGB:
+                    output = SocketName.Color
+                else:
+                    CS = BeamImageTexConverter.Sockets
+                    converter = tree.nodes.new(BeamImageTexConverter.bl_idname)
+                    tree.links.new(image_node.outputs[SocketName.Color], converter.inputs[CS.COLOR])
+                    tree.links.new(image_node.outputs[SocketName.Alpha], converter.inputs[CS.ALPHA])
 
-            if field.normal:
-                normal_map = tree.nodes.new(NodeName.NormalMap)
-                tree.links.new(output, normal_map.inputs[SocketName.Color])
-                strength = _get_field(socket, "value")
-                if strength is not None: _set_socket(normal_map, SocketName.Strength, float(strength))
-                output = normal_map.outputs[SocketName.Normal]
+            strength = _get_field(socket, "value") if field.normal else None
+            if strength is not None: _set_socket(converter, SocketName.Strength, float(strength))
 
-            tree.links.new(output, node.inputs[field.map])
+            tree.links.new(converter.outputs[output], target)
             self._link_uv(image_node, _get_field(socket, "uv") or 0, dataclass_replace(ctx, detail=ctx.detail or field.detail))
 
         for key, socket_name, conv in (("value", field.value, INVERSE[field.conv]), ("instance", field.instance, bool), ("vertex", field.vertex, bool)):

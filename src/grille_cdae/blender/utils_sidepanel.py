@@ -2,7 +2,7 @@ from grille_cdae.common import *
 from grille_cdae.common.basetypes import PropertyGroup, Operator, Panel
 
 from ..beamng.material.material import MaterialVersion
-from ..beamng.material.material_parser import MaterialParser
+from ..beamng.material.material_parser import MaterialParser, ImageNodeMode
 from .uilayout import UILayoutCtx
 
 class UtilsPanelPropertyGroup(PropertyGroup):
@@ -14,6 +14,10 @@ class UtilsPanelPInfo(PropertyInfoGroup[UtilsPanelPropertyGroup]):
     matconv_version = pinfo.enum("Material Version", description="BeamNG material conversion version", items=[("1.0", "V1"), ("1.5", "V1.5 (PBR)")], default="1.0")
     matconv_aclip = pinfo.bool("Enable Alpha Clip", True)
     matconv_force = pinfo.bool("Force Conversion", False)
+    matconv_image_nodes = pinfo.enum("Image Nodes", description="Nodes created for image maps", items=[
+        (ImageNodeMode.CONVERTER.value, "Image + Converter", "Blender image texture with a BNG image converter, all images share one node group"),
+        (ImageNodeMode.BEAM_IMAGE_TEX.value, "BNG Image Texture", "One BNG image texture per image, each image gets its own node group"),
+    ], default=ImageNodeMode.CONVERTER.value)
 
 UtilsPanelPInfo.pinfo.annotate(UtilsPanelPropertyGroup)
 
@@ -31,6 +35,7 @@ class OT_convert_materials(Operator):
         target_version = MaterialVersion(float(pinfo.matconv_version[properties]))
         parser = MaterialParser(target_version)
         parser.force_alpha_clip = pinfo.matconv_aclip[properties]
+        parser.image_nodes = ImageNodeMode(pinfo.matconv_image_nodes[properties])
         for bmat in bpy.data.materials:
             parser.convert_bmat(bmat, pinfo.matconv_force[properties])
 
@@ -57,6 +62,7 @@ class PT_materials_panel(Panel):
         ui.prop(pinfo.matconv_version)
         ui.prop(pinfo.matconv_aclip)
         ui.prop(pinfo.matconv_force)
+        ui.prop(pinfo.matconv_image_nodes)
 
         layout.separator()
 

@@ -7,7 +7,7 @@ from grille_cdae.enums import AlphaBlendMode
 from grille_cdae.beamng.material import MaterialBuilder, MaterialExportError
 from grille_cdae.beamng.material.material import AnimationFlags
 from grille_cdae.blender.shader_nodes import (
-    BeamMaterial, BeamBSDF15, BeamBDSF10Basic, BeamBSDFCollision, BeamStageMix, BeamUVData, BeamUVAnimation, BeamImageTex,
+    BeamMaterial, BeamBSDF15, BeamBDSF10Basic, BeamBSDFCollision, BeamStageMix, BeamUVData, BeamUVAnimation, BeamImageTex, BeamImageTexConverter,
     BeamBSDF15Detail, BeamPalette, ReflectionMode
 )
 
@@ -130,6 +130,40 @@ class MaterialExportTest(unittest.TestCase):
         node.image = bpy.data.images.new("bng.png", 4, 4)
         self.link(node.outputs[BeamImageTex.Sockets.COLOR_RGB], self.stage.inputs[S.BASE_COLOR_MAP])
         self.assertEqual(self.stage0()["baseColorMap"], "bng.png")
+
+
+    def test_image_converter(self):
+        CS = BeamImageTexConverter.Sockets
+        normal = self.node(BeamImageTexConverter.bl_idname)
+        normal.inputs[CS.STRENGTH].default_value = 0.5 # pyright: ignore
+        self.image_node("normal.png", normal.inputs[CS.COLOR])
+        self.link(normal.outputs[CS.NORMAL], self.stage.inputs[S.NORMAL])
+
+        data = self.node(BeamImageTexConverter.bl_idname)
+        self.image_node("rough.png", data.inputs[CS.COLOR])
+        self.link(data.outputs[CS.DATA], self.stage.inputs[S.ROUGHNESS_MAP])
+
+        stage = self.stage0()
+        self.assertEqual(stage["normalMap"], "normal.png")
+        self.assertEqual(stage["normalMapStrength"], 0.5)
+        self.assertEqual(stage["roughnessMap"], "rough.png")
+
+
+    def test_image_converter_alpha_from_other_image(self):
+        CS = BeamImageTexConverter.Sockets
+        self.tree.nodes.remove(self.stage)
+        self.stage = self.node(BeamBDSF10Basic.bl_idname)
+        self.link(self.stage.outputs[0], self.mat_node.inputs["BNGS"])
+
+        converter = self.node(BeamImageTexConverter.bl_idname)
+        self.image_node("color.png", converter.inputs[CS.COLOR])
+        alpha = cast(bpy.types.ShaderNodeTexImage, self.node("ShaderNodeTexImage"))
+        alpha.image = bpy.data.images.new("alpha.png", 4, 4)
+        self.link(alpha.outputs["Alpha"], converter.inputs[CS.ALPHA])
+        self.link(converter.outputs[CS.COLOR_RGBA], self.stage.inputs[BeamBDSF10Basic.Sockets.COLOR_MAP])
+
+        self.assertEqual(self.stage0(expect_issues=1)["baseColorMap"], "color.png")
+        self.assertIn("alpha.png", self.issues[0].message)
 
 
     def test_reroute_and_muted_link(self):
