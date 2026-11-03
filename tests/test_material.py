@@ -54,6 +54,24 @@ class MaterialDictTest(unittest.TestCase):
         self.assertEqual(stage.roughness.factor, -1)
 
 
+    def test_legacy_key_aliases(self):
+        raw: SDict = {"colorMap": "old.png", "diffuseColor": [1.0, 0.0, 0.0, 1.0]}
+        stage = MaterialStage(raw)
+        self.assertEqual(stage.color.map, "old.png")
+        self.assertEqual(stage.color.factor, Color4F(1.0, 0.0, 0.0, 1.0))
+
+        stage.color.map = "new.png"  # written to the primary key, alias dropped
+        self.assertEqual(raw, {"baseColorMap": "new.png", "diffuseColor": [1.0, 0.0, 0.0, 1.0]})
+
+        stage.color.factor = Color4F.WHITE  # default removes primary and alias
+        self.assertEqual(raw, {"baseColorMap": "new.png"})
+
+
+    def test_primary_key_wins_over_alias(self):
+        stage = MaterialStage({"baseColorMap": "new.png", "colorMap": "old.png"})
+        self.assertEqual(stage.color.map, "new.png")
+
+
     def test_unknown_attributes_raise(self):
         mat = Material({})
         stage = mat.stages[0]

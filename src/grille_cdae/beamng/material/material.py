@@ -11,30 +11,40 @@ type _nstr = str | None
 
 
 
+def _json_keys(key: _SI.JsonKey) -> tuple[str, ...]:
+    return (key,) if isinstance(key, str) else key
+
+
+
 class _BaseDict:
+    """Keys can be a tuple of (primary, *legacy aliases): reads take the first one present, writes set the primary and drop the aliases."""
     __slots__ = "value_dict"
 
     def __init__(self, dict: SDict | _BaseDict):
         self.value_dict = dict.value_dict if isinstance(dict, _BaseDict) else dict
 
 
-    def get_key(self, key: str) -> str: return key
+    def get_key(self, key: _SI.JsonKey) -> _SI.JsonKey: return key
 
 
-    def __getitem__(self, key: str):
-        return self.value_dict.get(self.get_key(key))
+    def __getitem__(self, key: _SI.JsonKey):
+        for json_key in _json_keys(self.get_key(key)):
+            value = self.value_dict.get(json_key)
+            if value is not None: return value
+        return None
 
 
-    def __setitem__(self, key: str, value: object | None):
-        full_key = self.get_key(key)
+    def __setitem__(self, key: _SI.JsonKey, value: object | None):
         if value is None:
-            self.value_dict.pop(full_key, None)
-        else:
-            self.value_dict[full_key] = value
+            del self[key]
+            return
+        primary, *aliases = _json_keys(self.get_key(key))
+        for alias in aliases: self.value_dict.pop(alias, None)
+        self.value_dict[primary] = value
 
 
-    def __delitem__(self, key: str):
-        self.value_dict.pop(self.get_key(key), None)
+    def __delitem__(self, key: _SI.JsonKey):
+        for json_key in _json_keys(self.get_key(key)): self.value_dict.pop(json_key, None)
 
 
     def _find_property(self, match: Callable[[str, DictProperty[Any]], bool]) -> tuple[str, DictProperty[Any]]:
@@ -68,12 +78,13 @@ class _BaseDict:
 class _KeyPtrDict(_BaseDict):
     __slots__ = "_key_dict"
 
-    def __init__(self, dict: SDict | _BaseDict, key_dict: SDict[str | None]):
+    def __init__(self, dict: SDict | _BaseDict, key_dict: SDict[_SI.JsonKey | None]):
         super().__init__(dict)
         self._key_dict = key_dict
 
 
-    def get_key(self, key: str): 
+    def get_key(self, key: _SI.JsonKey):
+        if not isinstance(key, str): return key
         real_key = self._key_dict.get(key, key)
         if real_key is None: raise KeyError(f"{key} not valid in this context")
         return real_key

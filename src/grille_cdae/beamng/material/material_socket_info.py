@@ -1,7 +1,9 @@
+type JsonKey = str | tuple[str,...]
+
 _socket_map_list: list[str] = []
 
-def _new(map: str, value: str | None, uv: str | None, instance: str | None = None, vertex: str | None = None) -> dict[str, str | None]:
-    _socket_map_list.append(map)
+def _new(map: JsonKey, value: JsonKey | None, uv: JsonKey | None, instance: JsonKey | None = None, vertex: JsonKey | None = None) -> dict[str, JsonKey | None]:
+    _socket_map_list.append(map if isinstance(map, str) else map[0])
     return {"map":map, "value":value, "uv":uv, "instance":instance, "vertex":vertex}
 
 DETAIL_COLOR = _new("detailMap", "detailBaseColorMapStrength", "detailMapUseUV")
@@ -11,7 +13,7 @@ DETAIL_ROUGHNES = _new("roughnessDetailMap", "detailRoughnessMapStrength", None)
 DETAIL_OPACITY = _new("opacityDetailMap", "detailOpacityMapStrength", "opacityDetailMapUseUV")
 DETAIL_AMBIENT_OCCLUSION = _new("ambientOcclusionDetailMap", "detailAoMapStrength", None)
 
-COLOR = _new("baseColorMap", "baseColorFactor", "diffuseMapUseUV", "instanceDiffuse", "vertColor")
+COLOR = _new(("baseColorMap", "colorMap"), ("baseColorFactor", "diffuseColor"), "diffuseMapUseUV", "instanceDiffuse", "vertColor")
 NORMAL = _new("normalMap", "normalMapStrength", "normalMapUseUV")
 SPECULAR = _new("specularMap", None, None)
 METALLIC = _new("metallicMap", "metallicFactor", "metallicMapUseUV")

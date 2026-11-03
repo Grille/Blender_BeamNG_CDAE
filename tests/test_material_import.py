@@ -12,10 +12,20 @@ from grille_cdae.beamng.material import Material, MaterialBuilder, MaterialParse
 from grille_cdae.blender.shader_nodes import BeamBSDF15, BeamBDSF10Basic, BeamImageTex, BeamRGBA, BeamStageMix
 
 import grille_cdae.addon as addon
+import grille_cdae.beamng.material.material_socket_info as _SI
 
 
 def setUpModule(): addon.register()
 def tearDownModule(): addon.unregister()
+
+
+# legacy json key -> primary key, legacy keys are written back under their primary key
+ALIASES: dict[str, str] = {
+    alias: json_key[0]
+    for info in vars(_SI).values() if isinstance(info, dict)
+    for json_key in cast(dict[str, _SI.JsonKey | None], info).values() if isinstance(json_key, tuple)
+    for alias in json_key[1:]
+}
 
 
 # everything the exporter writes for this tree, so import -> export must reproduce it exactly
@@ -121,6 +131,14 @@ class MaterialImportTest(unittest.TestCase):
         self.assertEqual(idnames[BeamRGBA.bl_idname], 1)  # color factor
 
 
+    def test_legacy_keys_10(self):
+        legacy = copy.deepcopy(CANONICAL_10)
+        stage = cast(list[SDict], legacy["Stages"])[0]
+        stage["colorMap"] = stage.pop("baseColorMap")
+        stage["diffuseColor"] = stage.pop("baseColorFactor")
+        self.assertEqual(export_material(import_material(legacy)), CANONICAL_10)
+
+
     def test_missing_version_is_10(self):
         bmat = import_material({"name": "m", "Stages": [{"baseColorMap": "a.png"}]})
         self.assertEqual(export_material(bmat)["version"], 1.0)
@@ -166,7 +184,7 @@ class MaterialSampleRoundtripTest(unittest.TestCase):
                     layers = int(cast(int, raw.get("activeLayers", 1)) or 1)
                     stages = zip(cast(list[SDict], raw.get("Stages", [])), cast(list[SDict], first["Stages"]))
                     for stage, exported in list(stages)[:layers]:
-                        lost.update(f"Stages.{k}" for k in stage if k not in exported)
+                        lost.update(f"Stages.{k}" for k in stage if ALIASES.get(k, k) not in exported)
 
         self.assertGreater(count, 0)
         print(f"\n  {count} materials, keys lost on first import -> export:")
