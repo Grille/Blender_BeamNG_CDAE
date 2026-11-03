@@ -364,7 +364,7 @@ class Material(_BaseDict):
     class _Translucent(_BaseDict):
         __slots__=()
         enabled = _Bool("translucent", False)
-        blend_mode = _Str("translucentBlendOp", AlphaBlendMode.NONE, AlphaBlendMode)
+        blend_mode = _Str("translucentBlendOp", AlphaBlendMode.LERP_ALPHA, AlphaBlendMode) # BeamNG's editor writes "None" explicitly when not translucent
         zwrite = _Bool("translucentZWrite", False)
         recv_shadows = _Bool("translucentRecvShadows", False)
 

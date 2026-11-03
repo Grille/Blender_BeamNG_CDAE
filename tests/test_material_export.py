@@ -342,7 +342,7 @@ class MaterialExportTest(unittest.TestCase):
             "doubleSided": True, "invertBackFaceNormals": True,
             "castShadows": False,
             "subSurface": True, "subSurfaceIntensity": 0.3,
-            "translucent": True, "translucentBlendOp": "LerpAlpha", "translucentZWrite": True,
+            "translucent": True, "translucentZWrite": True,  # LerpAlpha is the file default
             "cubemap": "global_cubemap",
         })
 

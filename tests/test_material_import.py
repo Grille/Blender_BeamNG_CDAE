@@ -70,7 +70,7 @@ CANONICAL: SDict = {
     "doubleSided": True, "invertBackFaceNormals": True,
     "castShadows": False,
     "subSurface": True, "subSurfaceIntensity": 0.25,
-    "translucent": True, "translucentBlendOp": "LerpAlpha", "translucentZWrite": True,
+    "translucent": True, "translucentBlendOp": "PreMulAlpha", "translucentZWrite": True,
     "cubemap": "global_cubemap",
     "Stages": [
         {
@@ -190,6 +190,17 @@ class MaterialImportTest(unittest.TestCase):
         stage["colorMap"] = stage.pop("baseColorMap")
         stage["diffuseColor"] = stage.pop("baseColorFactor")
         self.assertEqual(export_material(import_material(legacy)), CANONICAL_10)
+
+
+    def test_translucent_default_blend_op(self):
+        for blend_op, expected in ((None, True), ("LerpAlpha", True), ("None", False)):
+            with self.subTest(blend_op):
+                raw: SDict = {"name": "m", "version": 1.5, "translucent": True}
+                if blend_op is not None: raw["translucentBlendOp"] = blend_op
+                mat = export_material(import_material(raw))
+                self.assertEqual(mat.get("translucent", False), expected)
+                self.assertNotIn("translucentBlendOp", mat)
+                cleanup()
 
 
     def test_model_defaults(self):
