@@ -275,6 +275,25 @@ class BaseShaderNode(ShaderNodeCustomGroup):
 
 
 
+class ImageType(StrEnum):
+    COLOR_RGBA = "Color RGBA"
+    COLOR_RGB = "Color RGB"
+    NORMAL = "Normal"
+    DATA = "Data"
+
+
+
+class BeamImageTexConverter(BaseShaderNode):
+    bl_idname = f"{SHADER_NODE_PREFIX}TexImgConverter"
+    bl_label = "BNG Image Converter"
+    #bl_icon = 'TEXTURE'
+
+    ng_color_tag = GroupColorTag.CONVERTER
+
+    _updating = False
+
+
+
 class BeamImageTex(BaseShaderNode):
 
     bl_idname = f"{SHADER_NODE_PREFIX}TexImg"

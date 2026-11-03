@@ -172,6 +172,7 @@ class _PSocketItem(Protocol):
 
 
 class NodeSignature(tuple[_NodeSignatureSocket, ...]):
+    __slots__ = ()
 
     class IO(NamedTuple):
         inputs: 'NodeSignature'
