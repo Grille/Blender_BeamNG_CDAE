@@ -313,12 +313,13 @@ class MaterialParser:
 
 
     def _get_image(self, map: str) -> bpy.types.Image:
+        """BNG nodes take every image as Non-Color and convert internally, reused images (e.g. from a converted Principled tree) are switched too."""
 
         image = bpy.data.images.get(map)
-        if image is not None: return image
+        if image is None:
+            image = bpy.data.images.new(map, 1, 1)
+            image.source = 'FILE'
+            image.filepath = os.path.join(self.base_dir, map) if self.base_dir and not os.path.isabs(map) else map
 
-        image = bpy.data.images.new(map, 1, 1)
-        image.source = 'FILE'
-        image.filepath = os.path.join(self.base_dir, map) if self.base_dir and not os.path.isabs(map) else map
         not_none(image.colorspace_settings).name = ColorSpace.NON_COLOR.value # pyright: ignore[reportAttributeAccessIssue]
         return image

@@ -99,6 +99,7 @@ class MaterialConvertTest(unittest.TestCase):
         self.assertEqual(stage["roughnessMap"], "orm.png")
         self.assertEqual(stage["normalMap"], "normal.png")
         self.assertEqual(stage["normalMapStrength"], 0.5)
+        for image in bpy.data.images: self.assertEqual(not_none(image.colorspace_settings).name, "Non-Color", image.name)
 
 
     def test_principled_emission(self):

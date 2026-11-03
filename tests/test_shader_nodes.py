@@ -4,7 +4,7 @@ import bpy
 
 from grille_cdae.common import *
 from grille_cdae.enums import *
-from grille_cdae.blender.shader_nodes import ShaderNodeRegistry, BaseShaderNode, BeamRGBAMath, BeamImageTex
+from grille_cdae.blender.shader_nodes import ShaderNodeRegistry, BaseShaderNode, BeamRGBAMath, BeamImageTex, BeamBSDF15
 
 import grille_cdae.addon as addon
 
@@ -69,3 +69,18 @@ class ShaderNodesTest(unittest.TestCase):
         node.image = bpy.data.images.new("tex.png", 4, 4)
         self.build(node)
         self.assertIn("tex.png", not_none(node.node_tree).name)
+
+
+    def test_bsdf15_validates_image_colorspace(self):
+        node = self.new(BeamBSDF15)
+        image_node = cast(bpy.types.ShaderNodeTexImage, self.tree.nodes.new("ShaderNodeTexImage"))
+        image_node.image = image = bpy.data.images.new("albedo.png", 4, 4)
+        self.tree.links.new(image_node.outputs["Color"], node.inputs[BeamBSDF15.Sockets.BASE_COLOR_MAP])
+
+        not_none(image.colorspace_settings).name = "sRGB"
+        node.update()
+        self.assertEqual(node.runtime.messages, [f"- {BeamBSDF15.Sockets.BASE_COLOR_MAP.value}:", "Non-Color Expected"])
+
+        not_none(image.colorspace_settings).name = "Non-Color"
+        node.update()
+        self.assertEqual(node.runtime.messages, [])

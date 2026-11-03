@@ -1321,17 +1321,18 @@ class BeamBSDF15(BaseShaderNode):
     bl_nclass = "SHADER"
     bl_width_default = 240
     ng_color_tag = GroupColorTag.SHADER
-    ng_version_mayor = 2
+    ng_version_mayor = 3
 
- 
+
     def update(self):
         messages = self.runtime.messages
         messages.clear()
-        nlv = NodeLayoutValidator(self)
 
-        if not nlv.assert_image_colorspace(SocketName.BaseColor, ColorSpace.NON_COLOR):
-            messages.append(f"- {SocketName.BaseColor.value}:")
-            messages.append(f"{ColorSpace.NON_COLOR.value} Expected")
+        LS = BeamBSDF15.Sockets
+        for socket in (LS.BASE_COLOR_MAP, LS.METALLIC_MAP, LS.ROUGHNESS_MAP, LS.OPACITY_MAP, LS.AO_MAP, LS.EMISSIVE_MAP, LS.CC_MAP):
+            if not NodeLayoutValidator(self).assert_image_colorspace(socket, ColorSpace.NON_COLOR):
+                messages.append(f"- {socket.value}:")
+                messages.append(f"{ColorSpace.NON_COLOR.value} Expected")
 
 
     class Sockets(StrEnum):
@@ -1428,7 +1429,10 @@ class BeamBSDF15(BaseShaderNode):
 
         normal = ngb.nc.node(BeamInvertBackfaceNormal, ngb.nc.node(BeamDetailNormal, normal, detail_n), closure[SocketName.InvertBackfaceNormals])
 
-        c = c_m * c_f * detail_c * palette_c
+        # images are Non-Color, 1.5 works in linear, so color maps are decoded before meeting the linear factors
+        def srgb_to_linear(map: LinkBuilderBase): return ngb.nc.node(bpy.types.ShaderNodeGamma, map, 2.2)
+
+        c = srgb_to_linear(c_m) * c_f * detail_c * palette_c
         c = c.mix(c * ic, ic_enabled)
         c = c.mix(c * vc, vc_enabled)
         c = 0 | c & 1
@@ -1439,7 +1443,7 @@ class BeamBSDF15(BaseShaderNode):
         r = r_m * r_f * detail_r * palette_r
         ao = ao_m * detail_ao
 
-        e = e_m * e_f
+        e = srgb_to_linear(e_m) * e_f
         e = e.mix(e * e_i, e_i > -0.1)
         e = e.mix(e * ic, ie_enabled)
         e = e.mix(e * vc, ve_enabled)
