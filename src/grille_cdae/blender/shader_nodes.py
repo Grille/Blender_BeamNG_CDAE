@@ -1321,7 +1321,7 @@ class BeamBSDF15(BaseShaderNode):
     bl_nclass = "SHADER"
     bl_width_default = 240
     ng_color_tag = GroupColorTag.SHADER
-    ng_version_mayor = 3
+    ng_version_mayor = 2
 
 
     def update(self):
@@ -1429,10 +1429,8 @@ class BeamBSDF15(BaseShaderNode):
 
         normal = ngb.nc.node(BeamInvertBackfaceNormal, ngb.nc.node(BeamDetailNormal, normal, detail_n), closure[SocketName.InvertBackfaceNormals])
 
-        # images are Non-Color, 1.5 works in linear, so color maps are decoded before meeting the linear factors
-        def srgb_to_linear(map: LinkBuilderBase): return ngb.nc.node(bpy.types.ShaderNodeGamma, map, 2.2)
-
-        c = srgb_to_linear(c_m) * c_f * detail_c * palette_c
+        # 1.5 color textures hold linear data, so the Non-Color images need no conversion
+        c = c_m * c_f * detail_c * palette_c
         c = c.mix(c * ic, ic_enabled)
         c = c.mix(c * vc, vc_enabled)
         c = 0 | c & 1
@@ -1443,7 +1441,7 @@ class BeamBSDF15(BaseShaderNode):
         r = r_m * r_f * detail_r * palette_r
         ao = ao_m * detail_ao
 
-        e = srgb_to_linear(e_m) * e_f
+        e = e_m * e_f
         e = e.mix(e * e_i, e_i > -0.1)
         e = e.mix(e * ic, ie_enabled)
         e = e.mix(e * vc, ve_enabled)
