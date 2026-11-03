@@ -324,7 +324,6 @@ class MaterialExportTest(unittest.TestCase):
         self.assertNotIn("invertBackFaceNormals", self.build())
 
 
-    @unittest.skip("BeamBSDFCollision has no output socket yet")
     def test_collision(self):
         self.tree.nodes.remove(self.mat_node)
         collision = self.node(BeamBSDFCollision.bl_idname)
