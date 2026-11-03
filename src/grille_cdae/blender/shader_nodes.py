@@ -286,11 +286,39 @@ class ImageType(StrEnum):
 class BeamImageTexConverter(BaseShaderNode):
     bl_idname = f"{SHADER_NODE_PREFIX}TexImgConverter"
     bl_label = "BNG Image Converter"
-    #bl_icon = 'TEXTURE'
+    ng_color_tag = GroupColorTag.TEXTURE
 
-    ng_color_tag = GroupColorTag.CONVERTER
 
-    _updating = False
+    class Sockets(StrEnum):
+        COLOR = SocketName.Color
+        ALPHA = SocketName.Alpha
+        STRENGTH = SocketName.Strength
+        COLOR_RGBA = ImageType.COLOR_RGBA
+        COLOR_RGB = ImageType.COLOR_RGB
+        NORMAL = ImageType.NORMAL
+        DATA = ImageType.DATA
+
+
+    def create_node_group(self, ngb):
+        LS = BeamImageTexConverter.Sockets
+
+        in_color = ngb.input(_COLOR, LS.COLOR)
+        in_alpha = ngb.input(_FLOAT, LS.ALPHA, default_value=1)
+        in_strength = ngb.input(_FLOAT_VALUE, LS.STRENGTH, default_value=1)
+
+        out_rgb = ngb.output(_COLOR_TEXTURE, LS.COLOR_RGB)
+        out_rgba = ngb.output(_RGBA_TEXTURE, LS.COLOR_RGBA)
+        out_normal = ngb.output(_NORMAL_TEXTURE, LS.NORMAL)
+        out_data = ngb.output(_FLOAT_TEXTURE, LS.DATA)
+
+        in_color >> out_rgb
+        ngb.RGBA_combine(in_color, in_alpha) >> out_rgba
+        ngb.nc.node(types.ShaderNodeSeparateXYZ, in_color)[0] >> out_data
+
+        normal_map = ngb.nc.node(bpy.types.ShaderNodeNormalMap)
+        in_strength >> normal_map[SocketName.Strength]
+        in_color >> normal_map[SocketName.Color]
+        normal_map[SocketName.Normal] >> out_normal
 
 
 
@@ -298,22 +326,19 @@ class BeamImageTex(BaseShaderNode):
 
     bl_idname = f"{SHADER_NODE_PREFIX}TexImg"
     bl_label = "BNG Image Texture"
-    #bl_icon = 'TEXTURE'
-
     bl_width_default = 240
     ng_color_tag = GroupColorTag.TEXTURE
 
-    _updating = False
+ 
+    class Sockets(StrEnum):
+        STRENGTH = SocketName.Strength
+        UV = SocketName.Vector
+        COLOR_RGBA = ImageType.COLOR_RGBA
+        COLOR_RGB = ImageType.COLOR_RGB
+        NORMAL = ImageType.NORMAL
+        DATA = ImageType.DATA
 
 
-    class ImageType(StrEnum):
-        COLOR_RGBA = "Color RGBA"
-        COLOR_RGB = "Color RGB"
-        NORMAL = "Normal"
-        DATA = "Data"
-
-
-    # Custom properties
     image: bpy.types.Image | None
     image_type: ImageType
 
@@ -325,30 +350,34 @@ class BeamImageTex(BaseShaderNode):
 
     def create_node_group(self, ngb):
 
-        LS = BeamImageTex.ImageType
+        LS = BeamImageTex.Sockets
+        CS = BeamImageTexConverter.Sockets
 
         in_strength = ngb.input(_FLOAT_VALUE, SocketName.Strength)
         in_uv = ngb.input(_UV_NODE, SocketName.Vector)
-        out_color = ngb.output(_COLOR_TEXTURE, LS.COLOR_RGB)
+
+        out_rgb = ngb.output(_COLOR_TEXTURE, LS.COLOR_RGB)
         out_rgba = ngb.output(_RGBA_TEXTURE, LS.COLOR_RGBA)
-        out_normal = ngb.output(_NORMAL_MIX, LS.NORMAL)
+        out_normal = ngb.output(_NORMAL_TEXTURE, LS.NORMAL)
         out_data = ngb.output(_FLOAT_TEXTURE, LS.DATA)
 
         imgtex = ngb.nc.node(bpy.types.ShaderNodeTexImage, image = self.image)
-        normal_map = ngb.nc.node(bpy.types.ShaderNodeNormalMap)
+        converter = ngb.nc.node(BeamImageTexConverter)
 
+        imgtex[SocketName.Color] >> converter[CS.COLOR]
+        imgtex[SocketName.Alpha] >> converter[CS.ALPHA]
+        in_strength >> converter[CS.STRENGTH]
         in_uv >> imgtex[SocketName.Vector]
 
-        imgtex[SocketName.Color] >> out_color
-
-        in_strength >> normal_map[SocketName.Strength]
-        imgtex[SocketName.Color] >> normal_map[SocketName.Color]
-        normal_map[SocketName.Normal] >> out_normal
+        converter[CS.COLOR_RGB] >> out_rgb
+        converter[CS.COLOR_RGBA] >> out_rgba
+        converter[CS.NORMAL] >> out_normal
+        converter[CS.DATA] >> out_data
 
 
     def draw_buttons(self, context, layout):
         super().draw_buttons(context, layout)
-        layout.template_ID(self, "image_ptr", open="image.open", new="image.new")
+        layout.template_ID(self, "image", open="image.open", new="image.new")
         #layout.prop(self, "image_type", text="Type")
         #self.check_image_type(layout)
         #layout.prop(self, "uv_map")
@@ -357,7 +386,7 @@ class BeamImageTex(BaseShaderNode):
 
 BeamImageTex.annotate(
     image = props.PointerProperty(name="Image", type=bpy.types.Image, update=_BaseShaderNode_init),
-    image_type = BeamImageTex.ImageType.to_bpy_enum("Type", default=BeamImageTex.ImageType.COLOR_RGBA, update=_BaseShaderNode_init)
+    image_type = ImageType.to_bpy_enum("Type", default=ImageType.COLOR_RGBA, update=_BaseShaderNode_init)
 )
 
 
@@ -1707,6 +1736,7 @@ class ShaderNodeRegistry:
         BeamDetailNormal,
         BeamInvertBackfaceNormal,
         BeamImageTex,
+        BeamImageTexConverter,
         BeamRGBA,
         BeamRGBAMix,
         BeamRGBADefault,
