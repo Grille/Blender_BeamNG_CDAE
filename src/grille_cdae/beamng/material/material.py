@@ -363,10 +363,23 @@ class Material(_BaseDict):
 
     class _Translucent(_BaseDict):
         __slots__=()
+        _BLEND_OP = "translucentBlendOp"
         enabled = _Bool("translucent", False)
-        blend_mode = _Str("translucentBlendOp", AlphaBlendMode.LERP_ALPHA, AlphaBlendMode) # BeamNG's editor writes "None" explicitly when not translucent
+        blend_mode = _Str(_BLEND_OP, AlphaBlendMode.LERP_ALPHA, AlphaBlendMode) # BeamNG's editor writes "None" explicitly when not translucent
         zwrite = _Bool("translucentZWrite", False)
         recv_shadows = _Bool("translucentRecvShadows", False)
+
+        @property
+        def mode(self) -> AlphaBlendMode:
+            """translucent + blend op as one value, like BeamNG's editor dropdown: NONE when not translucent (or blend op "None")."""
+            return self.blend_mode if self.enabled else AlphaBlendMode.NONE
+
+        @mode.setter
+        def mode(self, value: AlphaBlendMode):
+            # blend op only with translucent, but then always explicit, the default LerpAlpha too
+            translucent = value != AlphaBlendMode.NONE
+            self.enabled = translucent
+            self[self._BLEND_OP] = str(value) if translucent else None
 
     class _Subsurface(_BaseDict):
         __slots__=()

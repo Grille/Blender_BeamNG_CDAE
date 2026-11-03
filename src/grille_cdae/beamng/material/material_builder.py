@@ -163,9 +163,8 @@ class MaterialBuilder:
         mat.subsurface.enabled = subsurface > 0
         if subsurface > 0: mat.subsurface.intensity = subsurface
 
-        if node.blend_mode != AlphaBlendMode.NONE:
-            mat.translucent.enabled = True
-            mat.translucent.blend_mode = AlphaBlendMode(node.blend_mode)
+        mat.translucent.mode = AlphaBlendMode(node.blend_mode)
+        if mat.translucent.mode != AlphaBlendMode.NONE:
             mat.translucent.zwrite = node.blend_z
             mat.translucent.recv_shadows = node.blend_rshadows
 

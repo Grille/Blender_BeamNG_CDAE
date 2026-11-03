@@ -5,6 +5,7 @@ import tempfile
 import unittest
 
 from grille_cdae.common import *
+from grille_cdae.enums import AlphaBlendMode
 from grille_cdae.beamng.material import Material, MaterialLibary
 from grille_cdae.beamng.material.material import MaterialStage
 
@@ -70,6 +71,23 @@ class MaterialDictTest(unittest.TestCase):
     def test_primary_key_wins_over_alias(self):
         stage = MaterialStage({"baseColorMap": "new.png", "colorMap": "old.png"})
         self.assertEqual(stage.color.map, "new.png")
+
+
+    def test_translucent_mode(self):
+        raw: SDict = {}
+        translucent = Material(raw).translucent
+        raw.pop("Stages")
+        self.assertEqual(translucent.mode, AlphaBlendMode.NONE)
+
+        translucent.mode = AlphaBlendMode.LERP_ALPHA  # default blend op, still written
+        self.assertEqual(raw, {"translucent": True, "translucentBlendOp": "LerpAlpha"})
+
+        translucent.mode = AlphaBlendMode.NONE
+        self.assertEqual(raw, {})
+
+        self.assertEqual(Material({"translucent": True}).translucent.mode, AlphaBlendMode.LERP_ALPHA)
+        self.assertEqual(Material({"translucent": True, "translucentBlendOp": "None"}).translucent.mode, AlphaBlendMode.NONE)
+        self.assertEqual(Material({"translucentBlendOp": "Add"}).translucent.mode, AlphaBlendMode.NONE)
 
 
     def test_unknown_attributes_raise(self):

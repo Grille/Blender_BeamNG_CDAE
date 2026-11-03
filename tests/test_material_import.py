@@ -193,13 +193,13 @@ class MaterialImportTest(unittest.TestCase):
 
 
     def test_translucent_default_blend_op(self):
-        for blend_op, expected in ((None, True), ("LerpAlpha", True), ("None", False)):
+        for blend_op, expected in ((None, "LerpAlpha"), ("LerpAlpha", "LerpAlpha"), ("None", None)):
             with self.subTest(blend_op):
                 raw: SDict = {"name": "m", "version": 1.5, "translucent": True}
                 if blend_op is not None: raw["translucentBlendOp"] = blend_op
                 mat = export_material(import_material(raw))
-                self.assertEqual(mat.get("translucent", False), expected)
-                self.assertNotIn("translucentBlendOp", mat)
+                self.assertEqual(mat.get("translucent"), True if expected else None)
+                self.assertEqual(mat.get("translucentBlendOp"), expected)
                 cleanup()
 
 

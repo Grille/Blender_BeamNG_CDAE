@@ -159,11 +159,11 @@ class MaterialParser:
             _set_socket(node, LS.CLIP, True)
             _set_socket(node, LS.CLIP_T, 0.5)
 
-        if src.translucent.enabled:
+        if src.translucent.mode != AlphaBlendMode.NONE:
             try:
-                node.blend_mode = src.translucent.blend_mode
+                node.blend_mode = src.translucent.mode
             except TypeError:
-                self._issue(node.name, f"Alpha blend mode '{src.translucent.blend_mode}' is not supported.")
+                self._issue(node.name, f"Alpha blend mode '{src.translucent.mode}' is not supported.")
             node.blend_z = src.translucent.zwrite
             node.blend_rshadows = src.translucent.recv_shadows
 
