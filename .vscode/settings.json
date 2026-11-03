@@ -1,5 +1,20 @@
 {
     "python.analysis.autoSearchPaths": false,
+    // bpy/ and modules/ resolve through extraPaths; excluding them stops Pylance
+    // from treating the 9 MB of fake-bpy-module stubs as project source.
+    "python.analysis.exclude": [
+        "**/__pycache__",
+        "**/.git",
+        "bpy",
+        "modules",
+        "config",
+    ],
+    "python.analysis.diagnosticMode": "openFilesOnly",
+    "python.analysis.packageIndexDepths": [
+        { "name": "bpy", "depth": 2 },
+    ],
+    // run Pylance in a standalone Node with a larger heap instead of VS Code's
+    "python.analysis.nodeExecutable": "auto",
     "python.analysis.extraPaths": [
         "${workspaceFolder}/bpy",
         "${workspaceFolder}/modules",
