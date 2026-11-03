@@ -92,7 +92,9 @@ COLOR_GRAY = (0.5,0.5,0.5,1)
 COLOR_NULL = (0,0,0,0)
 COLOR_NULL_HALF = (0.5,0.5,0.5,0.5)
 COLOR_RED = (1,0,0,1)
+COLOR_MAGENTA = (1,0,1,1)
 
+_BOOL = _SCI.BOOL
 _BOOL_VALUE = _SCI(SocketType.Bool, VALUE_SOCKET_SHAPE, False)
 _MENU = _SCI(SocketType.Menu, VALUE_SOCKET_SHAPE, False)
 _FLOAT = _SCI.FACTOR
@@ -702,15 +704,23 @@ class BeamDetailNormal(BaseShaderNode):
 class BeamBSDFCollision(BaseShaderNode):
 
     bl_idname = f"{SHADER_NODE_PREFIX}BSDFCollision"
-    bl_label = "BNG Collision BSDF"
+    bl_label = "BNGS Collision"
     bl_icon = 'MOD_PHYSICS'
     bl_nclass = "SHADER"
     bl_width_default = 200
     ng_color_tag = GroupColorTag.SHADER
 
 
-    def create_node_group(self, ngb: NodeGroupBuilder):
-        pass
+    def create_node_group(self, ngb):
+        display_enabled = ngb.input(_BOOL, "Display", default_value=True)
+        display_color = ngb.input(_COLOR, "Color", default_value=COLOR_MAGENTA)
+        output = ngb.output(SocketType.Shader, SocketName.Shader)
+
+        bsdf = ngb.nc.node(types.ShaderNodeBsdfPrincipled)
+
+        display_enabled >> bsdf[SocketName.Alpha]
+        display_color >> bsdf[SocketName.BaseColor]
+        bsdf >> output
 
 
 
