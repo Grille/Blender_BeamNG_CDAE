@@ -77,17 +77,20 @@ class MaterialDictTest(unittest.TestCase):
         raw: SDict = {}
         translucent = Material(raw).translucent
         raw.pop("Stages")
-        self.assertEqual(translucent.mode, AlphaBlendMode.NONE)
+        self.assertEqual(translucent.blend_mode, AlphaBlendMode.NONE)
 
-        translucent.mode = AlphaBlendMode.LERP_ALPHA  # default blend op, still written
-        self.assertEqual(raw, {"translucent": True, "translucentBlendOp": "LerpAlpha"})
+        translucent.blend_mode = AlphaBlendMode.LERP_ALPHA  # default blend op, omitted
+        self.assertEqual(raw, {"translucent": True})
 
-        translucent.mode = AlphaBlendMode.NONE
+        translucent.blend_mode = AlphaBlendMode.ADD
+        self.assertEqual(raw, {"translucent": True, "translucentBlendOp": "Add"})
+
+        translucent.blend_mode = AlphaBlendMode.NONE
         self.assertEqual(raw, {})
 
-        self.assertEqual(Material({"translucent": True}).translucent.mode, AlphaBlendMode.LERP_ALPHA)
-        self.assertEqual(Material({"translucent": True, "translucentBlendOp": "None"}).translucent.mode, AlphaBlendMode.NONE)
-        self.assertEqual(Material({"translucentBlendOp": "Add"}).translucent.mode, AlphaBlendMode.NONE)
+        self.assertEqual(Material({"translucent": True}).translucent.blend_mode, AlphaBlendMode.LERP_ALPHA)
+        self.assertEqual(Material({"translucent": True, "translucentBlendOp": "None"}).translucent.blend_mode, AlphaBlendMode.NONE)
+        self.assertEqual(Material({"translucentBlendOp": "Add"}).translucent.blend_mode, AlphaBlendMode.NONE)
 
 
     def test_unknown_attributes_raise(self):
@@ -196,7 +199,7 @@ class MaterialSampleFilesTest(unittest.TestCase):
                         if raw.get("class") in ("Material", "material"):
                             mat = not_none(lib.get_material(name))
                             mat.version
-                            mat.translucent.blend_mode
+                            mat.translucent._blend_mode
                             for stage in mat.stages:
                                 stage.color.factor
                                 stage.detail.scale

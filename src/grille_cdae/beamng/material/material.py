@@ -92,11 +92,12 @@ class _KeyPtrDict(_BaseDict):
 
 
 class DictProperty[T=object|None]:
-    __slots__ = "key", "default"
+    __slots__ = "key", "default", "omit"
 
-    def __init__(self, key: str, default: T):
+    def __init__(self, key: str, default: T, omit: bool = True):
         self.key = key
         self.default = default
+        self.omit = omit
 
 
     def _convert_in(self, value: T) -> object: 
@@ -114,7 +115,7 @@ class DictProperty[T=object|None]:
 
 
     def __set__(self, instance: _BaseDict, value: T | None):
-        if value is None or value == self.default: 
+        if value is None or (value == self.default and self.omit): 
             del instance[self.key]
         else:
             instance[self.key] = self._convert_in(value)
@@ -132,7 +133,7 @@ class _Converter[T](DictProperty[T]):
 
 class _NStr(DictProperty[_nstr]):
     __slots__=()
-    def __init__(self, key: str, default = None): super().__init__(key, default)
+    def __init__(self, key: str, default: _nstr = None): super().__init__(key, default)
 
 
 
@@ -363,23 +364,18 @@ class Material(_BaseDict):
 
     class _Translucent(_BaseDict):
         __slots__=()
-        _BLEND_OP = "translucentBlendOp"
-        enabled = _Bool("translucent", False)
-        blend_mode = _Str(_BLEND_OP, AlphaBlendMode.LERP_ALPHA, AlphaBlendMode) # BeamNG's editor writes "None" explicitly when not translucent
+        _enabled: _Bool = _Bool("translucent", False)
+        _blend_mode: _Str[AlphaBlendMode] = _Str("translucentBlendOp", AlphaBlendMode.LERP_ALPHA, AlphaBlendMode)
         zwrite = _Bool("translucentZWrite", False)
         recv_shadows = _Bool("translucentRecvShadows", False)
 
         @property
-        def mode(self) -> AlphaBlendMode:
-            """translucent + blend op as one value, like BeamNG's editor dropdown: NONE when not translucent (or blend op "None")."""
-            return self.blend_mode if self.enabled else AlphaBlendMode.NONE
-
-        @mode.setter
-        def mode(self, value: AlphaBlendMode):
-            # blend op only with translucent, but then always explicit, the default LerpAlpha too
+        def blend_mode(self): return self._blend_mode if self._enabled else AlphaBlendMode.NONE
+        @blend_mode.setter
+        def blend_mode(self, value: AlphaBlendMode):
             translucent = value != AlphaBlendMode.NONE
-            self.enabled = translucent
-            self[self._BLEND_OP] = str(value) if translucent else None
+            self._enabled = translucent
+            self._blend_mode = value if translucent else None
 
     class _Subsurface(_BaseDict):
         __slots__=()
