@@ -99,6 +99,7 @@ _BOOL_VALUE = _SCI(SocketType.Bool, VALUE_SOCKET_SHAPE, False)
 _MENU = _SCI(SocketType.Menu, VALUE_SOCKET_SHAPE, False)
 _FLOAT = _SCI.FACTOR
 _FLOAT_VALUE = _SCI(SocketType.Float, VALUE_SOCKET_SHAPE, False, default_value=1, **_SCI.FACTOR.kwargs)
+_FLOAT_ANY_VALUE = _SCI(SocketType.Float, VALUE_SOCKET_SHAPE, False, default_value=0)
 _FLOAT_TEXTURE = _SCI(SocketType.Float, TEXTURE_SOCKET_SHAPE, True, default_value=1)
 _FLOAT_DISPLAY = _SCI(SocketType.Float, DISPLAY_SOCKET_SHAPE, False, default_value=1)
 _COLOR = _SCI.COLOR
@@ -530,22 +531,32 @@ class BeamUVData(BaseShaderNode):
 
 class BeamUVAnimation(BaseShaderNode):
 
+    """
+    Torque3D texture animation (ProcessedShaderMaterial::_setTextureTransforms, GarageGames version BeamNG forked from).
+    One toggle per animFlags bit, Wave modifies scroll, rotation and scale, Scale also shrinks U to one frame of an image sequence.
+    """
+
     bl_idname = f"{SHADER_NODE_PREFIX}UVAnimation"
     bl_label = "BNG UV Animation"
     ng_color_tag = GroupColorTag.VECTOR
+    ng_version_mayor = 1
 
 
     class Sockets(StrEnum):
         UV = "UV"
         ANIMATION = "Animation"
+        SCALE = "Scale"
+        ROTATE = "Rotate"
         ROTATION_PIVOT_OFFSET = "Rotation Pivot Offset"
         ROTATION_SPEED = "Rotation Speed"
+        SCROLL = "Scroll"
         SCROLL_FACTOR = "Scroll Factor"
         SCROLL_SPEED = "Scroll Speed"
+        WAVE = "Wave"
         WAVE_TYPE = "Wave Type"
-        WAVE_SCALE = "Wave Scale"
         WAVE_AMPLITUDE = "Wave Amplitude"
         WAVE_FREQUENCY = "Wave Frequency"
+        SEQUENCE = "Sequence"
         FRAMES_SEC = "Frames/Sec"
         FRAMES = "Frames"
         TIME_SOURCE = "Time"
@@ -553,7 +564,6 @@ class BeamUVAnimation(BaseShaderNode):
 
 
     class WaveType(StrEnum):
-        NONE = "None"
         SIN = "Sin"
         SQUARE = "Square"
         TRIANGLE = "Triangle"
@@ -566,39 +576,88 @@ class BeamUVAnimation(BaseShaderNode):
 
     def create_node_group(self, ngb: NodeGroupBuilder):
 
+        def op(operation: Operation, value: LinkSource): return ngb.nc.math(operation, value)
+        def seperate_xyz(src: LinkSource): return ngb.nc.node(bpy.types.ShaderNodeSeparateXYZ, src)
+        def combine_xyz(x: LinkSource, y: LinkSource, z: LinkSource = 0.0): return ngb.nc.node(bpy.types.ShaderNodeCombineXYZ, x, y, z)
+
         LS = BeamUVAnimation.Sockets
+        WT = BeamUVAnimation.WaveType
+        TAU = 6.283185307179586
+        CENTER = (0.5, 0.5, 0.0)
 
         time_source_input = ngb.input(_MENU, LS.TIME_SOURCE)
-        time_source_value = ngb.input(_FLOAT, LS.SECONDS)
-        
-        ngb.output(_BUNDLE_NODE, LS.ANIMATION)
+        time_source_value = ngb.input(_FLOAT_ANY_VALUE, LS.SECONDS)
+        scale = ngb.input(_BOOL_VALUE, LS.SCALE)
+
+        output = ngb.output(_BUNDLE_NODE, LS.ANIMATION)
 
         ngb.panel("Rotation")
-        ngb.input(_VEC2_VALUE, LS.ROTATION_PIVOT_OFFSET)
-        rot_speed = ngb.input(_FLOAT_VALUE, LS.ROTATION_SPEED, 0)
+        rotate = ngb.input(_BOOL_VALUE, LS.ROTATE)
+        rot_pivot = ngb.input(_VEC2_VALUE, LS.ROTATION_PIVOT_OFFSET)
+        rot_speed = ngb.input(_FLOAT_ANY_VALUE, LS.ROTATION_SPEED)
 
         ngb.panel("Scroll")
-        ngb.input(_VEC2_VALUE, LS.SCROLL_FACTOR)
-        ngb.input(_FLOAT_VALUE, LS.SCROLL_SPEED, 0)
+        scroll = ngb.input(_BOOL_VALUE, LS.SCROLL)
+        scroll_dir = ngb.input(_VEC2_VALUE, LS.SCROLL_FACTOR)
+        scroll_speed = ngb.input(_FLOAT_ANY_VALUE, LS.SCROLL_SPEED)
 
         ngb.panel("Wave")
-        menu_socket = ngb.input(_MENU, LS.WAVE_TYPE)
-        ngb.input(_BOOL_VALUE, LS.WAVE_SCALE)
-        ngb.input(_FLOAT_VALUE, LS.WAVE_AMPLITUDE, 0)
-        ngb.input(_FLOAT_VALUE, LS.WAVE_FREQUENCY, 0)
+        wave = ngb.input(_BOOL_VALUE, LS.WAVE)
+        wave_type = ngb.input(_MENU, LS.WAVE_TYPE)
+        wave_amp = ngb.input(_FLOAT_ANY_VALUE, LS.WAVE_AMPLITUDE)
+        wave_freq = ngb.input(_FLOAT_ANY_VALUE, LS.WAVE_FREQUENCY)
 
         ngb.panel("Image Sequence")
-        ngb.input(_FLOAT_VALUE, LS.FRAMES_SEC, 0)
-        ngb.input(_FLOAT_VALUE, LS.FRAMES, 0)
+        sequence = ngb.input(_BOOL_VALUE, LS.SEQUENCE)
+        fps = ngb.input(_FLOAT_ANY_VALUE, LS.FRAMES_SEC)
+        frames = ngb.input(_FLOAT_ANY_VALUE, LS.FRAMES)
 
         seconds = ngb.nc.menu_switch(SocketType.Float, *BeamUVAnimation.TimeSource, menu=time_source_input)
         ngb.nc.node(bpy.types.GeometryNodeInputSceneTime)[LS.SECONDS] >> seconds[BeamUVAnimation.TimeSource.SCENE]
         time_source_value >> seconds[BeamUVAnimation.TimeSource.VALUE]
 
+        # wave offset (_getWaveOffset), phase wrapped for precision, all wave types are periodic
+        phase = op(Operation.FRACT, wave_freq * seconds)
+        phase_4 = phase * 4
+        waves = ngb.nc.menu_switch(SocketType.Float, *WT, menu=wave_type)
+        op(Operation.SINE, phase * TAU) >> waves[WT.SIN]
+        phase_4.mix(2 - phase_4, phase > 0.25).mix(phase_4 - 4, phase > 0.75) >> waves[WT.TRIANGLE]
+        ((phase > 0.5) | (phase < 1e-6)) >> waves[WT.SQUARE]
+        wave_offset = waves * wave_amp
 
-        ngb.nc.menu_switch(SocketType.Float, *BeamUVAnimation.WaveType, menu=menu_socket)
+        # texture matrix in torque UV space, 2x3 affine as columns: u' = col_u * u + col_v * v + trans
 
-        #sin = ngb.nc.math("SINE", seconds)
+        # scroll (sets the translation)
+        scroll_offset = (scroll_dir * (scroll_speed * seconds)).mix(scroll_dir * wave_offset, wave)
+        trans = scroll_offset * scroll
+
+        # rotation (replaces the matrix, scroll is lost): R * (uv + pivot) + 0.5, R = [cos sin; -sin cos]
+        angle = (rot_speed * seconds).mix(wave_offset * TAU, wave)
+        cos, sin = op(Operation.COSINE, angle), op(Operation.SINE, angle)
+        rot_u = combine_xyz(cos, -sin)
+        rot_v = combine_xyz(sin, cos)
+        pivot = seperate_xyz(rot_pivot)
+        col_u = ngb.nc.mix(rotate, (1.0, 0.0, 0.0), rot_u)
+        col_v = ngb.nc.mix(rotate, (0.0, 1.0, 0.0), rot_v)
+        trans = trans.mix(rot_u * pivot[0] + rot_v * pivot[1] + CENTER, rotate)
+
+        # scale + wave: translation reset to the center, then scaled by |wave| around it
+        w = ngb.nc.abs(wave_offset)
+        wave_scale = scale * wave
+        trans = trans.mix((col_u + col_v) * (w * -0.5) + CENTER, wave_scale)
+        col_u = col_u.mix(col_u * w, wave_scale)
+        col_v = col_v.mix(col_v * w, wave_scale)
+
+        # image sequence: u offset by whole frames, scale shrinks u to one frame
+        segment = 1 / frames
+        col_u = col_u.mix(col_u * segment, sequence * scale)
+        trans = trans + combine_xyz(op(Operation.FLOOR, seconds * fps) * segment * sequence, 0.0)
+
+        # to blender UV space (v flipped on export): u' = a u - b v + (b + c), v' = -d u + e v + (1 - e - f)
+        u, v, t = seperate_xyz(col_u), seperate_xyz(col_v), seperate_xyz(trans)
+        a, d, b, e, c, f = u[0], u[1], v[0], v[1], t[0], t[1]
+        enabled = scroll | rotate | wave | scale | sequence
+        ngb.nc.combine_bundle(UVMATRIX, combine_xyz(a, -b, b + c), combine_xyz(-d, e, 1 - e - f), enabled) >> output
 
 
 

@@ -11,7 +11,7 @@ from grille_cdae.common import *
 from grille_cdae.enums import SocketName
 
 from ...blender.shader_nodes import BaseShaderNode, BeamBSDF15, BeamBSDF15Detail, BeamBDSF10Basic, BeamMaterial, BeamPalette, BeamUVAnimation
-from .material import MaterialVersion
+from .material import AnimationFlags, MaterialVersion
 
 
 
@@ -171,16 +171,33 @@ CONVERT_FIELDS: dict[type, tuple[Field, ...]] = {
 
 _SA = BeamUVAnimation.Sockets
 
-# wave type, flags and sequence segment size are derived in code
-UV_ANIMATION: tuple[Field, ...] = (
-    Value(_SA.ROTATION_SPEED, "animation.rot_speed"),
-    Value(_SA.ROTATION_PIVOT_OFFSET, "animation.rot_pivot_offset", to_vec2),
-    Value(_SA.SCROLL_SPEED, "animation.scroll_speed"),
-    Value(_SA.SCROLL_FACTOR, "animation.scroll_direction", to_vec2),
-    Value(_SA.WAVE_AMPLITUDE, "animation.wave_amp"),
-    Value(_SA.WAVE_FREQUENCY, "animation.wave_freq"),
-    Value(_SA.FRAMES_SEC, "animation.seq_frames_per_sec"),
-)
+# animFlags bit -> its toggle socket
+UV_ANIMATION_FLAGS: dict[AnimationFlags, str] = {
+    AnimationFlags.SCROLL: _SA.SCROLL,
+    AnimationFlags.ROTATION: _SA.ROTATE,
+    AnimationFlags.WAVE: _SA.WAVE,
+    AnimationFlags.SCALE: _SA.SCALE,
+    AnimationFlags.SEQUENCE: _SA.SEQUENCE,
+}
+
+# fields per animFlags bit, only exported when the bit is set; wave type and sequence segment size are derived in code
+UV_ANIMATION: dict[AnimationFlags, tuple[Field, ...]] = {
+    AnimationFlags.ROTATION: (
+        Value(_SA.ROTATION_SPEED, "animation.rot_speed"),
+        Value(_SA.ROTATION_PIVOT_OFFSET, "animation.rot_pivot_offset", to_vec2),
+    ),
+    AnimationFlags.SCROLL: (
+        Value(_SA.SCROLL_SPEED, "animation.scroll_speed"),
+        Value(_SA.SCROLL_FACTOR, "animation.scroll_direction", to_vec2),
+    ),
+    AnimationFlags.WAVE: (
+        Value(_SA.WAVE_AMPLITUDE, "animation.wave_amp"),
+        Value(_SA.WAVE_FREQUENCY, "animation.wave_freq"),
+    ),
+    AnimationFlags.SEQUENCE: (
+        Value(_SA.FRAMES_SEC, "animation.seq_frames_per_sec"),
+    ),
+}
 
 
 _SM = BeamMaterial.Sockets

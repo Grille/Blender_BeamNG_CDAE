@@ -303,6 +303,10 @@ class Operation(StrEnum):
     COMPARE = 'COMPARE'
     NORMALIZE = "NORMALIZE"
     ABSOLUTE = "ABSOLUTE"
+    FLOOR = "FLOOR"
+    FRACT = "FRACT"
+    SINE = "SINE"
+    COSINE = "COSINE"
 
     @property
     def neutral_value(self):

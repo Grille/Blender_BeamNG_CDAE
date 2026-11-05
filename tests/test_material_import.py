@@ -192,6 +192,23 @@ class MaterialImportTest(unittest.TestCase):
         self.assertEqual(export_material(import_material(legacy)), CANONICAL_10)
 
 
+    def test_uv_animation_all_flags(self):
+        raw: SDict = {"name": "m", "version": 1.5, "Stages": [{
+            "baseColorMap": "a.png",
+            "animFlags": 31, "scrollDir": [0.25, -0.5], "scrollSpeed": 1.5, "rotSpeed": 0.25, "rotPivotOffset": [-0.25, 0.5],
+            "waveType": "Triangle", "waveFreq": 1.5, "waveAmp": 0.125, "sequenceFramePerSec": 4.0, "sequenceSegmentSize": 0.25,
+        }]}
+        stage = cast(list[SDict], export_material(import_material(raw))["Stages"])[0]
+        self.assertEqual(stage, cast(list[SDict], raw["Stages"])[0])
+
+
+    def test_uv_animation_fractional_segment(self):
+        # segment size isn't always 1 / whole frames
+        raw: SDict = {"name": "m", "version": 1.5, "Stages": [{"baseColorMap": "a.png", "animFlags": 16, "sequenceFramePerSec": 4.0, "sequenceSegmentSize": 0.3}]}
+        stage = cast(list[SDict], export_material(import_material(raw))["Stages"])[0]
+        self.assertAlmostEqual(cast(float, stage["sequenceSegmentSize"]), 0.3, places=5)
+
+
     def test_translucent_default_blend_op(self):
         for blend_op, translucent in ((None, True), ("LerpAlpha", True), ("None", None)):
             with self.subTest(blend_op):

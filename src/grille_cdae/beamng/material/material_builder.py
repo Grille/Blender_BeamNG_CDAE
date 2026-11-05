@@ -11,7 +11,7 @@ from ...blender.shader_nodes import (
     BaseBeamRGBA, BeamMaterial, BeamBSDFCollision, BeamBDSF10Basic, BeamImageTex, BeamImageTexConverter, BeamStageMix, BeamUVData, BeamUVAnimation, ImageType, ReflectionMode
 )
 from .material import *
-from .node_fields import Field, Tex, Value, Bundle, STAGE_FIELDS, STAGE_VERSION, CONVERT_FIELDS, MATERIAL_FIELDS, UV_ANIMATION, to_float, to_srgb, to_vec2
+from .node_fields import Field, Tex, Value, Bundle, STAGE_FIELDS, STAGE_VERSION, CONVERT_FIELDS, MATERIAL_FIELDS, UV_ANIMATION, UV_ANIMATION_FLAGS, to_float, to_srgb, to_vec2
 
 
 
@@ -303,30 +303,27 @@ class MaterialBuilder:
 
         walker = NodeWalker(nodes[0])
         anim_ctx = _Context(nodes[0].name)
-        self._apply_fields(walker, UV_ANIMATION, stage, anim_ctx)
 
         LS = BeamUVAnimation.Sockets
         anim = stage.animation
         flags = AnimationFlags.NONE
 
-        if anim.rot_speed != 0: flags |= AnimationFlags.ROTATION
-        if anim.scroll_speed != 0: flags |= AnimationFlags.SCROLL
+        for flag, socket in UV_ANIMATION_FLAGS.items():
+            if self._read_value(walker, socket, anim_ctx): flags |= flag
+        for flag, fields in UV_ANIMATION.items():
+            if flags & flag: self._apply_fields(walker, fields, stage, anim_ctx)
 
-        wave_value: str = self._read_value(walker, LS.WAVE_TYPE, anim_ctx)
-        try:
-            wave_type = BeamUVAnimation.WaveType(wave_value or BeamUVAnimation.WaveType.NONE)
-        except ValueError:
-            self._issue(anim_ctx.location, f"Unknown wave type '{wave_value}'.")
-            wave_type = BeamUVAnimation.WaveType.NONE
+        if flags & AnimationFlags.WAVE:
+            wave_value: str = self._read_value(walker, LS.WAVE_TYPE, anim_ctx)
+            try:
+                anim.wave_type = AnimationWaveType(wave_value)
+            except ValueError:
+                self._issue(anim_ctx.location, f"Unknown wave type '{wave_value}'.")
 
-        if wave_type != BeamUVAnimation.WaveType.NONE:
-            anim.wave_type = AnimationWaveType(wave_type.value)
-            flags |= AnimationFlags.SCALE if self._read_value(walker, LS.WAVE_SCALE, anim_ctx) else AnimationFlags.WAVE
-
-        frames = to_float(self._read_value(walker, LS.FRAMES, anim_ctx))
-        if anim.seq_frames_per_sec > 0 and frames > 0:
-            anim.seq_segment_size = to_float(1 / frames)
-            flags |= AnimationFlags.SEQUENCE
+        if flags & AnimationFlags.SEQUENCE:
+            frames = to_float(self._read_value(walker, LS.FRAMES, anim_ctx))
+            if frames > 0: anim.seq_segment_size = to_float(1 / frames)
+            else: self._issue(anim_ctx.location, f"'{LS.SEQUENCE.value}' needs more than 0 '{LS.FRAMES.value}'.")
 
         anim.flags = flags
 

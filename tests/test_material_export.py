@@ -284,6 +284,7 @@ class MaterialExportTest(unittest.TestCase):
 
     def test_uv_animation(self):
         anim = self.animated_map(S.BASE_COLOR_MAP)
+        for socket in (A.ROTATE, A.SCROLL, A.WAVE, A.SEQUENCE): anim.inputs[socket].default_value = True
         anim.inputs[A.ROTATION_SPEED].default_value = 0.5
         anim.inputs[A.ROTATION_PIVOT_OFFSET].default_value = (0.5, 0.25)
         anim.inputs[A.SCROLL_SPEED].default_value = 2.0
@@ -309,16 +310,41 @@ class MaterialExportTest(unittest.TestCase):
 
     def test_uv_animation_wave_scale(self):
         anim = self.animated_map(S.BASE_COLOR_MAP)
+        anim.inputs[A.WAVE].default_value = True
+        anim.inputs[A.SCALE].default_value = True
         anim.inputs[A.WAVE_TYPE].default_value = BeamUVAnimation.WaveType.SIN
-        anim.inputs[A.WAVE_SCALE].default_value = True
         stage = self.stage0()
-        self.assertEqual(stage["animFlags"], int(AnimationFlags.SCALE))
+        self.assertEqual(stage["animFlags"], int(AnimationFlags.WAVE | AnimationFlags.SCALE))
         self.assertNotIn("waveType", stage)  # Sin is the default
 
 
+    def test_uv_animation_disabled_parts_not_written(self):
+        anim = self.animated_map(S.BASE_COLOR_MAP)
+        anim.inputs[A.SCROLL].default_value = True
+        anim.inputs[A.SCROLL_SPEED].default_value = 2.0
+        anim.inputs[A.ROTATION_SPEED].default_value = 0.5  # rotate off
+        anim.inputs[A.WAVE_TYPE].default_value = BeamUVAnimation.WaveType.SQUARE  # wave off
+        anim.inputs[A.FRAMES_SEC].default_value = 10.0  # sequence off
+        stage = self.stage0()
+        self.assertEqual(stage["animFlags"], int(AnimationFlags.SCROLL))
+        self.assertEqual(stage["scrollSpeed"], 2.0)
+        for key in ("rotSpeed", "waveType", "sequenceFramePerSec", "sequenceSegmentSize"): self.assertNotIn(key, stage)
+
+
+    def test_uv_animation_sequence_without_frames(self):
+        anim = self.animated_map(S.BASE_COLOR_MAP)
+        anim.inputs[A.SEQUENCE].default_value = True
+        anim.inputs[A.FRAMES_SEC].default_value = 10.0
+        stage = self.stage0(expect_issues=1)
+        self.assertNotIn("sequenceSegmentSize", stage)
+        self.assertIn(A.FRAMES.value, self.issues[0].message)
+
+
     def test_uv_animation_conflict(self):
-        self.animated_map(S.BASE_COLOR_MAP).inputs[A.ROTATION_SPEED].default_value = 1.0
-        self.animated_map(S.ROUGHNESS_MAP).inputs[A.ROTATION_SPEED].default_value = 2.0
+        for socket, speed in ((S.BASE_COLOR_MAP, 1.0), (S.ROUGHNESS_MAP, 2.0)):
+            anim = self.animated_map(socket)
+            anim.inputs[A.ROTATE].default_value = True
+            anim.inputs[A.ROTATION_SPEED].default_value = speed
         self.assertEqual(self.stage0(expect_issues=1)["rotSpeed"], 1.0)
         self.assertIn("UV animations", self.issues[0].message)
 

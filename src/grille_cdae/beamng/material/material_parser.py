@@ -10,7 +10,7 @@ from ...blender.shader_nodes import BeamMaterial, BeamBDSF10Basic, BeamImageTex,
 from ...blender.shader_node_builder import NodeTreeBuilder
 from .material import *
 from .material_builder import MaterialBuilder, MaterialExportError, MAX_STAGES
-from .node_fields import Field, Tex, Value, STAGE_FIELDS, STAGE_NODE, MATERIAL_FIELDS, UV_ANIMATION, INVERSE, from_srgb
+from .node_fields import Field, Tex, Value, STAGE_FIELDS, STAGE_NODE, MATERIAL_FIELDS, UV_ANIMATION, UV_ANIMATION_FLAGS, INVERSE, from_srgb
 
 
 
@@ -298,18 +298,18 @@ class MaterialParser:
 
     def _import_animation(self, node: bpy.types.Node, ctx: _Context):
 
-        self._apply_fields(node, UV_ANIMATION, ctx.stage, ctx)
+        for fields in UV_ANIMATION.values():
+            self._apply_fields(node, fields, ctx.stage, ctx)
 
         LS = BeamUVAnimation.Sockets
         anim = ctx.stage.animation
         flags = AnimationFlags(anim.flags)
 
-        if flags & (AnimationFlags.WAVE | AnimationFlags.SCALE):
-            _set_socket(node, LS.WAVE_TYPE, BeamUVAnimation.WaveType(anim.wave_type.value))
-            _set_socket(node, LS.WAVE_SCALE, bool(flags & AnimationFlags.SCALE))
-
-        if flags & AnimationFlags.SEQUENCE and anim.seq_segment_size > 0:
-            _set_socket(node, LS.FRAMES, round(1 / anim.seq_segment_size))
+        for flag, socket in UV_ANIMATION_FLAGS.items():
+            _set_socket(node, socket, bool(flags & flag))
+        _set_socket(node, LS.WAVE_TYPE, BeamUVAnimation.WaveType(anim.wave_type.value))
+        if anim.seq_segment_size > 0:
+            _set_socket(node, LS.FRAMES, 1 / anim.seq_segment_size)
 
 
     def _get_image(self, map: str) -> bpy.types.Image:
