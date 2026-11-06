@@ -535,13 +535,13 @@ class BeamUVAnimation(BaseShaderNode):
     """
     Torque3D texture animation (ProcessedShaderMaterial::_setTextureTransforms, GarageGames version BeamNG forked from).
     Motion picks Scroll or Rotate (rotation replaces scroll), modifiers map to their animFlags bit:
-    Wave drives the motion instead of its speed, Scale pulses with Wave and fits one frame with Sequence.
+    a Wave Type drives the motion instead of its speed, Scale pulses with the wave and fits one frame with Sequence.
     """
 
     bl_idname = f"{SHADER_NODE_PREFIX}UVAnimation"
     bl_label = "BNG UV Animation"
     ng_color_tag = GroupColorTag.VECTOR
-    ng_version_mayor = 3
+    ng_version_mayor = 4
 
 
     class Sockets(StrEnum):
@@ -553,7 +553,6 @@ class BeamUVAnimation(BaseShaderNode):
         ROTATION_SPEED = "Rotation Speed"
         SCROLL_FACTOR = "Scroll Factor"
         SCROLL_SPEED = "Scroll Speed"
-        WAVE = "Wave"
         WAVE_TYPE = "Wave Type"
         WAVE_AMPLITUDE = "Wave Amplitude"
         WAVE_FREQUENCY = "Wave Frequency"
@@ -571,6 +570,7 @@ class BeamUVAnimation(BaseShaderNode):
 
 
     class WaveType(StrEnum):
+        NONE = "None"
         SIN = "Sin"
         SQUARE = "Square"
         TRIANGLE = "Triangle"
@@ -605,8 +605,7 @@ class BeamUVAnimation(BaseShaderNode):
         rot_speed = ngb.input(_FLOAT_ANY_VALUE, LS.ROTATION_SPEED)
 
         ngb.panel("Modifiers")
-        wave = ngb.input(_BOOL_VALUE, LS.WAVE)
-        wave_type = ngb.input(_MENU, LS.WAVE_TYPE, WT.SIN)
+        wave_type = ngb.input(_MENU, LS.WAVE_TYPE, WT.NONE)
         wave_amp = ngb.input(_FLOAT_ANY_VALUE, LS.WAVE_AMPLITUDE)
         wave_freq = ngb.input(_FLOAT_ANY_VALUE, LS.WAVE_FREQUENCY)
         scale = ngb.input(_BOOL_VALUE, LS.SCALE)
@@ -619,6 +618,11 @@ class BeamUVAnimation(BaseShaderNode):
         scroll = ngb.nc.compare(motion, 1)
         rotate = ngb.nc.compare(motion, 2)
 
+        # a menu socket can only drive one Menu Switch, switch on its index
+        wave_index = ngb.nc.menu_switch(SocketType.Float, *WT, menu=wave_type)
+        for index, item in enumerate(WT): index >> wave_index[item]
+        wave = wave_index > 0
+
         seconds = ngb.nc.menu_switch(SocketType.Float, *BeamUVAnimation.TimeSource, menu=time_source_input)
         ngb.nc.node(bpy.types.GeometryNodeInputSceneTime)[LS.SECONDS] >> seconds[BeamUVAnimation.TimeSource.SCENE]
         time_source_value >> seconds[BeamUVAnimation.TimeSource.VALUE]
@@ -626,11 +630,12 @@ class BeamUVAnimation(BaseShaderNode):
         # wave offset (_getWaveOffset), phase wrapped for precision, all wave types are periodic
         phase = op(Operation.FRACT, wave_freq * seconds)
         phase_4 = phase * 4
-        waves = ngb.nc.menu_switch(SocketType.Float, *WT, menu=wave_type)
-        op(Operation.SINE, phase * TAU) >> waves[WT.SIN]
-        phase_4.mix(2 - phase_4, phase > 0.25).mix(phase_4 - 4, phase > 0.75) >> waves[WT.TRIANGLE]
-        ((phase > 0.5) | (phase < 1e-6)) >> waves[WT.SQUARE]
-        wave_offset = waves * wave_amp
+        sine = op(Operation.SINE, phase * TAU)
+        triangle = phase_4.mix(2 - phase_4, phase > 0.25).mix(phase_4 - 4, phase > 0.75)
+        square = (phase > 0.5) | (phase < 1e-6)
+        waves = sine.mix(triangle, ngb.nc.compare(wave_index, list(WT).index(WT.TRIANGLE)))
+        waves = waves.mix(square, ngb.nc.compare(wave_index, list(WT).index(WT.SQUARE)))
+        wave_offset = ngb.nc.mix(wave, 0.0, waves * wave_amp)
 
         # texture matrix in torque UV space, 2x3 affine as columns: u' = col_u * u + col_v * v + trans
 

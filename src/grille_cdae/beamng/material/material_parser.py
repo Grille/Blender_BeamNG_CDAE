@@ -311,7 +311,7 @@ class MaterialParser:
         _set_socket(node, LS.MOTION, motion)
         for flag, socket in UV_ANIMATION_FLAGS.items():
             _set_socket(node, socket, bool(flags & flag))
-        _set_socket(node, LS.WAVE_TYPE, BeamUVAnimation.WaveType(anim.wave_type.value))
+        _set_socket(node, LS.WAVE_TYPE, BeamUVAnimation.WaveType(anim.wave_type.value) if AnimationFlags.WAVE in flags else BeamUVAnimation.WaveType.NONE)
         if anim.seq_segment_size > 0:
             _set_socket(node, LS.FRAMES, 1 / anim.seq_segment_size)
 

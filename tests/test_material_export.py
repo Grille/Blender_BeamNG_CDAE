@@ -296,7 +296,7 @@ class MaterialExportTest(unittest.TestCase):
     def test_uv_animation_modifiers(self):
         anim = self.animated_map(S.BASE_COLOR_MAP)
         anim.inputs[A.MOTION].default_value = BeamUVAnimation.Motion.SCROLL
-        for socket in (A.WAVE, A.SEQUENCE): anim.inputs[socket].default_value = True
+        anim.inputs[A.SEQUENCE].default_value = True
         anim.inputs[A.SCROLL_SPEED].default_value = 2.0  # replaced by the wave
         anim.inputs[A.SCROLL_FACTOR].default_value = (1.0, 0.0)
         anim.inputs[A.WAVE_TYPE].default_value = BeamUVAnimation.WaveType.SQUARE
@@ -319,7 +319,8 @@ class MaterialExportTest(unittest.TestCase):
     def test_uv_animation_rotate_wave_scale(self):
         anim = self.animated_map(S.BASE_COLOR_MAP)
         anim.inputs[A.MOTION].default_value = BeamUVAnimation.Motion.ROTATE
-        for socket in (A.WAVE, A.SCALE): anim.inputs[socket].default_value = True
+        anim.inputs[A.WAVE_TYPE].default_value = BeamUVAnimation.WaveType.SIN
+        anim.inputs[A.SCALE].default_value = True
         anim.inputs[A.ROTATION_SPEED].default_value = 0.5  # replaced by the wave
         anim.inputs[A.ROTATION_PIVOT_OFFSET].default_value = (0.5, 0.25)  # reset by the wave scale
         stage = self.stage0()
@@ -330,7 +331,8 @@ class MaterialExportTest(unittest.TestCase):
     def test_uv_animation_scroll_lost_to_wave_scale(self):
         anim = self.animated_map(S.BASE_COLOR_MAP)
         anim.inputs[A.MOTION].default_value = BeamUVAnimation.Motion.SCROLL
-        for socket in (A.WAVE, A.SCALE): anim.inputs[socket].default_value = True
+        anim.inputs[A.WAVE_TYPE].default_value = BeamUVAnimation.WaveType.SIN
+        anim.inputs[A.SCALE].default_value = True
         anim.inputs[A.SCROLL_FACTOR].default_value = (1.0, 0.0)
         stage = self.stage0(expect_issues=1)
         self.assertEqual(stage["animFlags"], int(AnimationFlags.WAVE | AnimationFlags.SCALE))
@@ -340,21 +342,20 @@ class MaterialExportTest(unittest.TestCase):
 
     def test_uv_animation_modifiers_without_effect(self):
         anim = self.animated_map(S.BASE_COLOR_MAP)
-        anim.inputs[A.WAVE].default_value = True  # no motion, no scale
+        anim.inputs[A.WAVE_TYPE].default_value = BeamUVAnimation.WaveType.SIN  # no motion, no scale
         anim.inputs[A.WAVE_AMPLITUDE].default_value = 0.1
         anim.inputs[A.SEQUENCE].default_value = True
         anim.inputs[A.FRAMES].default_value = 4.0
         self.assertEqual(self.stage0()["animFlags"], int(AnimationFlags.SEQUENCE))
 
         anim.inputs[A.SEQUENCE].default_value = False
-        anim.inputs[A.WAVE].default_value = False
+        anim.inputs[A.WAVE_TYPE].default_value = BeamUVAnimation.WaveType.NONE
         anim.inputs[A.SCALE].default_value = True  # no wave, no sequence
         self.assertNotIn("animFlags", self.stage0())
 
 
     def test_uv_animation_wave_scale(self):
         anim = self.animated_map(S.BASE_COLOR_MAP)
-        anim.inputs[A.WAVE].default_value = True
         anim.inputs[A.SCALE].default_value = True
         anim.inputs[A.WAVE_TYPE].default_value = BeamUVAnimation.WaveType.SIN
         stage = self.stage0()
@@ -367,12 +368,12 @@ class MaterialExportTest(unittest.TestCase):
         anim.inputs[A.MOTION].default_value = BeamUVAnimation.Motion.SCROLL
         anim.inputs[A.SCROLL_SPEED].default_value = 2.0
         anim.inputs[A.ROTATION_SPEED].default_value = 0.5  # rotate off
-        anim.inputs[A.WAVE_TYPE].default_value = BeamUVAnimation.WaveType.SQUARE  # wave off
+        anim.inputs[A.WAVE_AMPLITUDE].default_value = 0.1  # wave type None
         anim.inputs[A.FRAMES_SEC].default_value = 10.0  # sequence off
         stage = self.stage0()
         self.assertEqual(stage["animFlags"], int(AnimationFlags.SCROLL))
         self.assertEqual(stage["scrollSpeed"], 2.0)
-        for key in ("rotSpeed", "waveType", "sequenceFramePerSec", "sequenceSegmentSize"): self.assertNotIn(key, stage)
+        for key in ("rotSpeed", "waveAmp", "sequenceFramePerSec", "sequenceSegmentSize"): self.assertNotIn(key, stage)
 
 
     def test_uv_animation_sequence_without_frames(self):

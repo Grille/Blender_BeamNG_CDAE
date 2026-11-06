@@ -182,7 +182,6 @@ UV_ANIMATION_MOTION: dict[str, AnimationFlags] = {
 
 # modifier animFlags bit -> its toggle socket
 UV_ANIMATION_FLAGS: dict[AnimationFlags, str] = {
-    _AF.WAVE: _SA.WAVE,
     _AF.SCALE: _SA.SCALE,
     _AF.SEQUENCE: _SA.SEQUENCE,
 }

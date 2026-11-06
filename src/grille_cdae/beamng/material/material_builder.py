@@ -315,23 +315,23 @@ class MaterialBuilder:
             flags = AF.NONE
         for flag, socket in UV_ANIMATION_FLAGS.items():
             if self._read_value(walker, socket, anim_ctx): flags |= flag
+        wave_value: str = self._read_value(walker, LS.WAVE_TYPE, anim_ctx)
+        if wave_value != BeamUVAnimation.WaveType.NONE:
+            if wave_value in AnimationWaveType: flags |= AF.WAVE
+            else: self._issue(anim_ctx.location, f"Unknown wave type '{wave_value}'.")
 
         # drop what has no effect: wave without motion or scale, scale without wave or sequence
         if not flags & (AF.SCROLL | AF.ROTATION | AF.SCALE): flags &= ~AF.WAVE
         if not flags & (AF.WAVE | AF.SEQUENCE): flags &= ~AF.SCALE
         if AF.SCROLL in flags and (AF.WAVE | AF.SCALE) in flags:
-            self._issue(anim_ctx.location, f"'{BeamUVAnimation.Motion.SCROLL.value}' has no effect with '{LS.WAVE.value}' and '{LS.SCALE.value}', the wave scale resets the offset.")
+            self._issue(anim_ctx.location, f"'{BeamUVAnimation.Motion.SCROLL.value}' has no effect with a '{LS.WAVE_TYPE.value}' and '{LS.SCALE.value}', the wave scale resets the offset.")
             flags &= ~AF.SCROLL
 
         for field, used in UV_ANIMATION:
             if used(flags): self._apply_fields(walker, (field,), stage, anim_ctx)
 
         if flags & AnimationFlags.WAVE:
-            wave_value: str = self._read_value(walker, LS.WAVE_TYPE, anim_ctx)
-            try:
-                anim.wave_type = AnimationWaveType(wave_value)
-            except ValueError:
-                self._issue(anim_ctx.location, f"Unknown wave type '{wave_value}'.")
+            anim.wave_type = AnimationWaveType(wave_value)
 
         if flags & AnimationFlags.SEQUENCE:
             frames = to_float(self._read_value(walker, LS.FRAMES, anim_ctx))
