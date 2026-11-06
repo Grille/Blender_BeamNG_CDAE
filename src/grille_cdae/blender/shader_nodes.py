@@ -80,11 +80,12 @@ UVMATRIX = NodeSignature(
 )
 BNGS_IO = NodeSignature.IO(BNGS_INPUT, BNGS_OUTPUT)
 
-NODE_SOCKET_SHAPE = SocketShape.CIRCLE
-TEXTURE_SOCKET_SHAPE = SocketShape.DIAMOND
-VALUE_SOCKET_SHAPE = SocketShape.LINE
-TVMIX_SOCKET_SHAPE = SocketShape.SQUARE
-DISPLAY_SOCKET_SHAPE = SocketShape.CIRCLE_DOT
+# socket shapes tell the user what an input expects
+NODE_SOCKET_SHAPE = SocketShape.CIRCLE  # another node, neither a texture nor a constant
+TEXTURE_SOCKET_SHAPE = SocketShape.DIAMOND  # a texture
+VALUE_SOCKET_SHAPE = SocketShape.LINE  # a constant
+TVMIX_SOCKET_SHAPE = SocketShape.SQUARE  # a texture, a constant or a node tree, only used for normals
+DISPLAY_SOCKET_SHAPE = SocketShape.CIRCLE_DOT  # only affects the viewport, not exported
 
 COLOR_WHITE = Color4F.WHITE
 COLOR_BLACK = Color4F.BLACK
@@ -96,6 +97,7 @@ COLOR_MAGENTA = (1,0,1,1)
 
 _BOOL = _SCI.BOOL
 _BOOL_VALUE = _SCI(SocketType.Bool, VALUE_SOCKET_SHAPE, False)
+_BOOL_DISPLAY = _SCI(SocketType.Bool, DISPLAY_SOCKET_SHAPE, False)
 _MENU = _SCI(SocketType.Menu, VALUE_SOCKET_SHAPE, False)
 _FLOAT = _SCI.FACTOR
 _FLOAT_VALUE = _SCI(SocketType.Float, VALUE_SOCKET_SHAPE, False, default_value=1, **_SCI.FACTOR.kwargs)
@@ -778,11 +780,12 @@ class BeamBSDFCollision(BaseShaderNode):
     bl_nclass = "SHADER"
     bl_width_default = 200
     ng_color_tag = GroupColorTag.SHADER
+    ng_version_mayor = 1
 
 
     def create_node_group(self, ngb):
-        display_enabled = ngb.input(_BOOL, "Display", default_value=True)
-        display_color = ngb.input(_COLOR, "Color", default_value=COLOR_MAGENTA)
+        display_enabled = ngb.input(_BOOL_DISPLAY, "Display", default_value=True)
+        display_color = ngb.input(_COLOR_DISPLAY, "Color", default_value=COLOR_MAGENTA)
         output = ngb.output(SocketType.Shader, SocketName.Shader)
 
         bsdf = ngb.nc.node(types.ShaderNodeBsdfPrincipled)
