@@ -188,10 +188,10 @@ UV_ANIMATION_FLAGS: dict[AnimationFlags, str] = {
 
 # fields and whether the animFlags use them, only used fields are exported; wave type and sequence segment size are derived in code
 UV_ANIMATION: tuple[tuple[Field, Callable[[AnimationFlags], bool]], ...] = (
-    (Value(_SA.SCROLL_FACTOR, "animation.scroll_direction", to_vec2), lambda f: _AF.SCROLL in f),
-    (Value(_SA.SCROLL_SPEED, "animation.scroll_speed"), lambda f: _AF.SCROLL in f and _AF.WAVE not in f),
-    (Value(_SA.ROTATION_SPEED, "animation.rot_speed"), lambda f: _AF.ROTATION in f and _AF.WAVE not in f),
-    (Value(_SA.ROTATION_PIVOT_OFFSET, "animation.rot_pivot_offset", to_vec2), lambda f: _AF.ROTATION in f and (_AF.WAVE | _AF.SCALE) not in f),
+    (Value(_SA.MOTION_DIRECTION, "animation.scroll_direction", to_vec2), lambda f: _AF.SCROLL in f),
+    (Value(_SA.MOTION_SPEED, "animation.scroll_speed"), lambda f: _AF.SCROLL in f and _AF.WAVE not in f),
+    (Value(_SA.MOTION_SPEED, "animation.rot_speed"), lambda f: _AF.ROTATION in f and _AF.WAVE not in f),
+    (Value(_SA.MOTION_PIVOT_OFFSET, "animation.rot_pivot_offset", to_vec2), lambda f: _AF.ROTATION in f and (_AF.WAVE | _AF.SCALE) not in f),
     (Value(_SA.WAVE_AMPLITUDE, "animation.wave_amp"), lambda f: _AF.WAVE in f),
     (Value(_SA.WAVE_FREQUENCY, "animation.wave_freq"), lambda f: _AF.WAVE in f),
     (Value(_SA.FRAMES_SEC, "animation.seq_frames_per_sec"), lambda f: _AF.SEQUENCE in f),

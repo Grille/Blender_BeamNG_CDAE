@@ -541,7 +541,7 @@ class BeamUVAnimation(BaseShaderNode):
     bl_idname = f"{SHADER_NODE_PREFIX}UVAnimation"
     bl_label = "BNG UV Animation"
     ng_color_tag = GroupColorTag.VECTOR
-    ng_version_mayor = 4
+    ng_version_mayor = 5
 
 
     class Sockets(StrEnum):
@@ -549,13 +549,12 @@ class BeamUVAnimation(BaseShaderNode):
         ANIMATION = "Animation"
         MOTION = "Motion"
         SCALE = "Scale"
-        ROTATION_PIVOT_OFFSET = "Rotation Pivot Offset"
-        ROTATION_SPEED = "Rotation Speed"
-        SCROLL_FACTOR = "Scroll Factor"
-        SCROLL_SPEED = "Scroll Speed"
+        MOTION_PIVOT_OFFSET = "Motion Pivot Offset"
+        MOTION_SPEED = "Motion Speed"
+        MOTION_DIRECTION = "Motion Direction"
         WAVE_TYPE = "Wave Type"
-        WAVE_AMPLITUDE = "Wave Amplitude"
-        WAVE_FREQUENCY = "Wave Frequency"
+        WAVE_AMPLITUDE = "Amplitude"
+        WAVE_FREQUENCY = "Frequency"
         SEQUENCE = "Sequence"
         FRAMES_SEC = "Frames/Sec"
         FRAMES = "Frames"
@@ -599,10 +598,9 @@ class BeamUVAnimation(BaseShaderNode):
 
         ngb.panel("Motion")
         motion_input = ngb.input(_MENU, LS.MOTION, BeamUVAnimation.Motion.NONE)
-        scroll_dir = ngb.input(_VEC2_VALUE, LS.SCROLL_FACTOR)
-        scroll_speed = ngb.input(_FLOAT_ANY_VALUE, LS.SCROLL_SPEED)
-        rot_pivot = ngb.input(_VEC2_VALUE, LS.ROTATION_PIVOT_OFFSET)
-        rot_speed = ngb.input(_FLOAT_ANY_VALUE, LS.ROTATION_SPEED)
+        motion_direction = ngb.input(_VEC2_VALUE, LS.MOTION_DIRECTION)
+        motion_pivot = ngb.input(_VEC2_VALUE, LS.MOTION_PIVOT_OFFSET)
+        motion_speed = ngb.input(_FLOAT_ANY_VALUE, LS.MOTION_SPEED)
 
         ngb.panel("Modifiers")
         wave_type = ngb.input(_MENU, LS.WAVE_TYPE, WT.NONE)
@@ -640,18 +638,18 @@ class BeamUVAnimation(BaseShaderNode):
         # texture matrix in torque UV space, 2x3 affine as columns: u' = col_u * u + col_v * v + trans
 
         # scroll (sets the translation)
-        scroll_offset = (scroll_dir * (scroll_speed * seconds)).mix(scroll_dir * wave_offset, wave)
+        scroll_offset = (motion_direction * (motion_speed * seconds)).mix(motion_direction * wave_offset, wave)
         trans = ngb.nc.mix(scroll, (0.0, 0.0, 0.0), scroll_offset)  # mix instead of multiply, so unused inputs are greyed out
 
         # rotation (replaces the matrix, scroll is lost): R * (uv + pivot) + 0.5, R = [cos sin; -sin cos]
-        angle = (rot_speed * seconds).mix(wave_offset * TAU, wave)
+        angle = (motion_speed * seconds).mix(wave_offset * TAU, wave)
         cos, sin = op(Operation.COSINE, angle), op(Operation.SINE, angle)
         rot_u = combine_xyz(cos, -sin)
         rot_v = combine_xyz(sin, cos)
-        pivot = seperate_xyz(rot_pivot)
+        motion_pivot = seperate_xyz(motion_pivot)
         col_u = ngb.nc.mix(rotate, (1.0, 0.0, 0.0), rot_u)
         col_v = ngb.nc.mix(rotate, (0.0, 1.0, 0.0), rot_v)
-        trans = trans.mix(rot_u * pivot[0] + rot_v * pivot[1] + CENTER, rotate)
+        trans = trans.mix(rot_u * motion_pivot[0] + rot_v * motion_pivot[1] + CENTER, rotate)
 
         # scale + wave: translation reset to the center, then scaled by |wave| around it
         w = ngb.nc.abs(wave_offset)

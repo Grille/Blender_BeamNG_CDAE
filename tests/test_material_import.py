@@ -192,6 +192,16 @@ class MaterialImportTest(unittest.TestCase):
         self.assertEqual(export_material(import_material(legacy)), CANONICAL_10)
 
 
+    def test_uv_animation_shared_speed(self):
+        # scroll and rotation share the speed socket, a stray key of the other motion must not overwrite it
+        for flags, key in ((1, "scrollSpeed"), (2, "rotSpeed")):
+            with self.subTest(key):
+                raw: SDict = {"name": "m", "version": 1.5, "Stages": [{"baseColorMap": "a.png", "animFlags": flags, "scrollSpeed": 1.5, "rotSpeed": 0.25}]}
+                stage = cast(list[SDict], export_material(import_material(raw))["Stages"])[0]
+                self.assertEqual(stage, {"baseColorMap": "a.png", "animFlags": flags, key: cast(SDict, cast(list[SDict], raw["Stages"])[0])[key]})
+                cleanup()
+
+
     def test_uv_animation_round_trip(self):
         raw: SDict = {"name": "m", "version": 1.5, "Stages": [{
             "baseColorMap": "a.png",
