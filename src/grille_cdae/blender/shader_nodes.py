@@ -780,7 +780,7 @@ class BeamBSDFCollision(BaseShaderNode):
     bl_nclass = "SHADER"
     bl_width_default = 200
     ng_color_tag = GroupColorTag.SHADER
-    ng_version_mayor = 1
+    ng_version_minor = 1
 
 
     def create_node_group(self, ngb):
