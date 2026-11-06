@@ -533,23 +533,23 @@ class BeamUVAnimation(BaseShaderNode):
 
     """
     Torque3D texture animation (ProcessedShaderMaterial::_setTextureTransforms, GarageGames version BeamNG forked from).
-    One toggle per animFlags bit, Wave modifies scroll, rotation and scale, Scale also shrinks U to one frame of an image sequence.
+    Motion picks Scroll or Rotate (rotation replaces scroll), modifiers map to their animFlags bit:
+    Wave drives the motion instead of its speed, Scale pulses with Wave and fits one frame with Sequence.
     """
 
     bl_idname = f"{SHADER_NODE_PREFIX}UVAnimation"
     bl_label = "BNG UV Animation"
     ng_color_tag = GroupColorTag.VECTOR
-    ng_version_mayor = 1
+    ng_version_mayor = 2
 
 
     class Sockets(StrEnum):
         UV = "UV"
         ANIMATION = "Animation"
+        MOTION = "Motion"
         SCALE = "Scale"
-        ROTATE = "Rotate"
         ROTATION_PIVOT_OFFSET = "Rotation Pivot Offset"
         ROTATION_SPEED = "Rotation Speed"
-        SCROLL = "Scroll"
         SCROLL_FACTOR = "Scroll Factor"
         SCROLL_SPEED = "Scroll Speed"
         WAVE = "Wave"
@@ -561,6 +561,12 @@ class BeamUVAnimation(BaseShaderNode):
         FRAMES = "Frames"
         TIME_SOURCE = "Time"
         SECONDS = "Seconds"
+
+
+    class Motion(StrEnum):
+        NONE = "None"
+        SCROLL = "Scroll"
+        ROTATE = "Rotate"
 
 
     class WaveType(StrEnum):
@@ -587,30 +593,30 @@ class BeamUVAnimation(BaseShaderNode):
 
         time_source_input = ngb.input(_MENU, LS.TIME_SOURCE)
         time_source_value = ngb.input(_FLOAT_ANY_VALUE, LS.SECONDS)
-        scale = ngb.input(_BOOL_VALUE, LS.SCALE)
 
         output = ngb.output(_BUNDLE_NODE, LS.ANIMATION)
 
-        ngb.panel("Rotation")
-        rotate = ngb.input(_BOOL_VALUE, LS.ROTATE)
+        ngb.panel("Motion")
+        motion_input = ngb.input(_MENU, LS.MOTION)
+        scroll_dir = ngb.input(_VEC2_VALUE, LS.SCROLL_FACTOR)
+        scroll_speed = ngb.input(_FLOAT_ANY_VALUE, LS.SCROLL_SPEED)
         rot_pivot = ngb.input(_VEC2_VALUE, LS.ROTATION_PIVOT_OFFSET)
         rot_speed = ngb.input(_FLOAT_ANY_VALUE, LS.ROTATION_SPEED)
 
-        ngb.panel("Scroll")
-        scroll = ngb.input(_BOOL_VALUE, LS.SCROLL)
-        scroll_dir = ngb.input(_VEC2_VALUE, LS.SCROLL_FACTOR)
-        scroll_speed = ngb.input(_FLOAT_ANY_VALUE, LS.SCROLL_SPEED)
-
-        ngb.panel("Wave")
+        ngb.panel("Modifiers")
         wave = ngb.input(_BOOL_VALUE, LS.WAVE)
         wave_type = ngb.input(_MENU, LS.WAVE_TYPE)
         wave_amp = ngb.input(_FLOAT_ANY_VALUE, LS.WAVE_AMPLITUDE)
         wave_freq = ngb.input(_FLOAT_ANY_VALUE, LS.WAVE_FREQUENCY)
-
-        ngb.panel("Image Sequence")
+        scale = ngb.input(_BOOL_VALUE, LS.SCALE)
         sequence = ngb.input(_BOOL_VALUE, LS.SEQUENCE)
         fps = ngb.input(_FLOAT_ANY_VALUE, LS.FRAMES_SEC)
         frames = ngb.input(_FLOAT_ANY_VALUE, LS.FRAMES)
+
+        motion = ngb.nc.menu_switch(SocketType.Float, *BeamUVAnimation.Motion, menu=motion_input)
+        for index, item in enumerate(BeamUVAnimation.Motion): index >> motion[item]
+        scroll = ngb.nc.compare(motion, 1)
+        rotate = ngb.nc.compare(motion, 2)
 
         seconds = ngb.nc.menu_switch(SocketType.Float, *BeamUVAnimation.TimeSource, menu=time_source_input)
         ngb.nc.node(bpy.types.GeometryNodeInputSceneTime)[LS.SECONDS] >> seconds[BeamUVAnimation.TimeSource.SCENE]
@@ -656,7 +662,7 @@ class BeamUVAnimation(BaseShaderNode):
         # to blender UV space (v flipped on export): u' = a u - b v + (b + c), v' = -d u + e v + (1 - e - f)
         u, v, t = seperate_xyz(col_u), seperate_xyz(col_v), seperate_xyz(trans)
         a, d, b, e, c, f = u[0], u[1], v[0], v[1], t[0], t[1]
-        enabled = scroll | rotate | wave | scale | sequence
+        enabled = (motion > 0) | wave | scale | sequence
         ngb.nc.combine_bundle(UVMATRIX, combine_xyz(a, -b, b + c), combine_xyz(-d, e, 1 - e - f), enabled) >> output
 
 

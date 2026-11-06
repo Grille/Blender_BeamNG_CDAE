@@ -170,34 +170,33 @@ CONVERT_FIELDS: dict[type, tuple[Field, ...]] = {
 
 
 _SA = BeamUVAnimation.Sockets
+_SAM = BeamUVAnimation.Motion
+_AF = AnimationFlags
 
-# animFlags bit -> its toggle socket
+# Motion menu entry -> animFlags bit
+UV_ANIMATION_MOTION: dict[str, AnimationFlags] = {
+    _SAM.NONE: _AF.NONE,
+    _SAM.SCROLL: _AF.SCROLL,
+    _SAM.ROTATE: _AF.ROTATION,
+}
+
+# modifier animFlags bit -> its toggle socket
 UV_ANIMATION_FLAGS: dict[AnimationFlags, str] = {
-    AnimationFlags.SCROLL: _SA.SCROLL,
-    AnimationFlags.ROTATION: _SA.ROTATE,
-    AnimationFlags.WAVE: _SA.WAVE,
-    AnimationFlags.SCALE: _SA.SCALE,
-    AnimationFlags.SEQUENCE: _SA.SEQUENCE,
+    _AF.WAVE: _SA.WAVE,
+    _AF.SCALE: _SA.SCALE,
+    _AF.SEQUENCE: _SA.SEQUENCE,
 }
 
-# fields per animFlags bit, only exported when the bit is set; wave type and sequence segment size are derived in code
-UV_ANIMATION: dict[AnimationFlags, tuple[Field, ...]] = {
-    AnimationFlags.ROTATION: (
-        Value(_SA.ROTATION_SPEED, "animation.rot_speed"),
-        Value(_SA.ROTATION_PIVOT_OFFSET, "animation.rot_pivot_offset", to_vec2),
-    ),
-    AnimationFlags.SCROLL: (
-        Value(_SA.SCROLL_SPEED, "animation.scroll_speed"),
-        Value(_SA.SCROLL_FACTOR, "animation.scroll_direction", to_vec2),
-    ),
-    AnimationFlags.WAVE: (
-        Value(_SA.WAVE_AMPLITUDE, "animation.wave_amp"),
-        Value(_SA.WAVE_FREQUENCY, "animation.wave_freq"),
-    ),
-    AnimationFlags.SEQUENCE: (
-        Value(_SA.FRAMES_SEC, "animation.seq_frames_per_sec"),
-    ),
-}
+# fields and whether the animFlags use them, only used fields are exported; wave type and sequence segment size are derived in code
+UV_ANIMATION: tuple[tuple[Field, Callable[[AnimationFlags], bool]], ...] = (
+    (Value(_SA.SCROLL_FACTOR, "animation.scroll_direction", to_vec2), lambda f: _AF.SCROLL in f),
+    (Value(_SA.SCROLL_SPEED, "animation.scroll_speed"), lambda f: _AF.SCROLL in f and _AF.WAVE not in f),
+    (Value(_SA.ROTATION_SPEED, "animation.rot_speed"), lambda f: _AF.ROTATION in f and _AF.WAVE not in f),
+    (Value(_SA.ROTATION_PIVOT_OFFSET, "animation.rot_pivot_offset", to_vec2), lambda f: _AF.ROTATION in f and (_AF.WAVE | _AF.SCALE) not in f),
+    (Value(_SA.WAVE_AMPLITUDE, "animation.wave_amp"), lambda f: _AF.WAVE in f),
+    (Value(_SA.WAVE_FREQUENCY, "animation.wave_freq"), lambda f: _AF.WAVE in f),
+    (Value(_SA.FRAMES_SEC, "animation.seq_frames_per_sec"), lambda f: _AF.SEQUENCE in f),
+)
 
 
 _SM = BeamMaterial.Sockets

@@ -11,7 +11,7 @@ from ...blender.shader_nodes import (
     BaseBeamRGBA, BeamMaterial, BeamBSDFCollision, BeamBDSF10Basic, BeamImageTex, BeamImageTexConverter, BeamStageMix, BeamUVData, BeamUVAnimation, ImageType, ReflectionMode
 )
 from .material import *
-from .node_fields import Field, Tex, Value, Bundle, STAGE_FIELDS, STAGE_VERSION, CONVERT_FIELDS, MATERIAL_FIELDS, UV_ANIMATION, UV_ANIMATION_FLAGS, to_float, to_srgb, to_vec2
+from .node_fields import Field, Tex, Value, Bundle, STAGE_FIELDS, STAGE_VERSION, CONVERT_FIELDS, MATERIAL_FIELDS, UV_ANIMATION, UV_ANIMATION_FLAGS, UV_ANIMATION_MOTION, to_float, to_srgb, to_vec2
 
 
 
@@ -305,16 +305,30 @@ class MaterialBuilder:
         anim_ctx = _Context(nodes[0].name)
 
         LS = BeamUVAnimation.Sockets
+        AF = AnimationFlags
         anim = stage.animation
-        flags = AnimationFlags.NONE
 
+        # an unevaluated menu socket reads '', its first item
+        motion: str = self._read_value(walker, LS.MOTION, anim_ctx) or BeamUVAnimation.Motion.NONE
+        flags = UV_ANIMATION_MOTION.get(motion)
+        if flags is None:
+            self._issue(anim_ctx.location, f"Unknown motion '{motion}'.")
+            flags = AF.NONE
         for flag, socket in UV_ANIMATION_FLAGS.items():
             if self._read_value(walker, socket, anim_ctx): flags |= flag
-        for flag, fields in UV_ANIMATION.items():
-            if flags & flag: self._apply_fields(walker, fields, stage, anim_ctx)
+
+        # drop what has no effect: wave without motion or scale, scale without wave or sequence
+        if not flags & (AF.SCROLL | AF.ROTATION | AF.SCALE): flags &= ~AF.WAVE
+        if not flags & (AF.WAVE | AF.SEQUENCE): flags &= ~AF.SCALE
+        if AF.SCROLL in flags and (AF.WAVE | AF.SCALE) in flags:
+            self._issue(anim_ctx.location, f"'{BeamUVAnimation.Motion.SCROLL.value}' has no effect with '{LS.WAVE.value}' and '{LS.SCALE.value}', the wave scale resets the offset.")
+            flags &= ~AF.SCROLL
+
+        for field, used in UV_ANIMATION:
+            if used(flags): self._apply_fields(walker, (field,), stage, anim_ctx)
 
         if flags & AnimationFlags.WAVE:
-            wave_value: str = self._read_value(walker, LS.WAVE_TYPE, anim_ctx)
+            wave_value: str = self._read_value(walker, LS.WAVE_TYPE, anim_ctx) or BeamUVAnimation.WaveType.SIN
             try:
                 anim.wave_type = AnimationWaveType(wave_value)
             except ValueError:

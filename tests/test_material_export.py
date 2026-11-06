@@ -284,10 +284,20 @@ class MaterialExportTest(unittest.TestCase):
 
     def test_uv_animation(self):
         anim = self.animated_map(S.BASE_COLOR_MAP)
-        for socket in (A.ROTATE, A.SCROLL, A.WAVE, A.SEQUENCE): anim.inputs[socket].default_value = True
+        anim.inputs[A.MOTION].default_value = BeamUVAnimation.Motion.ROTATE
         anim.inputs[A.ROTATION_SPEED].default_value = 0.5
         anim.inputs[A.ROTATION_PIVOT_OFFSET].default_value = (0.5, 0.25)
-        anim.inputs[A.SCROLL_SPEED].default_value = 2.0
+        stage = self.stage0()
+        self.assertEqual(stage["animFlags"], int(AnimationFlags.ROTATION))
+        self.assertEqual(stage["rotSpeed"], 0.5)
+        self.assertEqual(stage["rotPivotOffset"], [0.5, 0.25])
+
+
+    def test_uv_animation_modifiers(self):
+        anim = self.animated_map(S.BASE_COLOR_MAP)
+        anim.inputs[A.MOTION].default_value = BeamUVAnimation.Motion.SCROLL
+        for socket in (A.WAVE, A.SEQUENCE): anim.inputs[socket].default_value = True
+        anim.inputs[A.SCROLL_SPEED].default_value = 2.0  # replaced by the wave
         anim.inputs[A.SCROLL_FACTOR].default_value = (1.0, 0.0)
         anim.inputs[A.WAVE_TYPE].default_value = BeamUVAnimation.WaveType.SQUARE
         anim.inputs[A.WAVE_AMPLITUDE].default_value = 0.1
@@ -296,16 +306,50 @@ class MaterialExportTest(unittest.TestCase):
         anim.inputs[A.FRAMES].default_value = 4.0
 
         stage = self.stage0()
-        self.assertEqual(stage["animFlags"], int(AnimationFlags.ROTATION | AnimationFlags.SCROLL | AnimationFlags.WAVE | AnimationFlags.SEQUENCE))
-        self.assertEqual(stage["rotSpeed"], 0.5)
-        self.assertEqual(stage["rotPivotOffset"], [0.5, 0.25])
-        self.assertEqual(stage["scrollSpeed"], 2.0)
+        self.assertEqual(stage["animFlags"], int(AnimationFlags.SCROLL | AnimationFlags.WAVE | AnimationFlags.SEQUENCE))
+        self.assertNotIn("scrollSpeed", stage)
         self.assertEqual(stage["scrollDir"], [1.0, 0.0])
         self.assertEqual(stage["waveType"], "Square")
         self.assertEqual(stage["waveAmp"], 0.1)
         self.assertEqual(stage["waveFreq"], 3.0)
         self.assertEqual(stage["sequenceFramePerSec"], 10.0)
         self.assertEqual(stage["sequenceSegmentSize"], 0.25)
+
+
+    def test_uv_animation_rotate_wave_scale(self):
+        anim = self.animated_map(S.BASE_COLOR_MAP)
+        anim.inputs[A.MOTION].default_value = BeamUVAnimation.Motion.ROTATE
+        for socket in (A.WAVE, A.SCALE): anim.inputs[socket].default_value = True
+        anim.inputs[A.ROTATION_SPEED].default_value = 0.5  # replaced by the wave
+        anim.inputs[A.ROTATION_PIVOT_OFFSET].default_value = (0.5, 0.25)  # reset by the wave scale
+        stage = self.stage0()
+        self.assertEqual(stage["animFlags"], int(AnimationFlags.ROTATION | AnimationFlags.WAVE | AnimationFlags.SCALE))
+        for key in ("rotSpeed", "rotPivotOffset"): self.assertNotIn(key, stage)
+
+
+    def test_uv_animation_scroll_lost_to_wave_scale(self):
+        anim = self.animated_map(S.BASE_COLOR_MAP)
+        anim.inputs[A.MOTION].default_value = BeamUVAnimation.Motion.SCROLL
+        for socket in (A.WAVE, A.SCALE): anim.inputs[socket].default_value = True
+        anim.inputs[A.SCROLL_FACTOR].default_value = (1.0, 0.0)
+        stage = self.stage0(expect_issues=1)
+        self.assertEqual(stage["animFlags"], int(AnimationFlags.WAVE | AnimationFlags.SCALE))
+        self.assertNotIn("scrollDir", stage)
+        self.assertIn(A.SCALE.value, self.issues[0].message)
+
+
+    def test_uv_animation_modifiers_without_effect(self):
+        anim = self.animated_map(S.BASE_COLOR_MAP)
+        anim.inputs[A.WAVE].default_value = True  # no motion, no scale
+        anim.inputs[A.WAVE_AMPLITUDE].default_value = 0.1
+        anim.inputs[A.SEQUENCE].default_value = True
+        anim.inputs[A.FRAMES].default_value = 4.0
+        self.assertEqual(self.stage0()["animFlags"], int(AnimationFlags.SEQUENCE))
+
+        anim.inputs[A.SEQUENCE].default_value = False
+        anim.inputs[A.WAVE].default_value = False
+        anim.inputs[A.SCALE].default_value = True  # no wave, no sequence
+        self.assertNotIn("animFlags", self.stage0())
 
 
     def test_uv_animation_wave_scale(self):
@@ -320,7 +364,7 @@ class MaterialExportTest(unittest.TestCase):
 
     def test_uv_animation_disabled_parts_not_written(self):
         anim = self.animated_map(S.BASE_COLOR_MAP)
-        anim.inputs[A.SCROLL].default_value = True
+        anim.inputs[A.MOTION].default_value = BeamUVAnimation.Motion.SCROLL
         anim.inputs[A.SCROLL_SPEED].default_value = 2.0
         anim.inputs[A.ROTATION_SPEED].default_value = 0.5  # rotate off
         anim.inputs[A.WAVE_TYPE].default_value = BeamUVAnimation.WaveType.SQUARE  # wave off
@@ -343,7 +387,7 @@ class MaterialExportTest(unittest.TestCase):
     def test_uv_animation_conflict(self):
         for socket, speed in ((S.BASE_COLOR_MAP, 1.0), (S.ROUGHNESS_MAP, 2.0)):
             anim = self.animated_map(socket)
-            anim.inputs[A.ROTATE].default_value = True
+            anim.inputs[A.MOTION].default_value = BeamUVAnimation.Motion.ROTATE
             anim.inputs[A.ROTATION_SPEED].default_value = speed
         self.assertEqual(self.stage0(expect_issues=1)["rotSpeed"], 1.0)
         self.assertIn("UV animations", self.issues[0].message)

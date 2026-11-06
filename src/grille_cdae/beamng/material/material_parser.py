@@ -298,13 +298,17 @@ class MaterialParser:
 
     def _import_animation(self, node: bpy.types.Node, ctx: _Context):
 
-        for fields in UV_ANIMATION.values():
-            self._apply_fields(node, fields, ctx.stage, ctx)
+        for field, _ in UV_ANIMATION:
+            self._apply_fields(node, (field,), ctx.stage, ctx)
 
         LS = BeamUVAnimation.Sockets
+        Motion = BeamUVAnimation.Motion
         anim = ctx.stage.animation
         flags = AnimationFlags(anim.flags)
 
+        # rotation replaces scroll
+        motion = Motion.ROTATE if AnimationFlags.ROTATION in flags else Motion.SCROLL if AnimationFlags.SCROLL in flags else Motion.NONE
+        _set_socket(node, LS.MOTION, motion)
         for flag, socket in UV_ANIMATION_FLAGS.items():
             _set_socket(node, socket, bool(flags & flag))
         _set_socket(node, LS.WAVE_TYPE, BeamUVAnimation.WaveType(anim.wave_type.value))

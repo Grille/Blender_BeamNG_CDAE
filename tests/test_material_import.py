@@ -10,7 +10,7 @@ import bpy
 
 from grille_cdae.common import *
 from grille_cdae.beamng.material import Material, MaterialBuilder, MaterialParser, MaterialImportError, ImageNodeMode
-from grille_cdae.blender.shader_nodes import BeamBSDF15, BeamBDSF10Basic, BeamImageTex, BeamImageTexConverter, BeamRGBA, BeamStageMix
+from grille_cdae.blender.shader_nodes import BeamBSDF15, BeamBDSF10Basic, BeamImageTex, BeamImageTexConverter, BeamRGBA, BeamStageMix, BeamUVAnimation
 
 import grille_cdae.addon as addon
 from grille_cdae.beamng.material.material import MaterialStage, DictProperty, _BaseDict # pyright: ignore[reportPrivateUsage]
@@ -80,7 +80,7 @@ CANONICAL: SDict = {
             "emissiveFactor": [1.0, 0.0, 0.0],
             "detailMap": "detail.png", "detailBaseColorMapStrength": 0.5, "detailScale": [4.0, 8.0],
             "colorPaletteMap": "palette.png", "paletteMetallic": False,
-            "animFlags": 3, "rotSpeed": 0.5, "scrollSpeed": 2.0, "scrollDir": [1.0, 0.0],
+            "animFlags": 2, "rotSpeed": 0.5, "rotPivotOffset": [0.5, 0.25],
         },
         {"metallicFactor": 1.0, "roughnessFactor": 0.3},
         {}, {},
@@ -192,14 +192,32 @@ class MaterialImportTest(unittest.TestCase):
         self.assertEqual(export_material(import_material(legacy)), CANONICAL_10)
 
 
+    def test_uv_animation_round_trip(self):
+        raw: SDict = {"name": "m", "version": 1.5, "Stages": [{
+            "baseColorMap": "a.png",
+            "animFlags": 21, "scrollDir": [0.25, -0.5],
+            "waveType": "Triangle", "waveFreq": 1.5, "waveAmp": 0.125, "sequenceFramePerSec": 4.0, "sequenceSegmentSize": 0.25,
+        }]}
+        stage = cast(list[SDict], export_material(import_material(raw))["Stages"])[0]
+        self.assertEqual(stage, cast(list[SDict], raw["Stages"])[0])
+
+
     def test_uv_animation_all_flags(self):
+        # rotation replaces scroll, the wave replaces the rotation speed and the wave scale resets the pivot
         raw: SDict = {"name": "m", "version": 1.5, "Stages": [{
             "baseColorMap": "a.png",
             "animFlags": 31, "scrollDir": [0.25, -0.5], "scrollSpeed": 1.5, "rotSpeed": 0.25, "rotPivotOffset": [-0.25, 0.5],
             "waveType": "Triangle", "waveFreq": 1.5, "waveAmp": 0.125, "sequenceFramePerSec": 4.0, "sequenceSegmentSize": 0.25,
         }]}
-        stage = cast(list[SDict], export_material(import_material(raw))["Stages"])[0]
-        self.assertEqual(stage, cast(list[SDict], raw["Stages"])[0])
+        bmat = import_material(raw)
+        anim = next(n for n in bmat.node_tree.nodes if n.bl_idname == BeamUVAnimation.bl_idname)
+        self.assertEqual(anim.inputs[BeamUVAnimation.Sockets.MOTION].default_value, BeamUVAnimation.Motion.ROTATE)
+        stage = cast(list[SDict], export_material(bmat)["Stages"])[0]
+        self.assertEqual(stage, {
+            "baseColorMap": "a.png",
+            "animFlags": 30,
+            "waveType": "Triangle", "waveFreq": 1.5, "waveAmp": 0.125, "sequenceFramePerSec": 4.0, "sequenceSegmentSize": 0.25,
+        })
 
 
     def test_uv_animation_fractional_segment(self):
