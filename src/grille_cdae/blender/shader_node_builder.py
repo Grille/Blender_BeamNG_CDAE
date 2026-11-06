@@ -638,7 +638,13 @@ class NodeGroupBuilder(NodeTreeBuilder):
         self.inputs_node: bpy.types.NodeGroupInput | None = None
         self.output_node: bpy.types.NodeGroupOutput | None = None
         self.ngdata = NodeGroupData()
+        self.menu_defaults: list[tuple[bpy.types.NodeTreeInterfaceSocket, SocketValue]] = []
         self._create_io()
+
+
+    def finish(self):
+        """Menu items are only known once the menu is linked to a Menu Switch, so menu defaults are set last."""
+        for socket, value in self.menu_defaults: butils.set_default_value(socket, value)
 
 
     def _create_io(self):
@@ -674,6 +680,8 @@ class NodeGroupBuilder(NodeTreeBuilder):
 
         self._move_to_panel(socket)
         
-        if default_value is not None: butils.set_default_value(socket, default_value)
+        if default_value is None: pass
+        elif create_info.type == SocketType.Menu: self.menu_defaults.append((socket, default_value))
+        else: butils.set_default_value(socket, default_value)
 
         return socket

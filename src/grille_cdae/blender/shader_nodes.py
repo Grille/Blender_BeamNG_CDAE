@@ -261,6 +261,7 @@ class BaseShaderNode(ShaderNodeCustomGroup):
         
         ngb = _Extended_NGB(group_name)
         self.create_node_group(ngb)
+        ngb.finish()
         ngb.arrange_nodes()
         tree = ngb.tree
         tree.color_tag = self.ng_color_tag # pyright: ignore[reportAttributeAccessIssue]
@@ -540,7 +541,7 @@ class BeamUVAnimation(BaseShaderNode):
     bl_idname = f"{SHADER_NODE_PREFIX}UVAnimation"
     bl_label = "BNG UV Animation"
     ng_color_tag = GroupColorTag.VECTOR
-    ng_version_mayor = 2
+    ng_version_mayor = 3
 
 
     class Sockets(StrEnum):
@@ -591,13 +592,13 @@ class BeamUVAnimation(BaseShaderNode):
         TAU = 6.283185307179586
         CENTER = (0.5, 0.5, 0.0)
 
-        time_source_input = ngb.input(_MENU, LS.TIME_SOURCE)
+        time_source_input = ngb.input(_MENU, LS.TIME_SOURCE, BeamUVAnimation.TimeSource.SCENE)
         time_source_value = ngb.input(_FLOAT_ANY_VALUE, LS.SECONDS)
 
         output = ngb.output(_BUNDLE_NODE, LS.ANIMATION)
 
         ngb.panel("Motion")
-        motion_input = ngb.input(_MENU, LS.MOTION)
+        motion_input = ngb.input(_MENU, LS.MOTION, BeamUVAnimation.Motion.NONE)
         scroll_dir = ngb.input(_VEC2_VALUE, LS.SCROLL_FACTOR)
         scroll_speed = ngb.input(_FLOAT_ANY_VALUE, LS.SCROLL_SPEED)
         rot_pivot = ngb.input(_VEC2_VALUE, LS.ROTATION_PIVOT_OFFSET)
@@ -605,7 +606,7 @@ class BeamUVAnimation(BaseShaderNode):
 
         ngb.panel("Modifiers")
         wave = ngb.input(_BOOL_VALUE, LS.WAVE)
-        wave_type = ngb.input(_MENU, LS.WAVE_TYPE)
+        wave_type = ngb.input(_MENU, LS.WAVE_TYPE, WT.SIN)
         wave_amp = ngb.input(_FLOAT_ANY_VALUE, LS.WAVE_AMPLITUDE)
         wave_freq = ngb.input(_FLOAT_ANY_VALUE, LS.WAVE_FREQUENCY)
         scale = ngb.input(_BOOL_VALUE, LS.SCALE)

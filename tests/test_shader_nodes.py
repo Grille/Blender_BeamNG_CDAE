@@ -55,6 +55,16 @@ class ShaderNodesTest(unittest.TestCase):
                 self.assertEqual(self.new(cls).node_tree, self.new(cls).node_tree)
 
 
+    def test_menu_defaults(self):
+        # menu items come from the linked Menu Switch, a default set before linking would be lost
+        for cls in ShaderNodeRegistry.nodes:
+            node = self.new(cls)
+            for socket in node.inputs:
+                if socket.type == "MENU":
+                    with self.subTest(f"{cls.__name__}.{socket.name}"):
+                        self.assertNotEqual(cast(bpy.types.NodeSocketMenu, socket).default_value, "")
+
+
     def test_rgba_math_operations(self):
         # Internal node, only the operations the node groups use, others are allowed to throw
         node = cast(BeamRGBAMath, self.new(BeamRGBAMath))

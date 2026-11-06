@@ -308,8 +308,7 @@ class MaterialBuilder:
         AF = AnimationFlags
         anim = stage.animation
 
-        # an unevaluated menu socket reads '', its first item
-        motion: str = self._read_value(walker, LS.MOTION, anim_ctx) or BeamUVAnimation.Motion.NONE
+        motion: str = self._read_value(walker, LS.MOTION, anim_ctx)
         flags = UV_ANIMATION_MOTION.get(motion)
         if flags is None:
             self._issue(anim_ctx.location, f"Unknown motion '{motion}'.")
@@ -328,7 +327,7 @@ class MaterialBuilder:
             if used(flags): self._apply_fields(walker, (field,), stage, anim_ctx)
 
         if flags & AnimationFlags.WAVE:
-            wave_value: str = self._read_value(walker, LS.WAVE_TYPE, anim_ctx) or BeamUVAnimation.WaveType.SIN
+            wave_value: str = self._read_value(walker, LS.WAVE_TYPE, anim_ctx)
             try:
                 anim.wave_type = AnimationWaveType(wave_value)
             except ValueError:
