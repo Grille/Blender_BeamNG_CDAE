@@ -551,7 +551,7 @@ class NodeGroupData:
 
         def apply(self, dst: bpy.types.NodeSocket):
             dst.display_shape = self.shape # type: ignore
-            dst.hide = self.hide
+            if self.hide: dst.hide = True  # don't unhide what the user hid when reapplied by an update
             if self.default_value is not None: butils.set_default_value(dst, self.default_value)
 
 

@@ -4,7 +4,7 @@ import bpy
 
 from grille_cdae.common import *
 from grille_cdae.enums import *
-from grille_cdae.blender.shader_nodes import ShaderNodeRegistry, BaseShaderNode, BeamRGBAMath, BeamImageTex, BeamBSDF15
+from grille_cdae.blender.shader_nodes import ShaderNodeRegistry, BaseShaderNode, BeamRGBAMath, BeamImageTex, BeamBSDF15, BeamBSDFCollision, NODE_GROUP_VERSION_MINOR_KEY, update_node_groups
 
 import grille_cdae.addon as addon
 
@@ -63,6 +63,43 @@ class ShaderNodesTest(unittest.TestCase):
                 if socket.type == "MENU":
                     with self.subTest(f"{cls.__name__}.{socket.name}"):
                         self.assertNotEqual(cast(bpy.types.NodeSocketMenu, socket).default_value, "")
+
+
+    def test_minor_update_keeps_links_and_values(self):
+        node = self.new(BeamBSDFCollision)
+        not_none(node.node_tree)[NODE_GROUP_VERSION_MINOR_KEY] = -1
+        rgb = self.tree.nodes.new("ShaderNodeRGB")
+        self.tree.links.new(rgb.outputs[0], node.inputs["Color"])
+        display = node.inputs["Display"]
+        cast(bpy.types.NodeSocketBool, display).default_value = False
+        display.display_shape = "CIRCLE"
+        display.hide = True
+
+        update_node_groups()
+
+        self.assertFalse(node.is_node_group_outdated)
+        self.assertEqual(not_none(node.node_tree).name, node.get_node_group_name())
+        self.assertEqual([link.from_node for link in node.inputs["Color"].links], [rgb])
+        display = node.inputs["Display"]
+        self.assertFalse(cast(bpy.types.NodeSocketBool, display).default_value)
+        self.assertEqual(display.display_shape, "CIRCLE_DOT")
+        self.assertTrue(display.hide)
+
+
+    def test_minor_update_nested_groups(self):
+        # outer and nested groups all stale, removing an outer group removes the nodes nested in it
+        node = self.new(BeamBSDF15)
+        for group in bpy.data.node_groups: group[NODE_GROUP_VERSION_MINOR_KEY] = -1
+
+        update_node_groups()
+
+        self.assertFalse(node.is_node_group_outdated)
+        self.assertFalse([group.name for group in bpy.data.node_groups if group.name.endswith("_outdated")])
+        for tree in [self.tree, *bpy.data.node_groups]:
+            for inner in tree.nodes:
+                if isinstance(inner, BaseShaderNode):
+                    with self.subTest(f"{tree.name}/{inner.name}"):
+                        self.assertFalse(inner.is_node_group_outdated)
 
 
     def test_rgba_math_operations(self):

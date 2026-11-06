@@ -208,6 +208,13 @@ class BaseShaderNode(ShaderNodeCustomGroup):
         return self.ng_version_mayor > version[0] or self.ng_version_minor > version[1]
 
 
+    @property
+    def is_node_group_minor_outdated(self):
+        """Same interface, the group can be swapped without touching links or values."""
+        version = self.node_tree_version
+        return self.ng_version_mayor == version[0] and self.ng_version_minor > version[1]
+
+
     @classmethod
     def poll(cls, node_tree):
         if node_tree is None: return False
@@ -219,20 +226,24 @@ class BaseShaderNode(ShaderNodeCustomGroup):
 
 
     def init(self, context):
-        tree = self.get_node_group()
-        self.node_tree = tree
-
-        if NODE_GROUP_JSON_KEY in tree:
-            text = tree[NODE_GROUP_JSON_KEY]
-            ngdata = _NODE_GROUP_DATA_RUNTIME_DICT.get(text, None)
-            if ngdata is None:
-                ngdata =  NodeGroupData.from_text(text)
-                _NODE_GROUP_DATA_RUNTIME_DICT[text] = ngdata
-
-            for key in ngdata.inputs: ngdata.inputs[key].apply(self.inputs[key])
-            for key in ngdata.outputs: ngdata.outputs[key].apply(self.outputs[key])
-
+        self.node_tree = self.get_node_group()
+        self.apply_socket_data()
         self.post_init()
+
+
+    def apply_socket_data(self):
+        """Socket shapes live on the node, not the group interface, so they are applied per node."""
+        tree = self.node_tree
+        if tree is None or NODE_GROUP_JSON_KEY not in tree: return
+
+        text = tree[NODE_GROUP_JSON_KEY]
+        ngdata = _NODE_GROUP_DATA_RUNTIME_DICT.get(text, None)
+        if ngdata is None:
+            ngdata =  NodeGroupData.from_text(text)
+            _NODE_GROUP_DATA_RUNTIME_DICT[text] = ngdata
+
+        for key in ngdata.inputs: ngdata.inputs[key].apply(self.inputs[key])
+        for key in ngdata.outputs: ngdata.outputs[key].apply(self.outputs[key])
 
 
     def post_init(self):
@@ -258,9 +269,11 @@ class BaseShaderNode(ShaderNodeCustomGroup):
 
         if self.ng_shared and group_name in bpy.data.node_groups:
             group = bpy.data.node_groups[group_name]
-            if isinstance(group, bpy.types.ShaderNodeTree): return group
-            else: raise Exception()
-        
+            if not isinstance(group, bpy.types.ShaderNodeTree): raise Exception()
+            if group.get(NODE_GROUP_VERSION_MINOR_KEY, -1) >= self.ng_version_minor: return group
+            # outdated, step aside so the fresh group gets the name, update_node_groups moves the users over
+            group.name = f"{group_name}_outdated"
+
         ngb = _Extended_NGB(group_name)
         self.create_node_group(ngb)
         ngb.finish()
@@ -1804,6 +1817,43 @@ class ShaderNodeTree(Menu):
 
 
 
+def _iter_shader_trees():
+    for id in (*bpy.data.materials, *bpy.data.worlds, *bpy.data.lights):
+        if id.node_tree is not None: yield id.node_tree
+    for group in bpy.data.node_groups:
+        if isinstance(group, bpy.types.ShaderNodeTree): yield group
+
+
+def _find_minor_outdated():
+    nodes = [node for tree in _iter_shader_trees() for node in tree.nodes if isinstance(node, BaseShaderNode) and node.is_node_group_minor_outdated]
+    # innermost first, rebuilding an outer group would otherwise step nested groups aside that only the old outer group uses
+    for node in nodes:
+        stale = not_none(node.node_tree)
+        if not any(other.id_data == stale for other in nodes):
+            return stale, [other for other in nodes if other.node_tree == stale]
+    return None
+
+
+def update_node_groups():
+    """
+    Minor updates keep the interface, so outdated groups are swapped for fresh ones, links and values survive.
+    One group at a time, removing a group also removes the nodes nested in it.
+    """
+    while (found := _find_minor_outdated()) is not None:
+        stale, nodes = found
+        fresh = nodes[0].get_node_group()
+        for node in nodes:
+            node.node_tree = fresh
+            node.apply_socket_data()
+        bpy.data.node_groups.remove(stale)
+
+
+@bpy.app.handlers.persistent
+def _load_post(*args: object):
+    update_node_groups()
+
+
+
 class ShaderNodeRegistry:
 
     nodes: list[type[BaseShaderNode]] = [
@@ -1844,10 +1894,12 @@ class ShaderNodeRegistry:
 
         bpy.utils.register_class(ShaderNodeTree)
         bpy.types.NODE_MT_add.append(ShaderNodeTree.addmenu_append) # type: ignore
+        bpy.app.handlers.load_post.append(_load_post)
 
 
     @staticmethod
     def unregister():
+        bpy.app.handlers.load_post.remove(_load_post)
         bpy.types.NODE_MT_add.remove(ShaderNodeTree.addmenu_append) # type: ignore
         bpy.utils.unregister_class(ShaderNodeTree)
 
