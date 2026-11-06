@@ -4,7 +4,8 @@ import bpy
 
 from grille_cdae.common import *
 from grille_cdae.enums import *
-from grille_cdae.blender.shader_nodes import ShaderNodeRegistry, BaseShaderNode, BeamRGBAMath, BeamImageTex, BeamBSDF15, BeamBSDFCollision, NODE_GROUP_VERSION_MINOR_KEY, update_node_groups
+from grille_cdae.blender.shader_nodes import ShaderNodeRegistry, BaseShaderNode, BeamRGBAMath, BeamImageTex, BeamBSDF15, BeamBSDFCollision, BeamUVAnimation, BeamUVData
+from grille_cdae.blender.shader_nodes import NODE_GROUP_VERSION_MAYOR_KEY, NODE_GROUP_VERSION_MINOR_KEY, update_node_groups
 
 import grille_cdae.addon as addon
 
@@ -100,6 +101,59 @@ class ShaderNodesTest(unittest.TestCase):
                 if isinstance(inner, BaseShaderNode):
                     with self.subTest(f"{tree.name}/{inner.name}"):
                         self.assertFalse(inner.is_node_group_outdated)
+
+
+    def fake_old_mayor(self, node: BaseShaderNode, old_names: dict[str, str]):
+        """Turns the node's group into one from the previous major version, with sockets renamed back."""
+        group = not_none(node.node_tree)
+        group.name = f"{group.name}_old"
+        group[NODE_GROUP_VERSION_MAYOR_KEY] = node.ng_version_mayor - 1
+        for item in not_none(group.interface).items_tree:
+            if item.name in old_names: item.name = old_names[item.name]
+        group.interface_update(bpy.context)
+        self.assertTrue(node.is_node_group_mayor_outdated)
+
+
+    def test_mayor_update_follows_renames(self):
+        LS = BeamUVAnimation.Sockets
+        node = self.new(BeamUVAnimation)
+        self.fake_old_mayor(node, {LS.MOTION_SPEED: "Scroll Speed", LS.MOTION_DIRECTION: "Scroll Factor"})
+        cast(bpy.types.NodeSocketMenu, node.inputs[LS.MOTION]).default_value = BeamUVAnimation.Motion.SCROLL
+        cast(bpy.types.NodeSocketFloat, node.inputs["Scroll Speed"]).default_value = 2.5
+        direction = self.tree.nodes.new("ShaderNodeCombineXYZ")
+        self.tree.links.new(direction.outputs[0], node.inputs["Scroll Factor"])
+        uv_data = self.tree.nodes.new(BeamUVData.bl_idname)
+        self.tree.links.new(node.outputs[LS.ANIMATION], uv_data.inputs[BeamUVData.Sockets.ANIMATION])
+
+        self.assertEqual(node.update_node_group_mayor(), [])
+
+        self.assertFalse(node.is_node_group_outdated)
+        self.assertEqual(cast(bpy.types.NodeSocketMenu, node.inputs[LS.MOTION]).default_value, BeamUVAnimation.Motion.SCROLL)
+        self.assertAlmostEqual(cast(bpy.types.NodeSocketFloat, node.inputs[LS.MOTION_SPEED]).default_value, 2.5)
+        self.assertEqual([link.from_node for link in node.inputs[LS.MOTION_DIRECTION].links], [direction])
+        self.assertEqual([link.to_node for link in node.outputs[LS.ANIMATION].links], [uv_data])
+
+
+    def test_mayor_update_operator(self):
+        node = self.new(BeamBSDFCollision)
+        self.fake_old_mayor(node, {"Color": "Tint"})
+        cast(bpy.types.NodeSocketColor, node.inputs["Tint"]).default_value = (1, 0, 0, 1)
+
+        with bpy.context.temp_override(node=node):
+            self.assertEqual(bpy.ops.grille.update_beamng_node(), {'FINISHED'})
+
+        # the identifier survives on the new socket, it must start at the group default, not the old value
+        self.assertFalse(node.is_node_group_outdated)
+        self.assertEqual(tuple(cast(bpy.types.NodeSocketColor, node.inputs["Color"]).default_value), (1, 0, 1, 1))
+
+
+    def test_mayor_update_reports_lost(self):
+        # removed with a changed value is reported, unchanged isn't
+        node = self.new(BeamBSDFCollision)
+        self.fake_old_mayor(node, {"Color": "Tint", "Display": "Show"})
+        cast(bpy.types.NodeSocketColor, node.inputs["Tint"]).default_value = (1, 0, 0, 1)
+        self.assertEqual(node.update_node_group_mayor(), ["Input 'Tint' removed"])
+        self.assertTrue(cast(bpy.types.NodeSocketBool, node.inputs["Display"]).default_value)
 
 
     def test_rgba_math_operations(self):

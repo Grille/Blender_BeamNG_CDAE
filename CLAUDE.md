@@ -43,7 +43,7 @@ The root `__init__.py` puts `src/` and `modules/` on `sys.path` and imports `gri
 
 ### Custom shader nodes
 
-- `blender/shader_nodes.py`: every node is a `ShaderNodeCustomGroup` whose group is built by `create_node_group` with the `shader_node_builder.py` DSL (`a * b >> out`, `NodeSignature` for bundles/closures). Groups are shared by name `.{bl_idname}_v{ng_version_mayor}`, so **bump `ng_version_mayor` whenever a node's interface changes** (sockets renamed, added, removed or retyped; node trees need fixing after the update). Bump `ng_version_minor` for internal changes (group internals, socket shapes, defaults), which let nodes update without problems; `update_node_groups` applies those on file load.
+- `blender/shader_nodes.py`: every node is a `ShaderNodeCustomGroup` whose group is built by `create_node_group` with the `shader_node_builder.py` DSL (`a * b >> out`, `NodeSignature` for bundles/closures). Groups are shared by name `.{bl_idname}_v{ng_version_mayor}`, so **bump `ng_version_mayor` whenever a node's interface changes** (sockets renamed, added, removed or retyped; node trees need fixing after the update). Outdated nodes show an Update button that carries links and values over by socket name; declare renamed sockets in `get_socket_renames`. Bump `ng_version_minor` for internal changes (group internals, socket shapes, defaults), which let nodes update without problems; `update_node_groups` applies those on file load.
 - Nodes parametrised by `Operation` (e.g. `BeamRGBAMath`) are internal building blocks, in the add menu only for debugging. `Operation` is deliberately loose; an unsupported operation throwing is a programmer error, not something to validate.
 
 ## Conventions

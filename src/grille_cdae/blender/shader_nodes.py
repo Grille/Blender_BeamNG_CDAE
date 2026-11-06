@@ -169,6 +169,44 @@ class NodeRuntimeData:
 _NODE_GROUP_DATA_RUNTIME_DICT: dict[str, NodeGroupData] = {}  # keyed by the stored json, pointers get reused after reload / undo
 
 
+
+class SavedSocket:
+    """A socket's state, carried over by name through a major group update."""
+
+    __slots__ = "type", "value", "changed", "hide", "links"
+    def __init__(self, type: str, value: SocketValue | None, changed: bool, hide: bool, links: list[bpy.types.NodeSocket]):
+        self.type = type
+        self.value = value
+        self.changed = changed
+        self.hide = hide
+        self.links = links
+
+
+    @staticmethod
+    def copy_value(socket: bpy.types.NodeSocket | bpy.types.NodeTreeInterfaceSocket) -> SocketValue | None:
+        """Arrays are copied, the socket goes away with the group."""
+        if not hasattr(socket, "default_value"): return None
+        value = butils.get_default_value(socket)
+        return value if isinstance(value, (str, bool, int, float)) else cast(SocketValue, tuple(value))
+
+
+    @staticmethod
+    def save(socket: bpy.types.NodeSocket, links: list[bpy.types.NodeSocket], default: SocketValue | None = None):
+        value = SavedSocket.copy_value(socket)
+        return SavedSocket(socket.type, value, value is not None and value != default, socket.hide, links)
+
+
+    def restore(self, socket: bpy.types.NodeSocket, link: Callable[[bpy.types.NodeSocket], object]):
+        """Returns False when a changed value couldn't be carried over, unchanged values keep the new default."""
+        for other in self.links: link(other)
+        if self.hide: socket.hide = True
+        if not self.changed: return True
+        if socket.type != self.type: return False
+        try: butils.set_default_value(socket, cast(SocketValue, self.value))
+        except (TypeError, ValueError): return False
+        return True
+
+
 def _BaseShaderNode_init(self: BaseShaderNode, ctx: bpy.types.Context):
     return self.init(ctx)
 
@@ -215,6 +253,12 @@ class BaseShaderNode(ShaderNodeCustomGroup):
         return self.ng_version_mayor == version[0] and self.ng_version_minor > version[1]
 
 
+    @property
+    def is_node_group_mayor_outdated(self):
+        """Interface changed, the node tree may need fixing after the update."""
+        return self.node_tree is not None and self.ng_version_mayor > self.node_tree_version[0]
+
+
     @classmethod
     def poll(cls, node_tree):
         if node_tree is None: return False
@@ -250,7 +294,63 @@ class BaseShaderNode(ShaderNodeCustomGroup):
         pass
 
 
+    def get_interface_defaults(self) -> dict[str, SocketValue]:
+        """Input identifier -> the group's default value."""
+        if self.node_tree is None: return {}
+        return {
+            item.identifier: not_none(SavedSocket.copy_value(item)) for item in not_none(self.node_tree.interface).items_tree
+            if isinstance(item, bpy.types.NodeTreeInterfaceSocket) and item.in_out == "INPUT" and hasattr(item, "default_value")
+        }
+
+
+    def get_socket_renames(self, saved: dict[str, SavedSocket]) -> dict[str, str]:
+        """Old input name -> new input name, for values and links to follow a major update."""
+        return {}
+
+
+    def update_node_group_mayor(self) -> list[str]:
+        """Swaps in the current group, carries links, values and hidden state over by socket name, returns what got lost."""
+        tree = cast(bpy.types.ShaderNodeTree, self.id_data)
+        old_defaults = self.get_interface_defaults()
+        inputs = {socket.name: SavedSocket.save(socket, [not_none(link.from_socket) for link in not_none(socket.links)], old_defaults.get(socket.identifier)) for socket in self.inputs}
+        outputs = {socket.name: SavedSocket.save(socket, [not_none(link.to_socket) for link in not_none(socket.links)]) for socket in self.outputs}
+        renames = self.get_socket_renames(inputs)
+
+        # identifiers can survive the swap on a different socket, start clean and restore by name only
+        for socket in (*self.inputs, *self.outputs):
+            for link in list(not_none(socket.links)): tree.links.remove(link)
+
+        self.node_tree = self.get_node_group()
+        defaults = self.get_interface_defaults()
+        for socket in self.inputs:
+            if socket.identifier in defaults: butils.set_default_value(socket, defaults[socket.identifier])
+        self.apply_socket_data()
+        self.post_init()
+
+        lost: list[str] = []
+        for name, saved in inputs.items():
+            new_name = renames.get(name, name)
+            if new_name not in self.inputs:
+                if saved.links or saved.changed: lost.append(f"Input '{name}' removed")
+                continue
+            socket = self.inputs[new_name]
+            if not saved.restore(socket, lambda other: tree.links.new(other, socket)): lost.append(f"Input '{name}' value doesn't fit '{new_name}'")
+        for name, saved in outputs.items():
+            if name not in self.outputs:
+                if saved.links: lost.append(f"Output '{name}' removed")
+                continue
+            socket = self.outputs[name]
+            saved.restore(socket, lambda other: tree.links.new(socket, other))
+        return lost
+
+
     def draw_buttons(self, context: bpy.types.Context, layout: bpy.types.UILayout):
+        if self.is_node_group_mayor_outdated:
+            row = layout.row()
+            row.alert = True
+            row.context_pointer_set("node", self)
+            row.operator(OT_UpdateNodeGroup.bl_idname, text=f"Update v{self.node_tree_version[0]} > v{self.ng_version_mayor}", icon="FILE_REFRESH")
+
         messages = self.runtime.messages
         if len(messages) > 0:
             col = layout.column()
@@ -595,6 +695,20 @@ class BeamUVAnimation(BaseShaderNode):
         VALUE = "Value"
 
 
+    def get_socket_renames(self, saved: dict[str, SavedSocket]):
+        LS = BeamUVAnimation.Sockets
+        # v4, scroll and rotation got shared sockets, take the speed the motion used
+        motion = saved.get(LS.MOTION)
+        rotate = motion is not None and motion.value == BeamUVAnimation.Motion.ROTATE
+        return {
+            "Scroll Factor": LS.MOTION_DIRECTION.value,
+            "Rotation Pivot Offset": LS.MOTION_PIVOT_OFFSET.value,
+            "Rotation Speed" if rotate else "Scroll Speed": LS.MOTION_SPEED.value,
+            "Wave Amplitude": LS.WAVE_AMPLITUDE.value,
+            "Wave Frequency": LS.WAVE_FREQUENCY.value,
+        }
+
+
     def create_node_group(self, ngb: NodeGroupBuilder):
 
         def op(operation: Operation, value: LinkSource): return ngb.nc.math(operation, value)
@@ -883,6 +997,7 @@ class BaseBeamRGBA(BaseShaderNode):
 
 
     def draw_buttons(self, context, layout):
+        super().draw_buttons(context, layout)
         layout.prop(self, "color_value", text="")
 
 BaseBeamRGBA.annotate(
@@ -1854,6 +1969,28 @@ def _load_post(*args: object):
 
 
 
+class OT_UpdateNodeGroup(basetypes.Operator):
+    bl_idname = "grille.update_beamng_node"
+    bl_label = "Update BNG Node"
+    bl_description = "Update the node to the current version, links and values follow by socket name"
+    bl_options = {'REGISTER', 'UNDO'}
+
+
+    @classmethod
+    def poll(cls, context):
+        node = getattr(context, "node", None)
+        return isinstance(node, BaseShaderNode) and node.is_node_group_mayor_outdated
+
+
+    def execute(self, context):
+        node = cast(BaseShaderNode, getattr(context, "node"))
+        lost = node.update_node_group_mayor()
+        for msg in lost: print(f"{node.name}: {msg}")
+        if lost: self.report({'WARNING'}, f"{node.name}: {', '.join(lost)}")
+        return {'FINISHED'}
+
+
+
 class ShaderNodeRegistry:
 
     nodes: list[type[BaseShaderNode]] = [
@@ -1894,12 +2031,14 @@ class ShaderNodeRegistry:
 
         bpy.utils.register_class(ShaderNodeTree)
         bpy.types.NODE_MT_add.append(ShaderNodeTree.addmenu_append) # type: ignore
+        bpy.utils.register_class(OT_UpdateNodeGroup)
         bpy.app.handlers.load_post.append(_load_post)
 
 
     @staticmethod
     def unregister():
         bpy.app.handlers.load_post.remove(_load_post)
+        bpy.utils.unregister_class(OT_UpdateNodeGroup)
         bpy.types.NODE_MT_add.remove(ShaderNodeTree.addmenu_append) # type: ignore
         bpy.utils.unregister_class(ShaderNodeTree)
 
