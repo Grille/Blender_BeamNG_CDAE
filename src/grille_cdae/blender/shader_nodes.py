@@ -635,7 +635,7 @@ class BeamUVAnimation(BaseShaderNode):
 
         # scroll (sets the translation)
         scroll_offset = (scroll_dir * (scroll_speed * seconds)).mix(scroll_dir * wave_offset, wave)
-        trans = scroll_offset * scroll
+        trans = ngb.nc.mix(scroll, (0.0, 0.0, 0.0), scroll_offset)  # mix instead of multiply, so unused inputs are greyed out
 
         # rotation (replaces the matrix, scroll is lost): R * (uv + pivot) + 0.5, R = [cos sin; -sin cos]
         angle = (rot_speed * seconds).mix(wave_offset * TAU, wave)
@@ -657,7 +657,7 @@ class BeamUVAnimation(BaseShaderNode):
         # image sequence: u offset by whole frames, scale shrinks u to one frame
         segment = 1 / frames
         col_u = col_u.mix(col_u * segment, sequence * scale)
-        trans = trans + combine_xyz(op(Operation.FLOOR, seconds * fps) * segment * sequence, 0.0)
+        trans = trans.mix(trans + combine_xyz(op(Operation.FLOOR, seconds * fps) * segment, 0.0), sequence)
 
         # to blender UV space (v flipped on export): u' = a u - b v + (b + c), v' = -d u + e v + (1 - e - f)
         u, v, t = seperate_xyz(col_u), seperate_xyz(col_v), seperate_xyz(trans)
