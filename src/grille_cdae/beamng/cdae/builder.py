@@ -40,6 +40,7 @@ StrEnumMetaData.description[MeshDataEvalMode.Depsgraph] = "More efficient altern
 type _ArrayAny = np.typing.NDArray[np.generic]
 type _ArrayF32 = np.typing.NDArray[np.float32]
 type _ArrayI32 = np.typing.NDArray[np.int32]
+type _ArrayInt = np.typing.NDArray[np.integer[Any]]
 type _ArrayU8 = np.typing.NDArray[np.uint8]
 type Indices = np.typing.NDArray[np.int32]
 
@@ -75,9 +76,26 @@ class CdaeMeshBuilder:
             append(self.colors)
 
             return np.concatenate(keys, axis=1)
-        
+
+
+        def select_vertices(self, order: _ArrayInt):
+            """New vertex i is old vertex order[i], for every vertex attribute."""
+            if self.positions is not None:
+                self.positions = self.positions[order]
+            if self.normals is not None:
+                self.normals = self.normals[order]
+            if self.tangents is not None:
+                self.tangents = self.tangents[order]
+            if self.uvs0 is not None:
+                self.uvs0 = self.uvs0[order]
+            if self.uvs1 is not None:
+                self.uvs1 = self.uvs1[order]
+            if self.colors is not None:
+                self.colors = self.colors[order]
+
 
         def collapse_vertices(self):
+            """Tangents aren't part of the key, loop tangents of a shared vertex differ in the last bits, the first one is kept."""
 
             combined = self.concatenate()
             _, unique_indices, inverse = np.unique(
@@ -87,18 +105,58 @@ class CdaeMeshBuilder:
                 return_index=True
             )
 
-            self.indices = inverse[self.indices].astype(np.int32)
+            self.indices = inverse.ravel()[self.indices].astype(np.int32)
+            self.select_vertices(unique_indices)
 
-            if self.positions is not None:
-                self.positions = self.positions[unique_indices]
-            if self.normals is not None:
-                self.normals = self.normals[unique_indices]
-            if self.uvs0 is not None:
-                self.uvs0 = self.uvs0[unique_indices]
-            if self.uvs1 is not None:
-                self.uvs1 = self.uvs1[unique_indices]
-            if self.colors is not None:
-                self.colors = self.colors[unique_indices]
+
+        def build_draw_regions(self, regions: list[tuple[int, int]], split_blocks: bool, block_size: int = 65536):
+            """
+            regions: (info, triangle count) in index order.
+            Torque draws with 16 bit indices relative to a block aligned to 65536 vertices, a region can't reference
+            vertices from two blocks. With split_blocks, vertices get laid out block by block, a triangle that doesn't
+            fit in the current block starts the next one and splits the region, vertices it shares are duplicated.
+            The few vertices left at the end of a block stay unused, as in BeamNG's own conversions.
+            """
+            vertex_count = 0 if self.positions is None else len(self.positions)
+            draw_regions: list[Tuple3I] = []
+
+            if not split_blocks or vertex_count <= block_size:
+                offset = 0
+                for info, count in regions:
+                    draw_regions.append((offset, count * 3, info))
+                    offset += count * 3
+                return draw_regions
+
+            triangles: list[list[int]] = not_none(self.indices).reshape((-1, 3)).tolist()
+            order: list[int] = []  # new vertex -> old vertex
+            remap: dict[int, int] = {}  # old vertex -> new vertex, current block only
+            block_end = block_size
+            tri_index = 0
+            for info, count in regions:
+                region_start = tri_index
+                for _ in range(count):
+                    triangle = triangles[tri_index]
+                    missing = len({v for v in triangle if v not in remap})
+                    if len(order) + missing > block_end:
+                        if tri_index > region_start:
+                            draw_regions.append((region_start * 3, (tri_index - region_start) * 3, info))
+                            region_start = tri_index
+                        order.extend([order[-1]] * (block_end - len(order)))
+                        block_end += block_size
+                        remap.clear()
+                    for k, vertex in enumerate(triangle):
+                        new = remap.get(vertex)
+                        if new is None:
+                            new = remap[vertex] = len(order)
+                            order.append(vertex)
+                        triangle[k] = new
+                    tri_index += 1
+                if tri_index > region_start:
+                    draw_regions.append((region_start * 3, (tri_index - region_start) * 3, info))
+
+            self.indices = np.array(triangles, dtype=np.int32)
+            self.select_vertices(np.array(order, dtype=np.int64))
+            return draw_regions
 
 
 
@@ -250,33 +308,21 @@ class CdaeMeshBuilder:
             indices_list.extend(matrange)
         npmesh.indices = np.array(indices_list, dtype=np.int32)
 
-        U16_LIMIT = 65535
-
-        draw_regions: list[Tuple3I] = []
-        offset = 0
-        for mat_index in material_ranges:
-            count = len(material_ranges[mat_index]) * 3
-            info = mat_index | CdaeV31.Mesh.DrawRegion.InfoMask.INDEXED
-            if self.split_draw_regions:
-                while count > U16_LIMIT:
-                    draw_regions.append((offset, U16_LIMIT, info))
-                    offset += U16_LIMIT
-                    count -= U16_LIMIT
-            draw_regions.append((offset, count, info))
-            offset += count
-
         DrawRegion = np.dtype([
             ('elements_start', np.int32),
             ('elements_count', np.int32),
             ('material_index', np.int32),
         ])
+
+        npmesh.collapse_vertices()
+        regions = [(mat_index | CdaeV31.Mesh.DrawRegion.InfoMask.INDEXED, len(material_ranges[mat_index])) for mat_index in material_ranges]
+        draw_regions = npmesh.build_draw_regions(regions, self.split_draw_regions)
         npmesh.draw_regions = np.array(draw_regions, dtype=np.int32).reshape((-1, 3))
 
 
         mesh_out = CdaeV31.Mesh()
         mesh_out.type = CdaeV31.MeshType.STANDARD
 
-        npmesh.collapse_vertices()
         mesh_out.draw_regions.set_array(npmesh.draw_regions)
         mesh_out.indices.set_array(npmesh.indices)
         mesh_out.verts.set_array(npmesh.positions)
