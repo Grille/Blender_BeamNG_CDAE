@@ -62,8 +62,8 @@ def make_sample() -> CdaeV31:
     cdae.sequences.append(seq)
     cdae.sequences.append(CdaeV31.Sequence())
 
-    cdae.materials.append(CdaeV31.Material("mat_a"))
-    cdae.materials.append(CdaeV31.Material("mat_b"))
+    cdae.materials.append(CdaeV31.Material("mat_a", 0))
+    cdae.materials.append(CdaeV31.Material("mat_b", 1))
     return cdae
 
 
@@ -108,10 +108,23 @@ class CdaeRoundtripTest(unittest.TestCase):
         self.assertEqual(read.sequences[0].rotationMatters[:40], cdae.sequences[0].rotationMatters)
         self.assertEqual(read.sequences[0].translationMatters[:3], [True, False, True])
         self.assertEqual([m.name for m in read.materials], ["mat_a", "mat_b"])
+        # as in BeamNG's files, the reflectance map is the material itself, no bump or detail map
+        NO_MAP = CdaeV31.Material.NO_MAP
+        self.assertEqual([(m.reflect, m.bump, m.detail) for m in read.materials], [(0, NO_MAP, NO_MAP), (1, NO_MAP, NO_MAP)])
 
 
     def test_uncompressed(self): self.assert_roundtrip(False)
     def test_compressed(self): self.assert_roundtrip(True)
+
+
+    def test_many_siblings(self):
+        # linking used to recurse along the sibling chain
+        tree = CdaeV31().unpack_tree()
+        root_index, _ = tree.create_node("root")
+        for i in range(3000): tree.create_object(f"obj{i}", root_index)
+        for i in range(3000): tree.create_node(f"node{i}", root_index)
+        self.assertEqual([obj_index for obj_index, _ in tree.enumerate_child_objects(root_index)], list(range(3000)))
+        self.assertEqual([node_index for node_index, _ in tree.enumerate_child_nodes(root_index)], list(range(1, 3001)))
 
 
 

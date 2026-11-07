@@ -1,3 +1,4 @@
+import io
 import math
 import unittest
 
@@ -7,6 +8,7 @@ import numpy as np
 from grille_cdae.common import *
 from grille_cdae.beamng.cdae.builder import CdeaBuilder, CdaeMeshBuilder, MeshDataEvalMode
 from grille_cdae.beamng.cdae.builder_tree import CdaeTreeBuildMode
+from grille_cdae.beamng.cdae.io import DaeReader, DaeWriter
 
 
 
@@ -66,6 +68,15 @@ class BuilderScaleTest(unittest.TestCase):
         verts = cdae.meshes[0].verts.to_array().reshape(-1, 3)
         np.testing.assert_allclose(verts.max(axis=0), [1, 1, 1], atol=1e-5)
         np.testing.assert_allclose(cdae.defaultAlignedScales.unpack_list()[0], [2, 3, 4], atol=1e-5)
+
+
+    def test_dae_keeps_node_scale(self):
+        # cdae files have no default scale, dae carries it in the node matrix
+        stream = io.StringIO()
+        DaeWriter.write_to_stream(self.build(apply_scale=False), stream) # pyright: ignore[reportArgumentType]
+        read = DaeReader.read_from_stream(io.BytesIO(stream.getvalue().encode())) # pyright: ignore[reportArgumentType]
+        scales = read.defaultAlignedScales.unpack_list()
+        self.assertTrue(any(np.allclose(scale, [2, 3, 4], atol=1e-4) for scale in scales), scales)
 
 
     def test_radius_is_half_diagonal(self):

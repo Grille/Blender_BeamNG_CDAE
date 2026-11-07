@@ -591,7 +591,7 @@ class CdeaBuilder:
         
         self.materials = []
         for mat in self.material_indexer.materials:
-            res = CdaeV31.Material()
+            res = CdaeV31.Material(index=len(self.cdae.materials))
             self.cdae.materials.append(res)
             if mat is None:
                 res.name = "undefined"

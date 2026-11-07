@@ -220,8 +220,9 @@ class DaeMatrix:
 
 
     @staticmethod
-    def from_cdae(quat: Quat4I16, location: Vec3F):
+    def from_cdae(quat: Quat4I16, location: Vec3F, scale: Vec3F | None = None):
         matrix = quat.to_collada_quaternion().to_matrix().to_4x4()
+        if scale is not None: matrix = matrix @ mathutils.Matrix.Diagonal((*scale, 1.0))
         matrix.translation = location
         return DaeMatrix.from_matrix(matrix)
 

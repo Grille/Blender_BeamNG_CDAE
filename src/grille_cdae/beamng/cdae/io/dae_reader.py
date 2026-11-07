@@ -206,8 +206,8 @@ def parse_collada(xml: XmlReader) -> Collada:
     return dae
 
 
-def convert_material(daemat: Material) -> CdaeV31.Material:
-    mat = CdaeV31.Material()
+def convert_material(daemat: Material, index: int) -> CdaeV31.Material:
+    mat = CdaeV31.Material(index=index)
     mat.name = daemat.name
     return mat
 
@@ -297,7 +297,7 @@ def convert(dae: Collada):
     material_dict: dict[str, str] = {}
     for mat_id in dae.materials:
         mat = dae.materials[mat_id]
-        cdae.materials.append(convert_material(mat))
+        cdae.materials.append(convert_material(mat, len(cdae.materials)))
         material_dict[mat_id] = mat.name
         print(f"assign {mat_id} {mat.name}")
 

@@ -67,6 +67,9 @@ class CdaeV31:
             self.node_rotations = rotations
             self.node_aligned_scales = aligned_scales
             self.objects = objects
+            # parent node -> last linked child, so appending doesn't walk the whole sibling chain
+            self._last_child_node: dict[int, int] = {}
+            self._last_child_object: dict[int, int] = {}
 
 
         def enumerate_root(self):
@@ -146,11 +149,10 @@ class CdaeV31:
 
         @staticmethod
         def _set_last_sibling(list: 'Sequence[CdaeV31.Node|CdaeV31.Object]', current_index: int, value: int):
-            next_index = list[current_index].nextSibling
-            if next_index == -1:
-                list[current_index].nextSibling = value
-            else:
-                CdaeV31.Tree._set_last_sibling(list, next_index, value)
+            # iterative, nodes with ~1000 children would hit the recursion limit
+            while list[current_index].nextSibling != -1:
+                current_index = list[current_index].nextSibling
+            list[current_index].nextSibling = value
 
 
         def link_node(self, parent_index: int, node_index: int):
@@ -165,9 +167,9 @@ class CdaeV31:
             first = self.nodes[parent_index].firstChild
             if first == -1:
                 self.nodes[parent_index].firstChild = node_index
-                return
-            
-            CdaeV31.Tree._set_last_sibling(self.nodes, first, node_index)
+            else:
+                CdaeV31.Tree._set_last_sibling(self.nodes, self._last_child_node.get(parent_index, first), node_index)
+            self._last_child_node[parent_index] = node_index
 
 
         def link_object(self, parent_index: int, obj_index: int):
@@ -182,9 +184,9 @@ class CdaeV31:
             first = self.nodes[parent_index].firstObject
             if first == -1:
                 self.nodes[parent_index].firstObject = obj_index
-                return
-            
-            CdaeV31.Tree._set_last_sibling(self.objects, first, obj_index)
+            else:
+                CdaeV31.Tree._set_last_sibling(self.objects, self._last_child_object.get(parent_index, first), obj_index)
+            self._last_child_object[parent_index] = obj_index
 
 
         def get_mesh_name(self, mesh_index: int):
@@ -465,18 +467,26 @@ class CdaeV31:
             SUBTRACTIVE = 1 << 4 
             SELF_ILLUMINATING = 1 << 5 
             NEVER_ENV_MAP = 1 << 6   
-            NO_MIP_MAP = 1 << 7    
-            MIP_MAP_ZERO_BORDER = 1 << 8 
-            AUXILIARY_MAP = 1 << 0   
+            NO_MIP_MAP = 1 << 7
+            MIP_MAP_ZERO_BORDER = 1 << 8
+            IFL_MATERIAL = 1 << 27
+            IFL_FRAME = 1 << 28
+            DETAIL_MAP_ONLY = 1 << 29
+            BUMP_MAP_ONLY = 1 << 30
+            REFLECTANCE_MAP_ONLY = 1 << 31
+            AUXILIARY_MAP = DETAIL_MAP_ONLY | BUMP_MAP_ONLY | REFLECTANCE_MAP_ONLY | IFL_FRAME
 
 
+        NO_MAP = 0xFFFFFFFF  # unsigned in the files, not -1
 
-        def __init__(self, name: str =""):
+
+        def __init__(self, name: str = "", index: int | None = None):
+            """index: the material's own index, BeamNG's files point the reflectance map at the material itself."""
             self.name: str = name
             self.flags: int = 3
-            self.reflect: int = 0
-            self.bump: int = 0
-            self.detail: int = 0
+            self.reflect: int = CdaeV31.Material.NO_MAP if index is None else index
+            self.bump: int = CdaeV31.Material.NO_MAP
+            self.detail: int = CdaeV31.Material.NO_MAP
             self.detailScale: float = 1.0
             self.reflectionAmount: float = 1.0
 
@@ -536,7 +546,7 @@ class CdaeV31:
             if mat.name == name:
                 return idx
         if create:
-            self.materials.append(CdaeV31.Material(name))
+            self.materials.append(CdaeV31.Material(name, len(self.materials)))
             return len(self.materials) - 1
         return 0
 

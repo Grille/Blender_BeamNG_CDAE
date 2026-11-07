@@ -191,13 +191,16 @@ def write_to_tree(cdae: CdaeV31, dae: ET.Element):
 
     default_translations = cdae.defaultTranslations.unpack_list()
     default_rotation = cdae.defaultRotations.unpack_list()
+    # not part of cdae files, only set by the builder when scale isn't applied to the mesh
+    default_scales = cdae.defaultAlignedScales.unpack_list()
 
     # Build tree: recursively walk nodes and objects
     def process_node(node_index: int, node: CdaeV31.Node, parent_xml_node: ET.Element):
         node_name = cdae.names[node.nameIndex]
         xml_node = ET.SubElement(parent_xml_node, DaeTag.node, {"id": node_name, "name": node_name, "type": "NODE"})
 
-        matrix = DaeMatrix.from_cdae(default_rotation[node_index], default_translations[node_index])
+        scale = default_scales[node_index] if node_index < len(default_scales) else None
+        matrix = DaeMatrix.from_cdae(default_rotation[node_index], default_translations[node_index], scale)
         ET.SubElement(xml_node, DaeTag.matrix, {"sid": "transform"}).text = format_float_list(matrix.values)
 
         for obj_index, obj in cdae_tree.enumerate_child_objects(node_index):
