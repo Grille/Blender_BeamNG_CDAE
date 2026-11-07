@@ -572,36 +572,6 @@ class BeamFactorFloat(BaseShaderNode):
 
 
 
-class BeamDetailUVScale(BaseShaderNode):
-
-    bl_idname = f"{SHADER_NODE_PREFIX}DetailUVSCale"
-    bl_label = "BNG Detail UV Scale"
-    bl_nclass = "OP_VECTOR"
-    ng_color_tag = GroupColorTag.VECTOR
-
-
-    def create_node_group(self, ngb: NodeGroupBuilder):
-        pass
-        
-        # ngb.create_vector_input("UV", True)
-        # ngb.create_vector_input("Scale", default_value=(1.0,1.0,1.0), subtype="XYZ", dimensions=2)
-        # #ngb.create_float_input("Scale V", default_value=1.0, range=None, subtype=None)
-        # ngb.create_vector_output("UV")
-
-        # inputs, outputs = ngb._create_io()
-
-        # #vec = ngb.create_node(NodeName.CombineXYZ)
-        # mul = ngb.create_node(NodeName.VectorMath, operation=Operation.MULTIPLY)
-
-        # #ngb.link(inputs, 1, vec, 0)
-        # #ngb.link(inputs, 2, vec, 1)
-
-        # ngb.link(inputs, 0, mul, 0)
-        # ngb.link(inputs, 1, mul, 1)
-        # ngb.link(mul, 0, outputs)
-
-
-
 class BeamUVData(BaseShaderNode):
 
     bl_idname = f"{SHADER_NODE_PREFIX}UVData"
@@ -823,88 +793,6 @@ class BeamUVAnimation(BaseShaderNode):
         a, d, b, e, c, f = u[0], u[1], v[0], v[1], t[0], t[1]
         enabled = (motion > 0) | wave | scale | sequence
         ngb.nc.combine_bundle(UVMATRIX, combine_xyz(a, -b, b + c), combine_xyz(-d, e, 1 - e - f), enabled) >> output
-
-
-
-class BeamDetailColor(BaseShaderNode):
-
-    bl_idname = f"{SHADER_NODE_PREFIX}DetailColor"
-    bl_label = "BNG Detail Color"
-    bl_nclass = "OP_COLOR"
-    ng_color_tag = GroupColorTag.COLOR
-
-
-    def update(self):
-        messages = self.runtime.messages
-        messages.clear()
-        nlv = NodeLayoutValidator(self)
-
-        if nlv.try_follow(1):
-            if nlv.is_node_idname(BeamFactorColor.bl_idname):
-                messages.append("- Base:")
-                messages.append(f"{BeamFactorColor.bl_label} must come after {BeamDetailColor.bl_label}")
-
-
-    # def post_init(self):
-    #     self.inputs["Strength"].display_shape = VALUE_SOCKET_SHAPE
-    #     self.inputs["Base"].display_shape = TEXTURE_SOCKET_SHAPE
-    #     self.inputs["Detail"].display_shape = TEXTURE_SOCKET_SHAPE
-    #     self.outputs["Result"].display_shape = TEXTURE_SOCKET_SHAPE
-
-
-    # def create_node_group(self, ngb: NodeGroupBuilder):
-
-    #     ngb.create_float_input("Strength")
-    #     ngb.create_color_input("Base", True, default_value=(1.0,1.0,1.0,1.0))
-    #     ngb.create_color_input("Detail", True, default_value=(0.5,0.5,0.5,1.0))
-
-    #     ngb.create_color_output("Result")
-
-    #     inputs, outputs = ngb._create_io()
-
-    #     separate = ngb.create_node(NodeName.SeparateColor, mode='HSV')
-    #     greater = ngb.create_math(Operation.GREATER_THAN, value1=0.5)
-
-    #     light_multiply = ngb.create_math(Operation.MULTIPLY, value1=1.0)
-    #     light_vm_sub  = ngb.create_node(NodeName.VectorMath, operation=Operation.SUBTRACT)
-    #     light_vm_sub.inputs[1].default_value = (0.5,0.5,0.5)
-    #     light_vm_mul  = ngb.create_node(NodeName.VectorMath, operation=Operation.MULTIPLY)
-    #     light_vm_add  = ngb.create_node(NodeName.VectorMath, operation=Operation.ADD)
-
-    #     def create_mix(mode: str):
-    #         mix = ngb.create_node(
-    #             NodeName.Mix,
-    #             data_type = Operation.RGBA,
-    #             blend_type = mode,
-    #             clamp_factor = False,
-    #             clamp_result = False,
-    #         )
-    #         bpy.context.view_layer.update()
-    #         return mix
-        
-    #     mix = create_mix(Operation.MIX)
-    #     dark = create_mix(Operation.LINEAR_LIGHT)
-
-    #     ngb.link(light_vm_sub, 0, light_vm_mul, 0)
-    #     ngb.link(light_vm_mul, 0, light_vm_add, 0)
-
-    #     ngb.link(inputs, 0, dark, 0)
-    #     ngb.link(inputs, 0, light_multiply, 0)
-    #     ngb.link(light_multiply, 0, light_vm_mul, 1)
-
-    #     ngb.link(inputs, 1, dark, SocketIndex.MixColorIn0)
-    #     ngb.link(inputs, 1, light_vm_add, 1)
-
-    #     ngb.link(inputs, 2, dark, SocketIndex.MixColorIn1)
-    #     ngb.link(inputs, 2, light_vm_sub, 0)
-    #     ngb.link(inputs, 2, separate, 0)
-
-    #     ngb.link(separate, 2, greater, 0)
-    #     ngb.link(greater, 0, mix, 0)
-    #     ngb.link(dark, SocketIndex.MixColorOut, mix, SocketIndex.MixColorIn0)
-    #     ngb.link(light_vm_add, 0, mix, SocketIndex.MixColorIn1)
-
-    #     ngb.link(mix, SocketIndex.MixColorOut, outputs, 0)
 
 
 
@@ -2009,10 +1897,8 @@ class ShaderNodeRegistry:
         BeamStageMix, 
         BeamMaterial, 
         BeamFactorColor, 
-        BeamFactorFloat, 
-        BeamDetailUVScale, 
+        BeamFactorFloat,
         BeamUVAnimation,
-        BeamDetailColor, 
         BeamDetailNormal,
         BeamInvertBackfaceNormal,
         BeamImageTex,
