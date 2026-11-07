@@ -4,7 +4,7 @@ import bpy
 
 from grille_cdae.common import *
 from grille_cdae.enums import *
-from grille_cdae.blender.shader_nodes import ShaderNodeRegistry, BaseShaderNode, BeamRGBAMath, BeamImageTex, BeamBSDF15, BeamBSDFCollision, BeamUVAnimation, BeamUVData, ImageType
+from grille_cdae.blender.shader_nodes import ShaderNodeRegistry, BaseShaderNode, BeamRGBAMath, BeamImageTex, BeamBSDF15, BeamBSDFCollision, BeamUVAnimation, BeamUVData, ImageType, BeamBDSF10Basic, BeamImageTexConverter
 from grille_cdae.blender.shader_nodes import NODE_GROUP_VERSION_MAYOR_KEY, NODE_GROUP_VERSION_MINOR_KEY, update_node_groups
 
 import grille_cdae.addon as addon
@@ -162,13 +162,39 @@ class ShaderNodesTest(unittest.TestCase):
         node = cast(BeamImageTex, self.new(BeamImageTex))
         node.image_type = ImageType.NORMAL
         self.fake_old_mayor(node, {LS.COLOR_RGBA: "Color RGBA", LS.COLOR_RGB: "Color RGB"})
-        bsdf = self.tree.nodes.new("ShaderNodeBsdfPrincipled")
-        self.tree.links.new(node.outputs["Color RGBA"], bsdf.inputs["Base Color"])
+        bsdf = self.new(BeamBDSF10Basic)
+        self.tree.links.new(node.outputs["Color RGBA"], bsdf.inputs[BeamBDSF10Basic.Sockets.COLOR_MAP])
 
         self.assertEqual(node.update_node_group_mayor(), [])
 
         self.assertTrue(node.outputs[LS.COLOR_RGBA].is_linked)
         self.assertEqual([s.name for s in node.outputs if not s.hide], [LS.COLOR_RGBA, LS.NORMAL])
+
+
+    def test_image_output_follows_link(self):
+        LS = BeamImageTex.Sockets
+        for node_type in (BeamImageTex, BeamImageTexConverter):
+            with self.subTest(node_type.bl_label):
+                node = cast(BeamImageTex, self.new(node_type))
+                bsdf = self.tree.nodes.new("ShaderNodeBsdfPrincipled")
+                cases = (("Roughness", LS.DATA), ("Normal", LS.NORMAL), ("Base Color", LS.COLOR_RGB))
+                for target, expected in cases:
+                    self.tree.links.new(node.outputs[LS.COLOR_RGB if expected != LS.COLOR_RGB else LS.DATA], bsdf.inputs[target])
+                    self.assertEqual(node.image_type, expected)
+                    self.assertTrue(node.outputs[expected].is_linked)
+                # every link sits on the output its target expects, unlinked other outputs are hidden
+                self.assertEqual([s.name for s in node.outputs if not s.hide], [LS.COLOR_RGB, LS.NORMAL, LS.DATA])
+                self.assertEqual(sum(len(not_none(s.links)) for s in node.outputs), 3)
+
+
+    def test_image_output_none_keeps_links(self):
+        LS = BeamImageTex.Sockets
+        node = cast(BeamImageTex, self.new(BeamImageTex))
+        node.image_type = ImageType.NONE
+        bsdf = self.tree.nodes.new("ShaderNodeBsdfPrincipled")
+        self.tree.links.new(node.outputs[LS.COLOR_RGB], bsdf.inputs["Roughness"])
+        self.assertTrue(node.outputs[LS.COLOR_RGB].is_linked)
+        self.assertEqual(node.image_type, ImageType.NONE)
 
 
     def test_rgba_math_operations(self):

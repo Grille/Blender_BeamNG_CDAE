@@ -67,10 +67,11 @@ def _is_bundle(socket: bpy.types.NodeSocket) -> bool:
 
 def _image_output(socket: bpy.types.NodeSocket, field: Tex) -> ImageType:
     """The image converter output the target socket expects."""
-    if _is_bundle(socket): return ImageType.COLOR_RGBA
+    # same rule the image nodes follow when linked
+    wanted = ImageType.for_socket(socket)
+    if wanted == ImageType.COLOR_RGBA: return wanted
     if field.normal: return ImageType.NORMAL
-    if socket.type == 'VALUE': return ImageType.DATA
-    return ImageType.COLOR_RGB
+    return wanted or ImageType.COLOR_RGB
 
 
 

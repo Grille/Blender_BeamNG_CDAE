@@ -405,6 +405,23 @@ class ImageType(StrEnum):
     DATA = "Data"
 
 
+    @staticmethod
+    def for_socket(socket: types.NodeSocket) -> ImageType | None:
+        """The image output a socket expects, None for sockets an image doesn't go into."""
+        return _SOCKET_IMAGE_TYPES.get(socket.type)
+
+
+_SOCKET_IMAGE_TYPES: dict[str, ImageType] = {
+    'BUNDLE': ImageType.COLOR_RGBA,
+    'RGBA': ImageType.COLOR_RGB,
+    'VECTOR': ImageType.NORMAL,
+    'VALUE': ImageType.DATA,
+}
+
+# nodes inside their own update, moving a link updates the tree again
+_IMAGE_TEX_UPDATING: set[int] = set()
+
+
 
 class _BeamImageTexIO_Sockets(StrEnum):
     STRENGTH = SocketName.Strength
@@ -431,6 +448,32 @@ class _BeamImageTexIO(BaseShaderNode):
     def draw_buttons(self, context: Context, layout: UILayout):
         super().draw_buttons(context, layout)
         layout.prop(self, "image_type")
+
+
+    def update(self):
+        # None shows every output and leaves the choice to the user, outdated groups still have the old names
+        if self.image_type == ImageType.NONE or self.is_node_group_mayor_outdated: return
+        pointer = self.as_pointer()
+        if pointer in _IMAGE_TEX_UPDATING: return
+        _IMAGE_TEX_UPDATING.add(pointer)
+        try: self.follow_links()
+        finally: _IMAGE_TEX_UPDATING.discard(pointer)
+
+
+    def follow_links(self):
+        """Moves each link to the output its target socket expects, the type follows the last moved link."""
+        tree = cast(bpy.types.NodeTree, self.id_data)
+        image_type: ImageType | None = None
+        for output in self.outputs:
+            for link in list(not_none(output.links)):
+                to_socket = not_none(link.to_socket)
+                wanted = ImageType.for_socket(to_socket)
+                if wanted is None or wanted == output.name or wanted not in self.outputs: continue
+                muted = link.is_muted
+                tree.links.remove(link)
+                tree.links.new(self.outputs[wanted], to_socket).is_muted = muted
+                image_type = wanted
+        if image_type is not None and image_type != self.image_type: self.image_type = image_type
 
 
     def post_init(self):
