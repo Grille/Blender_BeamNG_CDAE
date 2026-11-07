@@ -4,7 +4,7 @@ import bpy
 
 from grille_cdae.common import *
 from grille_cdae.enums import *
-from grille_cdae.blender.shader_nodes import ShaderNodeRegistry, BaseShaderNode, BeamRGBAMath, BeamImageTex, BeamBSDF15, BeamBSDFCollision, BeamUVAnimation, BeamUVData
+from grille_cdae.blender.shader_nodes import ShaderNodeRegistry, BaseShaderNode, BeamRGBAMath, BeamImageTex, BeamBSDF15, BeamBSDFCollision, BeamUVAnimation, BeamUVData, ImageType
 from grille_cdae.blender.shader_nodes import NODE_GROUP_VERSION_MAYOR_KEY, NODE_GROUP_VERSION_MINOR_KEY, update_node_groups
 
 import grille_cdae.addon as addon
@@ -154,6 +154,21 @@ class ShaderNodesTest(unittest.TestCase):
         cast(bpy.types.NodeSocketColor, node.inputs["Tint"]).default_value = (1, 0, 0, 1)
         self.assertEqual(node.update_node_group_mayor(), ["Input 'Tint' removed"])
         self.assertTrue(cast(bpy.types.NodeSocketBool, node.inputs["Display"]).default_value)
+
+
+    def test_mayor_update_renamed_outputs(self):
+        # v1 renamed the outputs, links follow and the type picks the visible ones
+        LS = BeamImageTex.Sockets
+        node = cast(BeamImageTex, self.new(BeamImageTex))
+        node.image_type = ImageType.NORMAL
+        self.fake_old_mayor(node, {LS.COLOR_RGBA: "Color RGBA", LS.COLOR_RGB: "Color RGB"})
+        bsdf = self.tree.nodes.new("ShaderNodeBsdfPrincipled")
+        self.tree.links.new(node.outputs["Color RGBA"], bsdf.inputs["Base Color"])
+
+        self.assertEqual(node.update_node_group_mayor(), [])
+
+        self.assertTrue(node.outputs[LS.COLOR_RGBA].is_linked)
+        self.assertEqual([s.name for s in node.outputs if not s.hide], [LS.COLOR_RGBA, LS.NORMAL])
 
 
     def test_rgba_math_operations(self):

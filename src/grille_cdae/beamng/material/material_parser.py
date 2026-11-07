@@ -237,6 +237,7 @@ class MaterialParser:
             if self.image_nodes == ImageNodeMode.BEAM_IMAGE_TEX:
                 image_node = tree.nodes.new(BeamImageTex.bl_idname)
                 cast(BeamImageTex, image_node).image = image
+                cast(BeamImageTex, image_node).image_type = ImageType(output)
                 converter = image_node
             else:
                 image_node = tree.nodes.new(NodeName.TexImage)
@@ -247,6 +248,7 @@ class MaterialParser:
                 else:
                     CS = BeamImageTexConverter.Sockets
                     converter = tree.nodes.new(BeamImageTexConverter.bl_idname)
+                    cast(BeamImageTexConverter, converter).image_type = ImageType(output)
                     tree.links.new(image_node.outputs[SocketName.Color], converter.inputs[CS.COLOR])
                     tree.links.new(image_node.outputs[SocketName.Alpha], converter.inputs[CS.ALPHA])
 

@@ -305,7 +305,7 @@ class BaseShaderNode(ShaderNodeCustomGroup):
 
 
     def get_socket_renames(self, saved: dict[str, SavedSocket]) -> dict[str, str]:
-        """Old input name -> new input name, for values and links to follow a major update."""
+        """Old socket name -> new socket name, for values and links to follow a major update."""
         return {}
 
 
@@ -326,7 +326,6 @@ class BaseShaderNode(ShaderNodeCustomGroup):
         for socket in self.inputs:
             if socket.identifier in defaults: butils.set_default_value(socket, defaults[socket.identifier])
         self.apply_socket_data()
-        self.post_init()
 
         lost: list[str] = []
         for name, saved in inputs.items():
@@ -337,11 +336,14 @@ class BaseShaderNode(ShaderNodeCustomGroup):
             socket = self.inputs[new_name]
             if not saved.restore(socket, lambda other: tree.links.new(other, socket)): lost.append(f"Input '{name}' value doesn't fit '{new_name}'")
         for name, saved in outputs.items():
-            if name not in self.outputs:
+            new_name = renames.get(name, name)
+            if new_name not in self.outputs:
                 if saved.links: lost.append(f"Output '{name}' removed")
                 continue
-            socket = self.outputs[name]
+            socket = self.outputs[new_name]
             saved.restore(socket, lambda other: tree.links.new(socket, other))
+        # after restoring, so it sees the carried over values
+        self.post_init()
         return lost
 
 
@@ -415,7 +417,21 @@ class _BeamImageTexIO_Sockets(StrEnum):
         
 class _BeamImageTexIO(BaseShaderNode):
 
+    # v1, outputs renamed from "Color RGBA" / "Color RGB"
+    ng_version_mayor = 1
+
     image_type: ImageType 
+
+
+    def get_socket_renames(self, saved: dict[str, SavedSocket]):
+        LS = _BeamImageTexIO_Sockets
+        return {"Color RGBA": str(LS.COLOR_RGBA), "Color RGB": str(LS.COLOR_RGB)}
+
+
+    def draw_buttons(self, context: Context, layout: UILayout):
+        super().draw_buttons(context, layout)
+        layout.prop(self, "image_type")
+
 
     def post_init(self):
         def hide(socket: types.NodeSocket, type: ImageType): 
@@ -468,9 +484,6 @@ class BeamImageTexConverter(_BeamImageTexIO):
         in_strength >> normal_map[SocketName.Strength]
         in_color >> normal_map[SocketName.Color]
         normal_map[SocketName.Normal] >> out_normal
-
-    def draw_buttons(self, context: Context, layout: UILayout):
-        layout.prop(self, "image_type")
 
 
 
@@ -528,7 +541,7 @@ class BeamImageTex(_BeamImageTexIO):
 
     def draw_buttons(self, context, layout):
         layout.template_ID(self, "image", open="image.open", new="image.new")
-        layout.prop(self, "image_type")
+        super().draw_buttons(context, layout)
 
 BeamImageTex.annotate(
     image = props.PointerProperty(name="Image", type=bpy.types.Image, update=_BaseShaderNode_init)
