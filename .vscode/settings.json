@@ -9,12 +9,18 @@
         "modules",
         "config",
     ],
+    // stubs opened via Go to Definition are still checked like open source files;
+    // ignore suppresses their diagnostics
+    "python.analysis.ignore": [
+        "bpy",
+        "modules",
+    ],
     "python.analysis.diagnosticMode": "openFilesOnly",
     "python.analysis.packageIndexDepths": [
         { "name": "bpy", "depth": 2 },
     ],
-    // run Pylance in a standalone Node with a larger heap instead of VS Code's
-    "python.analysis.nodeExecutable": "auto",
+    // python.analysis.nodeExecutable is machine-scoped and only works in user
+    // settings; set it there to run Pylance with a larger heap
     "python.analysis.extraPaths": [
         "${workspaceFolder}/bpy",
         "${workspaceFolder}/modules",
