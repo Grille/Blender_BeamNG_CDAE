@@ -171,6 +171,24 @@ class ShaderNodesTest(unittest.TestCase):
         self.assertEqual([s.name for s in node.outputs if not s.hide], [LS.COLOR_RGBA, LS.NORMAL])
 
 
+    def test_image_tex_group_found_by_image(self):
+        # group names don't identify the image, images get renamed and Blender 4.5 cuts names at 63 bytes
+        image = bpy.data.images.new("tex_a", 4, 4)
+        first = cast(BeamImageTex, self.new(BeamImageTex))
+        first.image = image
+        group = not_none(first.node_tree)
+        image.name = "tex_renamed"
+        group.name = f"{BaseShaderNode.get_node_group_name(first)}_tex_"
+
+        second = cast(BeamImageTex, self.new(BeamImageTex))
+        second.image = image
+        third = cast(BeamImageTex, self.new(BeamImageTex))
+        third.image = bpy.data.images.new("tex_b", 4, 4)
+
+        self.assertEqual(second.node_tree, group)
+        self.assertNotEqual(third.node_tree, group)
+
+
     def test_image_output_follows_link(self):
         LS = BeamImageTex.Sockets
         for node_type in (BeamImageTex, BeamImageTexConverter):

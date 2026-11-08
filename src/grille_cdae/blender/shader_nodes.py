@@ -391,15 +391,26 @@ class BaseShaderNode(ShaderNodeCustomGroup):
         return f".{self.bl_idname}_v{self.ng_version_mayor}"
 
     
-    def get_node_group(self): 
+    def find_node_group(self) -> bpy.types.ShaderNodeTree | None:
+        """The existing group to share, may be minor outdated."""
+        # the stubs type every group as a ShaderNodeTree
+        group = cast(bpy.types.NodeTree | None, bpy.data.node_groups.get(self.get_node_group_name()))
+        if group is not None and not isinstance(group, bpy.types.ShaderNodeTree): raise Exception()
+        return group
+
+
+    def is_node_group_current(self, group: bpy.types.NodeTree) -> bool:
+        return group.get(NODE_GROUP_VERSION_MINOR_KEY, -1) >= self.ng_version_minor
+
+
+    def get_node_group(self):
         group_name = self.get_node_group_name()
 
-        if self.ng_shared and group_name in bpy.data.node_groups:
-            group = bpy.data.node_groups[group_name]
-            if not isinstance(group, bpy.types.ShaderNodeTree): raise Exception()
-            if group.get(NODE_GROUP_VERSION_MINOR_KEY, -1) >= self.ng_version_minor: return group
+        group = self.find_node_group() if self.ng_shared else None
+        if group is not None:
+            if self.is_node_group_current(group): return group
             # outdated, step aside so the fresh group gets the name, update_node_groups moves the users over
-            group.name = f"{group_name}_outdated"
+            if not group.name.endswith("_outdated"): group.name = f"{group_name}_outdated"
 
         ngb = _Extended_NGB(group_name)
         self.create_node_group(ngb)
@@ -578,9 +589,22 @@ class BeamImageTex(_BeamImageTexIO):
 
 
     def get_node_group_name(self):
+        # only for reading, Blender 4.5 cuts names at 63 bytes and images get renamed, find_node_group matches the image
         base_name = super().get_node_group_name()
         return base_name if self.image is None else f"{base_name}_{self.image.name_full}"
-    
+
+
+    def find_node_group(self) -> bpy.types.ShaderNodeTree | None:
+        """The group holding this node's image, a current one first."""
+        prefix = super().get_node_group_name()
+        found: list[bpy.types.ShaderNodeTree] = []
+        for group in bpy.data.node_groups:
+            if not isinstance(group, bpy.types.ShaderNodeTree) or not group.name.startswith(prefix): continue
+            if group.get(NODE_GROUP_VERSION_MAYOR_KEY) != self.ng_version_mayor: continue
+            images = [node.image for node in group.nodes if isinstance(node, bpy.types.ShaderNodeTexImage)]
+            if images == [self.image]: found.append(group)
+        return next((group for group in found if self.is_node_group_current(group)), found[0] if found else None)
+
 
     def create_node_group(self, ngb):
 
