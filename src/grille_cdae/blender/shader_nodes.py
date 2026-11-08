@@ -164,6 +164,7 @@ class NodeRuntimeData:
 
     def __init__(self):
         self.messages: list[str] = []
+        self.updating = False
 
 
 
@@ -347,6 +348,18 @@ class BaseShaderNode(ShaderNodeCustomGroup):
         return lost
 
 
+    def update(self) -> None:
+        runtime = self.runtime
+        if runtime.updating: return
+        runtime.updating = True
+        try: self.single_update()
+        finally: runtime.updating = False
+
+
+    def single_update(self):
+        """Called from update, links and sockets can be changed here without updating the node again."""
+
+
     def draw_buttons(self, context: bpy.types.Context, layout: bpy.types.UILayout):
         if self.is_node_group_mayor_outdated:
             row = layout.row()
@@ -418,10 +431,6 @@ _SOCKET_IMAGE_TYPES: dict[str, ImageType] = {
     'VALUE': ImageType.DATA,
 }
 
-# nodes inside their own update, moving a link updates the tree again
-_IMAGE_TEX_UPDATING: set[int] = set()
-
-
 
 class _BeamImageTexIO_Sockets(StrEnum):
     STRENGTH = SocketName.Strength
@@ -447,17 +456,20 @@ class _BeamImageTexIO(BaseShaderNode):
 
     def draw_buttons(self, context: Context, layout: UILayout):
         super().draw_buttons(context, layout)
+        self.draw_buttons_top(layout)
         layout.prop(self, "image_type")
 
 
-    def update(self):
-        # None shows every output and leaves the choice to the user, outdated groups still have the old names
-        if self.image_type == ImageType.NONE or self.is_node_group_mayor_outdated: return
-        pointer = self.as_pointer()
-        if pointer in _IMAGE_TEX_UPDATING: return
-        _IMAGE_TEX_UPDATING.add(pointer)
-        try: self.follow_links()
-        finally: _IMAGE_TEX_UPDATING.discard(pointer)
+    def draw_buttons_top(self, layout: UILayout):...
+
+
+    def single_update(self):
+        # still being created, or an outdated group with the old socket names
+        if self.node_tree is None or self.is_node_group_mayor_outdated: return
+        # None shows every output and leaves the choice to the user
+        if self.image_type != ImageType.NONE: self.follow_links()
+        # hides outputs again once their link is gone
+        self.post_init()
 
 
     def follow_links(self):
@@ -582,9 +594,8 @@ class BeamImageTex(_BeamImageTexIO):
         converter[CS.DATA] >> out_data
 
 
-    def draw_buttons(self, context, layout):
+    def draw_buttons_top(self, layout):
         layout.template_ID(self, "image", open="image.open", new="image.new")
-        super().draw_buttons(context, layout)
 
 BeamImageTex.annotate(
     image = props.PointerProperty(name="Image", type=bpy.types.Image, update=_BaseShaderNode_init)
@@ -1494,7 +1505,7 @@ class BeamBSDF15(BaseShaderNode):
     ng_version_mayor = 2
 
 
-    def update(self):
+    def single_update(self):
         messages = self.runtime.messages
         messages.clear()
 
