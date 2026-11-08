@@ -114,10 +114,19 @@ class ShaderNodesTest(unittest.TestCase):
         self.assertTrue(node.is_node_group_mayor_outdated)
 
 
+    def update_with_renames(self, node: BaseShaderNode, renames: dict[str, str]) -> list[str]:
+        """Runs the major update as if the node declared the renames, nodes stay at version 0 until the rework is released."""
+        cls = type(node)
+        cls.get_socket_renames = lambda self, saved: renames # pyright: ignore[reportAttributeAccessIssue]
+        try: return node.update_node_group_mayor()
+        finally: del cls.get_socket_renames # pyright: ignore[reportAttributeAccessIssue]
+
+
     def test_mayor_update_follows_renames(self):
         LS = BeamUVAnimation.Sockets
+        renames = {"Scroll Speed": str(LS.MOTION_SPEED), "Scroll Factor": str(LS.MOTION_DIRECTION)}
         node = self.new(BeamUVAnimation)
-        self.fake_old_mayor(node, {LS.MOTION_SPEED: "Scroll Speed", LS.MOTION_DIRECTION: "Scroll Factor"})
+        self.fake_old_mayor(node, {new: old for old, new in renames.items()})
         cast(bpy.types.NodeSocketMenu, node.inputs[LS.MOTION]).default_value = BeamUVAnimation.Motion.SCROLL
         cast(bpy.types.NodeSocketFloat, node.inputs["Scroll Speed"]).default_value = 2.5
         direction = self.tree.nodes.new("ShaderNodeCombineXYZ")
@@ -125,7 +134,7 @@ class ShaderNodesTest(unittest.TestCase):
         uv_data = self.tree.nodes.new(BeamUVData.bl_idname)
         self.tree.links.new(node.outputs[LS.ANIMATION], uv_data.inputs[BeamUVData.Sockets.ANIMATION])
 
-        self.assertEqual(node.update_node_group_mayor(), [])
+        self.assertEqual(self.update_with_renames(node, renames), [])
 
         self.assertFalse(node.is_node_group_outdated)
         self.assertEqual(cast(bpy.types.NodeSocketMenu, node.inputs[LS.MOTION]).default_value, BeamUVAnimation.Motion.SCROLL)
@@ -166,10 +175,7 @@ class ShaderNodesTest(unittest.TestCase):
         bsdf = self.new(BeamBDSF10Basic)
         self.tree.links.new(node.outputs["Old RGBA"], bsdf.inputs[BeamBDSF10Basic.Sockets.COLOR_MAP])
 
-        # no node declares output renames right now
-        BeamImageTex.get_socket_renames = lambda self, saved: renames # pyright: ignore[reportAttributeAccessIssue]
-        try: self.assertEqual(node.update_node_group_mayor(), [])
-        finally: del BeamImageTex.get_socket_renames
+        self.assertEqual(self.update_with_renames(node, renames), [])
 
         self.assertTrue(node.outputs[LS.COLOR_RGBA].is_linked)
         self.assertEqual([s.name for s in node.outputs if not s.hide], [LS.COLOR_RGBA, LS.NORMAL])

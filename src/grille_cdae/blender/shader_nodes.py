@@ -750,7 +750,6 @@ class BeamUVAnimation(BaseShaderNode):
     bl_idname = f"{SHADER_NODE_PREFIX}UVAnimation"
     bl_label = "BNG UV Animation"
     ng_color_tag = GroupColorTag.VECTOR
-    ng_version_mayor = 5
 
 
     class Sockets(StrEnum):
@@ -787,20 +786,6 @@ class BeamUVAnimation(BaseShaderNode):
     class TimeSource(StrEnum):
         SCENE = "Scene Time"
         VALUE = "Value"
-
-
-    def get_socket_renames(self, saved: dict[str, SavedSocket]):
-        LS = BeamUVAnimation.Sockets
-        # v4, scroll and rotation got shared sockets, take the speed the motion used
-        motion = saved.get(LS.MOTION)
-        rotate = motion is not None and motion.value == BeamUVAnimation.Motion.ROTATE
-        return {
-            "Scroll Factor": LS.MOTION_DIRECTION.value,
-            "Rotation Pivot Offset": LS.MOTION_PIVOT_OFFSET.value,
-            "Rotation Speed" if rotate else "Scroll Speed": LS.MOTION_SPEED.value,
-            "Wave Amplitude": LS.WAVE_AMPLITUDE.value,
-            "Wave Frequency": LS.WAVE_FREQUENCY.value,
-        }
 
 
     def create_node_group(self, ngb: NodeGroupBuilder):
@@ -919,7 +904,6 @@ class BeamBSDFCollision(BaseShaderNode):
     bl_nclass = "SHADER"
     bl_width_default = 200
     ng_color_tag = GroupColorTag.SHADER
-    ng_version_minor = 1
 
 
     def create_node_group(self, ngb):
@@ -1533,7 +1517,6 @@ class BeamBSDF15(BaseShaderNode):
     bl_nclass = "SHADER"
     bl_width_default = 240
     ng_color_tag = GroupColorTag.SHADER
-    ng_version_mayor = 2
 
 
     def single_update(self):
