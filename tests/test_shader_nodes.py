@@ -157,15 +157,19 @@ class ShaderNodesTest(unittest.TestCase):
 
 
     def test_mayor_update_renamed_outputs(self):
-        # v1 renamed the outputs, links follow and the type picks the visible ones
+        # outputs follow renames too, post_init runs after restoring so the type picks the visible ones
         LS = BeamImageTex.Sockets
+        renames = {"Old RGBA": str(LS.COLOR_RGBA), "Old RGB": str(LS.COLOR_RGB)}
         node = cast(BeamImageTex, self.new(BeamImageTex))
         node.image_type = ImageType.NORMAL
-        self.fake_old_mayor(node, {LS.COLOR_RGBA: "Color RGBA", LS.COLOR_RGB: "Color RGB"})
+        self.fake_old_mayor(node, {new: old for old, new in renames.items()})
         bsdf = self.new(BeamBDSF10Basic)
-        self.tree.links.new(node.outputs["Color RGBA"], bsdf.inputs[BeamBDSF10Basic.Sockets.COLOR_MAP])
+        self.tree.links.new(node.outputs["Old RGBA"], bsdf.inputs[BeamBDSF10Basic.Sockets.COLOR_MAP])
 
-        self.assertEqual(node.update_node_group_mayor(), [])
+        # no node declares output renames right now
+        BeamImageTex.get_socket_renames = lambda self, saved: renames # pyright: ignore[reportAttributeAccessIssue]
+        try: self.assertEqual(node.update_node_group_mayor(), [])
+        finally: del BeamImageTex.get_socket_renames
 
         self.assertTrue(node.outputs[LS.COLOR_RGBA].is_linked)
         self.assertEqual([s.name for s in node.outputs if not s.hide], [LS.COLOR_RGBA, LS.NORMAL])

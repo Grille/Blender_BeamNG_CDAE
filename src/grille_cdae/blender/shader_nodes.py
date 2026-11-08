@@ -465,15 +465,7 @@ class _BeamImageTexIO_Sockets(StrEnum):
         
 class _BeamImageTexIO(BaseShaderNode):
 
-    # v1, outputs renamed from "Color RGBA" / "Color RGB"
-    ng_version_mayor = 1
-
     image_type: ImageType 
-
-
-    def get_socket_renames(self, saved: dict[str, SavedSocket]):
-        LS = _BeamImageTexIO_Sockets
-        return {"Color RGBA": str(LS.COLOR_RGBA), "Color RGB": str(LS.COLOR_RGB)}
 
 
     def draw_buttons(self, context: Context, layout: UILayout):
