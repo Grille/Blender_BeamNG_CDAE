@@ -5,7 +5,7 @@ import bpy
 from grille_cdae.common import *
 from grille_cdae.enums import *
 from grille_cdae.blender.shader_nodes import ShaderNodeRegistry, BaseShaderNode, BeamRGBAMath, BeamImageTex, BeamBSDF15, BeamBSDFCollision, BeamUVAnimation, BeamUVData, ImageType, BeamBDSF10Basic, BeamImageTexConverter
-from grille_cdae.blender.shader_nodes import NODE_GROUP_VERSION_MAYOR_KEY, NODE_GROUP_VERSION_MINOR_KEY, update_node_groups
+from grille_cdae.blender.shader_nodes import NODE_GROUP_VERSION_MAYOR_KEY, NODE_GROUP_VERSION_MINOR_KEY, update_node_groups, apply_deferred_updates
 
 import grille_cdae.addon as addon
 
@@ -179,12 +179,20 @@ class ShaderNodesTest(unittest.TestCase):
                 bsdf = self.tree.nodes.new("ShaderNodeBsdfPrincipled")
                 cases = (("Roughness", LS.DATA), ("Normal", LS.NORMAL), ("Base Color", LS.COLOR_RGB))
                 for target, expected in cases:
-                    self.tree.links.new(node.outputs[LS.COLOR_RGB if expected != LS.COLOR_RGB else LS.DATA], bsdf.inputs[target])
+                    dragged = LS.COLOR_RGB if expected != LS.COLOR_RGB else LS.DATA
+                    self.tree.links.new(node.outputs[dragged], bsdf.inputs[target])
+                    # links only move after the tree update, the editor's link operator is still running inside it
+                    self.assertTrue(node.outputs[dragged].is_linked)
+                    apply_deferred_updates()
                     self.assertEqual(node.image_type, expected)
                     self.assertTrue(node.outputs[expected].is_linked)
                 # every link sits on the output its target expects, unlinked other outputs are hidden
                 self.assertEqual([s.name for s in node.outputs if not s.hide], [LS.COLOR_RGB, LS.NORMAL, LS.DATA])
                 self.assertEqual(sum(len(not_none(s.links)) for s in node.outputs), 3)
+                # unlinked outputs hide again
+                for link in list(not_none(node.outputs[LS.NORMAL].links)): self.tree.links.remove(link)
+                apply_deferred_updates()
+                self.assertTrue(node.outputs[LS.NORMAL].hide)
 
 
     def test_image_output_none_keeps_links(self):
@@ -193,6 +201,7 @@ class ShaderNodesTest(unittest.TestCase):
         node.image_type = ImageType.NONE
         bsdf = self.tree.nodes.new("ShaderNodeBsdfPrincipled")
         self.tree.links.new(node.outputs[LS.COLOR_RGB], bsdf.inputs["Roughness"])
+        apply_deferred_updates()
         self.assertTrue(node.outputs[LS.COLOR_RGB].is_linked)
         self.assertEqual(node.image_type, ImageType.NONE)
 

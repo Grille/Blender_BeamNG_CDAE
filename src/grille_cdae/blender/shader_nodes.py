@@ -357,7 +357,18 @@ class BaseShaderNode(ShaderNodeCustomGroup):
 
 
     def single_update(self):
-        """Called from update, links and sockets can be changed here without updating the node again."""
+        """Called from update, sockets can be changed here without updating the node again. Change links in deferred_update."""
+
+
+    def defer_update(self) -> None:
+        """Runs deferred_update once the current operator is done. Links changed inside update, while dragging a link in the
+        editor, can stay or keep their sockets flagged as linked (which then can't be hidden)."""
+        _DEFERRED_UPDATES[self.as_pointer()] = cast(bpy.types.NodeTree, self.id_data)
+        if not bpy.app.timers.is_registered(apply_deferred_updates): bpy.app.timers.register(apply_deferred_updates)
+
+
+    def deferred_update(self) -> None:
+        """Called after defer_update outside of the tree update, links can be changed here without updating the node again."""
 
 
     def draw_buttons(self, context: bpy.types.Context, layout: bpy.types.UILayout):
@@ -464,6 +475,10 @@ class _BeamImageTexIO(BaseShaderNode):
 
 
     def single_update(self):
+        if self.node_tree is not None: self.defer_update()
+
+
+    def deferred_update(self):
         # still being created, or an outdated group with the old socket names
         if self.node_tree is None or self.is_node_group_mayor_outdated: return
         # None shows every output and leaves the choice to the user
@@ -1927,6 +1942,27 @@ def update_node_groups():
         bpy.data.node_groups.remove(stale)
 
 
+_DEFERRED_UPDATES: dict[int, bpy.types.NodeTree] = {}
+
+
+def apply_deferred_updates() -> None:
+    """Runs the updates nodes deferred with defer_update. A timer calls it, background scripts (tests) call it directly."""
+    import traceback
+    pending = list(_DEFERRED_UPDATES.items())
+    _DEFERRED_UPDATES.clear()
+    for pointer, tree in pending:
+        # the tree or node may be gone by now (deleted, undo, file loaded)
+        try: node: bpy.types.Node | None = next((node for node in tree.nodes if node.as_pointer() == pointer), None)
+        except ReferenceError: continue
+        if not isinstance(node, BaseShaderNode): continue
+        runtime = node.runtime
+        runtime.updating = True
+        try: node.deferred_update()
+        except Exception: traceback.print_exc()
+        finally: runtime.updating = False
+    return None
+
+
 @bpy.app.handlers.persistent
 def _load_post(*args: object):
     update_node_groups()
@@ -1999,6 +2035,8 @@ class ShaderNodeRegistry:
 
     @staticmethod
     def unregister():
+        if bpy.app.timers.is_registered(apply_deferred_updates): bpy.app.timers.unregister(apply_deferred_updates)
+        _DEFERRED_UPDATES.clear()
         bpy.app.handlers.load_post.remove(_load_post)
         bpy.utils.unregister_class(OT_UpdateNodeGroup)
         bpy.types.NODE_MT_add.remove(ShaderNodeTree.addmenu_append) # type: ignore
