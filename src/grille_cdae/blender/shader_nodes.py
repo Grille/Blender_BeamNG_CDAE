@@ -55,6 +55,7 @@ PALETTE = NodeSignature(
     (SocketName.Roughness, SocketType.Bool),
     (SocketName.ClearCoat, SocketType.Bool),
     (SocketName.ClearCoatRoughness, SocketType.Bool),
+    (SocketName.Enabled, SocketType.Bool),
 )
 DISPLAY_INFO = NodeSignature(
     (SocketName.Paint, PAINT3),
@@ -1145,22 +1146,39 @@ class BeamPaletteEval(BaseShaderNode):
     bl_label = "BNG Eval Palette"
     ng_color_tag = GroupColorTag.CONVERTER
 
-    def create_node_group(self, ngb):
 
-        pallete_bundle = ngb.input(_BUNDLE_NODE, "Palette")
-        pallete = ngb.nc.seperate_bundle(PAINT_LAYER, pallete_bundle)
-        enabled = pallete[SocketName.Enabled]
+    class Sockets(StrEnum):
+        PALETTE = "Palette"
+        PAINT = SocketName.Paint
+
+
+    def create_node_group(self, ngb):
+        """Mixes the paint layers by the palette map, the paint comes from the shader's display info."""
+
+        LS = BeamPaletteEval.Sockets
+
+        palette = ngb.nc.seperate_bundle(PALETTE, ngb.input(_BUNDLE_NODE, LS.PALETTE))
+        layers_bundle = ngb.nc.seperate_bundle(PAINT3, ngb.input(_BUNDLE_DISPLAY, LS.PAINT))
+        def sep_layer(index: int): return ngb.nc.seperate_bundle(PAINT_LAYER, layers_bundle[index])
+        layers = sep_layer(0), sep_layer(1), sep_layer(2)
+        factor = ngb.nc.node(bpy.types.ShaderNodeSeparateXYZ, palette[SocketName.Vector])
+
+        enabled = palette[SocketName.Enabled]
         enabled >> ngb.output(SocketType.Bool, SocketName.Enabled)
 
-        def socket(name: str, socket_type = SocketType.Float, default: SocketValue = 1):
-            ngb.nc.mix(enabled, default, pallete[name]) >> ngb.output(socket_type, name)
+        def socket(name: str, flag: str, socket_type = SocketType.Float, default: SocketValue = 1):
+            def mix(index: int):
+                layer = layers[index]
+                return factor[index] * ngb.nc.mix(layer[SocketName.Enabled], default, layer[name])
+            mix_value = mix(0) + mix(1) + mix(2)
+            ngb.nc.mix(enabled & palette[flag], default, mix_value) >> ngb.output(socket_type, name)
 
-        socket(SocketName.Color, SocketType.Color, COLOR_WHITE)
-        socket(SocketName.Alpha)
-        socket(SocketName.Metallic)
-        socket(SocketName.Roughness)
-        socket(SocketName.ClearCoat)
-        socket(SocketName.ClearCoatRoughness)
+        socket(SocketName.Color, SocketName.Color, SocketType.Color, COLOR_WHITE)
+        socket(SocketName.Alpha, SocketName.Color)
+        socket(SocketName.Metallic, SocketName.Metallic)
+        socket(SocketName.Roughness, SocketName.Roughness)
+        socket(SocketName.ClearCoat, SocketName.ClearCoat)
+        socket(SocketName.ClearCoatRoughness, SocketName.ClearCoatRoughness)
 
 
 
@@ -1182,6 +1200,7 @@ class BeamPalette(BaseShaderNode):
 
 
     def create_node_group(self, ngb):
+        """Only the material's palette data, the shaders mix it with the injected paint (BeamPaletteEval)."""
 
         LS = BeamPalette.Sockets
 
@@ -1191,30 +1210,9 @@ class BeamPalette(BaseShaderNode):
         roughness_enabled = ngb.input(_BOOL_VALUE, LS.ROUGHNESS, True)
         cc_enabled = ngb.input(_BOOL_VALUE, LS.CLEAR_COAT, True)
         ccr_enabled = ngb.input(_BOOL_VALUE, LS.CLEAR_COAT_ROUGHNESS, True)
-        paint_bundle = ngb.input(_BUNDLE_DISPLAY, "Paint")
 
-        layers_bundle = ngb.nc.seperate_bundle(PAINT3, paint_bundle)
-        def sep_layer(index: int): return ngb.nc.seperate_bundle(PAINT_LAYER, layers_bundle[index])
-        layers = sep_layer(0), sep_layer(1), sep_layer(2)
-        factor = ngb.nc.node(bpy.types.ShaderNodeSeparateXYZ, ngb.nc.math(Operation.NORMALIZE, pmap))
-
-        result = ngb.nc.combine_bundle(PAINT_LAYER)
-        result[SocketName.Enabled] << True
-
-        def mix3(name: str, enabled: LinkSource, default: SocketValue = 1):
-            def mix(index: int): 
-                layer = layers[index]
-                return factor[index] * ngb.nc.mix(layer[SocketName.Enabled], default, layer[name])
-            mix_value = mix(0) + mix(1) + mix(2)
-            ngb.nc.mix(enabled, default, mix_value) >> result[name]
-
-        mix3(SocketName.Color, color_enabled, COLOR_WHITE)
-        mix3(SocketName.Alpha, color_enabled)
-        mix3(SocketName.Metallic, metallic_enabled)
-        mix3(SocketName.Roughness, roughness_enabled)
-        mix3(SocketName.ClearCoat, cc_enabled)
-        mix3(SocketName.ClearCoatRoughness, ccr_enabled)
-
+        factor = ngb.nc.math(Operation.NORMALIZE, pmap)
+        result = ngb.nc.combine_bundle(PALETTE, factor, color_enabled, metallic_enabled, roughness_enabled, cc_enabled, ccr_enabled, True)
         result >> ngb.output(_BUNDLE_NODE, LS.PALETTE)
 
 
@@ -1352,7 +1350,8 @@ class BeamBDSF10Basic(BaseShaderNode):
         closure = ngb.nc.closure(BNGS_IO)
         closure.output >> out_result
 
-        pallete = ngb.nc.node(BeamPaletteEval, pallete_bundle)
+        display_info = ngb.nc.seperate_bundle(DISPLAY_INFO, closure[SocketName.DisplayInfo])
+        pallete = ngb.nc.node(BeamPaletteEval, pallete_bundle, display_info[SocketName.Paint])
 
         object_info = ngb.nc.node(bpy.types.ShaderNodeObjectInfo)
         vc_info = ngb.nc.node(bpy.types.ShaderNodeVertexColor)
@@ -1364,6 +1363,7 @@ class BeamBDSF10Basic(BaseShaderNode):
         rgba = ngb.RGBA_default(in_rgba_cm, COLOR_WHITE)
         rgba = rgba_math(rgba, ngb.RGBA_default(in_detail_color, COLOR_NULL_HALF), Operation.HARD_LIGHT)
         rgba = rgba_math(rgba, in_rgba_cf)
+        # 1.0 quirk: the instance color only applies with a palette
         rgba = rgba_mix(in_ic_enabled & pallete[SocketName.Enabled], rgba, rgba_math(rgba, ic))
         rgba = rgba_mix(in_vc_enabled, rgba, rgba_math(rgba, vc))
         rgba = ngb.nc.node(BeamRGBAMath, rgba, overlay, operation = Operation.OVERLAY)
@@ -1599,7 +1599,7 @@ class BeamBSDF15(BaseShaderNode):
 
         display_info = ngb.nc.seperate_bundle(DISPLAY_INFO, closure[SocketName.DisplayInfo])
 
-        palette = ngb.nc.node(BeamPaletteEval, palette_bundle)
+        palette = ngb.nc.node(BeamPaletteEval, palette_bundle, display_info[SocketName.Paint])
         palette_c = palette[SocketName.Color]
         palette_m = palette[SocketName.Metallic]
         palette_r = palette[SocketName.Roughness]
