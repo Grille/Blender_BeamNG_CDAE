@@ -1217,28 +1217,67 @@ class BeamPalette(BaseShaderNode):
 
 
 
+class PaintTarget(StrEnum):
+    """The material version a paint is previewed for, each shader reads different fields."""
+    NONE = "None"
+    V10 = "1.0"
+    V15 = "1.5"
+
+
+_PAINT_LAYER_FIELDS: tuple[tuple[str, _SCI], ...] = (
+    (SocketName.Color, _COLOR_DISPLAY),
+    (SocketName.Alpha, _FLOAT_DISPLAY),
+    (SocketName.Metallic, _FLOAT_DISPLAY),
+    (SocketName.Roughness, _FLOAT_DISPLAY),
+    (SocketName.ClearCoat, _FLOAT_DISPLAY),
+    (SocketName.ClearCoatRoughness, _FLOAT_DISPLAY),
+)
+_PAINT_TARGET_FIELDS: dict[PaintTarget, set[str]] = {
+    PaintTarget.V10: {SocketName.Color, SocketName.Alpha},
+    PaintTarget.V15: {SocketName.Color, SocketName.Metallic, SocketName.Roughness, SocketName.ClearCoat, SocketName.ClearCoatRoughness},
+}
+
+
 class BeamPaint(BaseShaderNode):
 
     bl_idname = f"{SHADER_NODE_PREFIX}Paint"
     bl_label = "BNG Paint"
     ng_color_tag = GroupColorTag.INPUT
+    layer_count = 3
+
+    paint_target: PaintTarget
+
+
+    @staticmethod
+    def input_name(layer: int, field: str):
+        """Layers count from 1."""
+        return f"Layer {layer} {field}"
+
+
+    def draw_buttons(self, context: Context, layout: UILayout):
+        super().draw_buttons(context, layout)
+        layout.prop(self, "paint_target")
+
+
+    def post_init(self):
+        # None shows every field, linked sockets can't be hidden
+        fields = _PAINT_TARGET_FIELDS.get(self.paint_target)
+        for layer in range(1, self.layer_count + 1):
+            for field, _ in _PAINT_LAYER_FIELDS:
+                self.inputs[self.input_name(layer, field)].hide = fields is not None and field not in fields
+
 
     def create_node_group(self, ngb):
-        output = ngb.output(_BUNDLE_DISPLAY, "Paint")
-        def new_layer(index: int):
-            panel_name = f"Layer {index}"
-            ngb.panel(panel_name)
-            def new_input(info: _SCI, name: str): return ngb.input(info, f"{panel_name} {name}")
-            inputs = (
-                new_input(_COLOR_DISPLAY, SocketName.Color),
-                new_input(_FLOAT_DISPLAY, SocketName.Alpha),
-                new_input(_FLOAT_DISPLAY, SocketName.Metallic),
-                new_input(_FLOAT_DISPLAY, SocketName.Roughness),
-                new_input(_FLOAT_DISPLAY, SocketName.ClearCoat),
-                new_input(_FLOAT_DISPLAY, SocketName.ClearCoatRoughness),
-            )
+        output = ngb.output(_BUNDLE_DISPLAY, SocketName.Paint)
+        def new_layer(layer: int):
+            ngb.panel(f"Layer {layer}")
+            inputs = (ngb.input(info, self.input_name(layer, field)) for field, info in _PAINT_LAYER_FIELDS)
             return ngb.nc.combine_bundle(PAINT_LAYER, *inputs, True)
-        ngb.nc.combine_bundle(PAINT3, new_layer(1), new_layer(2), new_layer(3)) >> output
+        ngb.nc.combine_bundle(PAINT3, *(new_layer(layer) for layer in range(1, self.layer_count + 1))) >> output
+
+BeamPaint.annotate(
+    paint_target = PaintTarget.to_bpy_enum("Target", default=PaintTarget.NONE, update=_BaseShaderNode_post_init)
+)
 
 
 

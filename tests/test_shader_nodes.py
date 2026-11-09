@@ -4,7 +4,7 @@ import bpy
 
 from grille_cdae.common import *
 from grille_cdae.enums import *
-from grille_cdae.blender.shader_nodes import ShaderNodeRegistry, BaseShaderNode, BeamRGBAMath, BeamImageTex, BeamBSDF15, BeamBSDFCollision, BeamUVAnimation, BeamUVData, ImageType, BeamBDSF10Basic, BeamImageTexConverter
+from grille_cdae.blender.shader_nodes import ShaderNodeRegistry, BaseShaderNode, BeamRGBAMath, BeamImageTex, BeamBSDF15, BeamBSDFCollision, BeamUVAnimation, BeamUVData, ImageType, BeamBDSF10Basic, BeamImageTexConverter, BeamPaint, PaintTarget
 from grille_cdae.blender.shader_nodes import NODE_GROUP_VERSION_MAYOR_KEY, NODE_GROUP_VERSION_MINOR_KEY, update_node_groups, apply_deferred_updates
 
 import grille_cdae.addon as addon
@@ -232,6 +232,17 @@ class ShaderNodesTest(unittest.TestCase):
         apply_deferred_updates()
         self.assertTrue(node.outputs[LS.COLOR_RGB].is_linked)
         self.assertEqual(node.image_type, ImageType.NONE)
+
+
+    def test_paint_target_hides_fields(self):
+        node = cast(BeamPaint, self.new(BeamPaint))
+        def hidden(target: PaintTarget):
+            node.paint_target = target
+            return {name for name in (SocketName.Color, SocketName.Alpha, SocketName.Metallic, SocketName.ClearCoatRoughness)
+                    if node.inputs[BeamPaint.input_name(3, name)].hide}
+        self.assertEqual(hidden(PaintTarget.V10), {SocketName.Metallic, SocketName.ClearCoatRoughness})
+        self.assertEqual(hidden(PaintTarget.V15), {SocketName.Alpha})
+        self.assertEqual(hidden(PaintTarget.NONE), set())
 
 
     def test_rgba_math_operations(self):
