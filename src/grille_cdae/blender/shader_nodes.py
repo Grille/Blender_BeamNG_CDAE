@@ -1900,7 +1900,6 @@ class ShaderNodeTree(Menu):
         BeamBSDF15Detail,
         BeamStageMix,
         BeamBDSF10Basic,
-        BeamBSDFCollision,
         BeamMaterial, 
         None,
         "Input",
@@ -1910,8 +1909,11 @@ class ShaderNodeTree(Menu):
         BeamImageTex,
         BeamImageTexConverter,
         BeamPalette,
-        BeamPaint,
+        None,
+        "Display",
+        BeamBSDFCollision,
         BeamDisplayInject,
+        BeamPaint,
     ]
 
 
